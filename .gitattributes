@@ -1,0 +1,2 @@
+*.sh text eol=lf
+/scripts/pre-commit text eol=lf

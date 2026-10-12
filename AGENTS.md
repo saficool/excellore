@@ -2,7 +2,7 @@
 
 You are working on **Excellore**, a multi-tenant SaaS platform made of three apps (**Shell**, **Profile**, **Access**), their backend services, workers, and a Keycloak identity provider.
 
-**The single source of truth is `docs/handbook.md` (The Excellore Platform Handbook).** Read **Part 0 (Agent Operating Manual)** before writing any code, then read the sections relevant to your task. If this file and the handbook disagree, the handbook wins.
+**The single source of truth is `excellore-platform-handbook.md` (The Excellore Platform Handbook).** Read **Part 0 (Agent Operating Manual)** before writing any code, then read the sections relevant to your task. If this file and the handbook disagree, the handbook wins.
 
 ---
 
