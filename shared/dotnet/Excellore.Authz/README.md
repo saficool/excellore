@@ -20,4 +20,6 @@ Call `AddAccessAuthzClient(configuration)` before `AddCachedAuthzResolver()` to 
 
 `AddCachedAuthzResolver()` also registers `AccessAuthzChangedHandler`. Pass the raw `access.authz.changed.v1` event JSON to `Handle` after broker delivery; it validates the shared contract, invalidates only the named tenant and users, and ignores recent duplicate event IDs. An absent, null, or empty `userIds` list invalidates the whole tenant. The contract and JSON Schema are in `Excellore.Contracts`. See proposed ADR-0009.
 
-The Valkey layer, RabbitMQ subscription, and database transaction context are later WP-03 slices. See proposed ADR-0007 for the interim cache behavior.
+`ValkeyAuthzCache` provides the 60-second distributed snapshot primitive. Read a generation before fetching Access, then call `StoreIfCurrentAsync`; a generation change rejects a stale fetch. `InvalidateAsync` changes only the named user's generation or the whole tenant's generation. Prefix keys with the app name. This primitive is not wired into `CachedAuthzResolver` yet; the remaining WP-03 wiring must invalidate every process's in-memory layer when an authorization-change event arrives. See proposed ADR-0014.
+
+The RabbitMQ subscription and resolver integration remain WP-03 work. See proposed ADR-0007 for the current fail-closed resolver behavior.
