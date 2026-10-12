@@ -8,4 +8,4 @@ The transaction tests use SQLite to verify statement order, commit, rollback, an
 
 `TenantDbContext` provides the EF defense in depth for class T entities. Map only `ITenantOwnedEntity` classes in a derived context; its sealed model-building step applies a filter using the current scoped tenant for every mapped class T entity. It rejects unsupported entity types and preexisting filters so a tenant filter is never silently omitted or overwritten. Synchronous and asynchronous `SaveChanges` stamp an empty `TenantId` on new rows and reject writes whose current or original tenant differs. Class P and H tables require separate, explicit context designs. This EF filter supplements PostgreSQL forced RLS; it does not replace it. See proposed ADR-0011.
 
-The PostgreSQL RLS policies and Testcontainers isolation harness remain WP-03 work. Do not expose tenant tables until those checks pass.
+The PostgreSQL RLS checks and a Testcontainers fixture are in `Excellore.Platform.Testing` (proposed ADR-0012). Each service must run the checks against its own migrations and restricted runtime role before exposing tenant tables.
