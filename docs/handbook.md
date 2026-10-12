@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.0 |
+| **Document version** | 4.1 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.1 | Keycloak login and admin events remain in the Keycloak event store until a redacting export path is available (ADR-0004). |
 | 4.0 | Solo-maintainer repository review policy accepted: owner security checklist and required CI replace mandatory independent PR approval until another maintainer joins (ADR-0003). |
 | 3.1 | Defaults in section 36 accepted. Retention reduced to a placeholder (Q-11). |
 | 3.0 | **Multi-tenant SaaS.** Tenant model, tenant-specific roles, permissions, and app access resolved by the Access authority (not Keycloak). Row-level-security data isolation. Agent operating manual, invariants, build plan with acceptance criteria, DDL and catalog appendices. |
@@ -763,7 +764,7 @@ Tenants do **not** get hostnames in the first release. Tenant identity is the `/
 | Required actions at first login | `VERIFY_EMAIL`, `UPDATE_PASSWORD`, `CONFIGURE_TOTP` or WebAuthn | MFA enrollment |
 | Self-registration | **Off** (default; Q-01) | Users enter by invitation |
 | Declarative user profile | On, attributes per [10.6](#106-user-profile-attributes) | Controlled attributes |
-| Events | Login and admin events on, shipped to logs | Audit |
+| Events | Login and admin events on, stored in Keycloak; log export deferred until a redacting listener is available (ADR-0004) | Audit without personal data in logs (INV-11) |
 
 ### 10.3 Clients
 

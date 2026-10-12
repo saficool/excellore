@@ -1,0 +1,8 @@
+# Platform staff are assigned by code (INV-18). These accounts are local test fixtures only.
+staff:
+  - username: penny.platform
+    roles: [platform-operator]
+  - username: sam.support
+    roles: [platform-support]
+  - username: sec.platform
+    roles: [platform-security]

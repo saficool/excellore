@@ -1,0 +1,857 @@
+{
+  "realm": "excellore",
+  "enabled": true,
+  "displayName": "Excellore",
+  "loginTheme": "excellore",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "editUsernameAllowed": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "passwordPolicy": "length(12) and notUsername(undefined) and notEmail(undefined) and passwordHistory(5) and passwordBlacklist(excellore-common.txt)",
+  "requiredActions": [
+    {
+      "alias": "VERIFY_EMAIL",
+      "name": "Verify Email",
+      "providerId": "VERIFY_EMAIL",
+      "enabled": true,
+      "defaultAction": false
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false
+    },
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false
+    }
+  ],
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpPolicyLookAheadWindow": 1,
+  "eventsEnabled": true,
+  "eventsListeners": [],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false,
+  "browserFlow": "excellore-browser",
+  "authenticatorConfig": [
+    {
+      "alias": "excellore-loa-1",
+      "config": { "loa-condition-level": "1", "loa-max-age": "36000" }
+    },
+    {
+      "alias": "excellore-loa-2",
+      "config": { "loa-condition-level": "2", "loa-max-age": "0" }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "id": "0d11e28a-5d25-4ab4-9107-af5fb4bc5040",
+      "alias": "excellore-browser",
+      "description": "Excellore password and fresh OTP authentication levels",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "priority": 10,
+          "requirement": "ALTERNATIVE",
+          "authenticator": "auth-cookie"
+        },
+        {
+          "priority": 20,
+          "requirement": "ALTERNATIVE",
+          "authenticatorFlow": true,
+          "flowAlias": "excellore-levels"
+        }
+      ]
+    },
+    {
+      "id": "6af957ce-6d30-44f4-b3cb-428a202442a3",
+      "alias": "excellore-levels",
+      "description": "Excellore password and fresh OTP authentication levels",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "priority": 10,
+          "requirement": "CONDITIONAL",
+          "authenticatorFlow": true,
+          "flowAlias": "excellore-level-1"
+        },
+        {
+          "priority": 20,
+          "requirement": "CONDITIONAL",
+          "authenticatorFlow": true,
+          "flowAlias": "excellore-level-2"
+        }
+      ]
+    },
+    {
+      "id": "7b5c2d4e-c0d6-4121-879e-197f4530a6ac",
+      "alias": "excellore-level-1",
+      "description": "Excellore password and fresh OTP authentication levels",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "priority": 10,
+          "requirement": "REQUIRED",
+          "authenticator": "conditional-level-of-authentication",
+          "authenticatorConfig": "excellore-loa-1"
+        },
+        {
+          "priority": 20,
+          "requirement": "REQUIRED",
+          "authenticator": "auth-username-password-form"
+        }
+      ]
+    },
+    {
+      "id": "2a7cb8a9-043d-4b07-89ac-ae51d7386918",
+      "alias": "excellore-level-2",
+      "description": "Excellore password and fresh OTP authentication levels",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "priority": 10,
+          "requirement": "REQUIRED",
+          "authenticator": "conditional-level-of-authentication",
+          "authenticatorConfig": "excellore-loa-2"
+        },
+        {
+          "priority": 20,
+          "requirement": "REQUIRED",
+          "authenticator": "auth-otp-form"
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "platform-admin" },
+      { "name": "platform-operator" },
+      { "name": "platform-support" },
+      { "name": "platform-auditor" },
+      { "name": "platform-security" }
+    ],
+    "client": {
+      "api-access": [
+        { "name": "access.authz.resolve" },
+        { "name": "access.catalog.sync" },
+        { "name": "access.worker" }
+      ],
+      "api-profile": [{ "name": "profile.worker" }]
+    }
+  },
+  "scopeMappings": [
+    {
+      "client": "excellore-access",
+      "roles": [
+        "platform-admin",
+        "platform-operator",
+        "platform-support",
+        "platform-auditor",
+        "platform-security"
+      ]
+    }
+  ],
+  "clientScopeMappings": {
+    "api-access": [
+      { "client": "worker-access", "roles": ["access.worker"] },
+      { "client": "svc-shell-authz", "roles": ["access.authz.resolve"] },
+      { "client": "svc-profile-authz", "roles": ["access.authz.resolve"] },
+      { "client": "svc-catalog-sync", "roles": ["access.catalog.sync"] }
+    ],
+    "api-profile": [
+      { "client": "worker-profile", "roles": ["profile.worker"] }
+    ],
+    "realm-management": [
+      {
+        "client": "svc-access-admin",
+        "roles": ["query-users", "view-users", "manage-users"]
+      },
+      {
+        "client": "svc-profile-identity",
+        "roles": ["view-users", "manage-users"]
+      }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "profile",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "preferred_username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "given_name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "firstName",
+            "claim.name": "given_name",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "family_name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "lastName",
+            "claim.name": "family_name",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "full-name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "email",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "email",
+            "claim.name": "email",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "email_verified",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "emailVerified",
+            "claim.name": "email_verified",
+            "jsonType.label": "boolean",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "acr",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "acr-loa",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-acr-mapper",
+          "config": { "access.token.claim": "true", "id.token.claim": "true" }
+        }
+      ]
+    },
+    {
+      "name": "api-profile",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-profile-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "api-profile",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "api-profile-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "api-profile",
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "api-access",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-access-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "api-access",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "api-access-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "api-access",
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        },
+        {
+          "name": "platform-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "platform_roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "excellore-shell",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["profile", "email", "acr"],
+      "optionalClientScopes": [],
+      "secret": "${SHELL_BFF_SECRET}",
+      "redirectUris": ["${SHELL_ORIGIN}/auth/callback"],
+      "webOrigins": [],
+      "protocolMappers": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "default.acr.values": "2",
+        "post.logout.redirect.uris": "${SHELL_ORIGIN}/",
+        "backchannel.logout.url": "${SHELL_ORIGIN}/auth/backchannel-logout",
+        "backchannel.logout.session.required": "true"
+      }
+    },
+    {
+      "clientId": "excellore-profile",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["profile", "email", "acr", "api-profile"],
+      "optionalClientScopes": [],
+      "secret": "${PROFILE_BFF_SECRET}",
+      "redirectUris": ["${PROFILE_ORIGIN}/auth/callback"],
+      "webOrigins": [],
+      "protocolMappers": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "default.acr.values": "2",
+        "post.logout.redirect.uris": "${PROFILE_ORIGIN}/",
+        "backchannel.logout.url": "${PROFILE_ORIGIN}/auth/backchannel-logout",
+        "backchannel.logout.session.required": "true"
+      }
+    },
+    {
+      "clientId": "excellore-access",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["profile", "email", "acr", "api-access"],
+      "optionalClientScopes": [],
+      "secret": "${ACCESS_BFF_SECRET}",
+      "redirectUris": ["${ACCESS_ORIGIN}/auth/callback"],
+      "webOrigins": [],
+      "protocolMappers": [
+        {
+          "name": "empty-platform-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "platform_roles",
+            "claim.value": "[]",
+            "jsonType.label": "JSON",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "default.acr.values": "2",
+        "post.logout.redirect.uris": "${ACCESS_ORIGIN}/",
+        "backchannel.logout.url": "${ACCESS_ORIGIN}/auth/backchannel-logout",
+        "backchannel.logout.session.required": "true"
+      }
+    },
+    {
+      "clientId": "api-profile",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["profile", "email", "acr"],
+      "optionalClientScopes": [],
+      "bearerOnly": true
+    },
+    {
+      "clientId": "api-access",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["profile", "email", "acr"],
+      "optionalClientScopes": [],
+      "bearerOnly": true
+    },
+    {
+      "clientId": "worker-profile",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["acr", "api-profile"],
+      "optionalClientScopes": [],
+      "secret": "${WORKER_PROFILE_SECRET}"
+    },
+    {
+      "clientId": "worker-access",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["acr", "api-access"],
+      "optionalClientScopes": [],
+      "secret": "${WORKER_ACCESS_SECRET}"
+    },
+    {
+      "clientId": "svc-shell-authz",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["acr", "api-access"],
+      "optionalClientScopes": [],
+      "secret": "${SVC_SHELL_AUTHZ_SECRET}"
+    },
+    {
+      "clientId": "svc-profile-authz",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["acr", "api-access"],
+      "optionalClientScopes": [],
+      "secret": "${SVC_PROFILE_AUTHZ_SECRET}"
+    },
+    {
+      "clientId": "svc-catalog-sync",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["acr", "api-access"],
+      "optionalClientScopes": [],
+      "secret": "${SVC_CATALOG_SYNC_SECRET}"
+    },
+    {
+      "clientId": "svc-access-admin",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["acr"],
+      "optionalClientScopes": [],
+      "secret": "${SVC_ACCESS_ADMIN_SECRET}"
+    },
+    {
+      "clientId": "svc-profile-identity",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["acr"],
+      "optionalClientScopes": [],
+      "secret": "${SVC_PROFILE_IDENTITY_SECRET}"
+    }
+  ],
+  "users": [
+    {
+      "username": "olivia.owner",
+      "firstName": "Olivia",
+      "lastName": "Owner",
+      "email": "olivia.owner@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": []
+    },
+    {
+      "username": "adam.admin",
+      "firstName": "Adam",
+      "lastName": "Admin",
+      "email": "adam.admin@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": []
+    },
+    {
+      "username": "mia.member",
+      "firstName": "Mia",
+      "lastName": "Member",
+      "email": "mia.member@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": []
+    },
+    {
+      "username": "vera.viewer",
+      "firstName": "Vera",
+      "lastName": "Viewer",
+      "email": "vera.viewer@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": []
+    },
+    {
+      "username": "gina.globex",
+      "firstName": "Gina",
+      "lastName": "Globex",
+      "email": "gina.globex@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": []
+    },
+    {
+      "username": "nora.nomember",
+      "firstName": "Nora",
+      "lastName": "NoMember",
+      "email": "nora.nomember@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": []
+    },
+    {
+      "username": "penny.platform",
+      "firstName": "Penny",
+      "lastName": "Platform",
+      "email": "penny.platform@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": ["platform-operator"]
+    },
+    {
+      "username": "sam.support",
+      "firstName": "Sam",
+      "lastName": "Support",
+      "email": "sam.support@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": ["platform-support"]
+    },
+    {
+      "username": "sec.platform",
+      "firstName": "Sec",
+      "lastName": "Platform",
+      "email": "sec.platform@example.test",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${DEV_USER_PASSWORD}",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "secretData": "{\"value\":\"${DEV_OTP_SECRET}\"}",
+          "credentialData": "{\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\",\"subType\":\"totp\"}"
+        }
+      ],
+      "realmRoles": ["platform-security"]
+    },
+    {
+      "username": "service-account-worker-profile",
+      "enabled": true,
+      "serviceAccountClientId": "worker-profile",
+      "clientRoles": { "api-profile": ["profile.worker"] }
+    },
+    {
+      "username": "service-account-worker-access",
+      "enabled": true,
+      "serviceAccountClientId": "worker-access",
+      "clientRoles": { "api-access": ["access.worker"] }
+    },
+    {
+      "username": "service-account-svc-shell-authz",
+      "enabled": true,
+      "serviceAccountClientId": "svc-shell-authz",
+      "clientRoles": { "api-access": ["access.authz.resolve"] }
+    },
+    {
+      "username": "service-account-svc-profile-authz",
+      "enabled": true,
+      "serviceAccountClientId": "svc-profile-authz",
+      "clientRoles": { "api-access": ["access.authz.resolve"] }
+    },
+    {
+      "username": "service-account-svc-catalog-sync",
+      "enabled": true,
+      "serviceAccountClientId": "svc-catalog-sync",
+      "clientRoles": { "api-access": ["access.catalog.sync"] }
+    },
+    {
+      "username": "service-account-svc-access-admin",
+      "enabled": true,
+      "serviceAccountClientId": "svc-access-admin",
+      "clientRoles": {
+        "realm-management": ["query-users", "view-users", "manage-users"]
+      }
+    },
+    {
+      "username": "service-account-svc-profile-identity",
+      "enabled": true,
+      "serviceAccountClientId": "svc-profile-identity",
+      "clientRoles": { "realm-management": ["view-users", "manage-users"] }
+    }
+  ]
+}
