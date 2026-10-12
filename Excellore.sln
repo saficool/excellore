@@ -51,6 +51,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Excellore.Platform", "share
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Excellore.Auth.Tests", "shared\dotnet\Excellore.Auth.Tests\Excellore.Auth.Tests.csproj", "{357B7AFF-B573-4FE6-A31D-418782DB8ACD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Excellore.Authz.Tests", "shared\dotnet\Excellore.Authz.Tests\Excellore.Authz.Tests.csproj", "{CC101F01-87EC-4F31-A873-25A9E9804077}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -289,6 +291,18 @@ Global
 		{357B7AFF-B573-4FE6-A31D-418782DB8ACD}.Release|x64.Build.0 = Release|Any CPU
 		{357B7AFF-B573-4FE6-A31D-418782DB8ACD}.Release|x86.ActiveCfg = Release|Any CPU
 		{357B7AFF-B573-4FE6-A31D-418782DB8ACD}.Release|x86.Build.0 = Release|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Debug|x64.Build.0 = Debug|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Debug|x86.Build.0 = Debug|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Release|x64.ActiveCfg = Release|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Release|x64.Build.0 = Release|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Release|x86.ActiveCfg = Release|Any CPU
+		{CC101F01-87EC-4F31-A873-25A9E9804077}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -316,5 +330,6 @@ Global
 		{327B7CA3-CB35-45EB-9376-1A47DFB45EEA} = {1CC180B5-AA09-2C35-115A-569411B97A5C}
 		{3BF4125F-7759-4846-B312-947AD37289C1} = {1CC180B5-AA09-2C35-115A-569411B97A5C}
 		{357B7AFF-B573-4FE6-A31D-418782DB8ACD} = {1CC180B5-AA09-2C35-115A-569411B97A5C}
+		{CC101F01-87EC-4F31-A873-25A9E9804077} = {1CC180B5-AA09-2C35-115A-569411B97A5C}
 	EndGlobalSection
 EndGlobal
