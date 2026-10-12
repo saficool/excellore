@@ -8,8 +8,18 @@ namespace Excellore.Authz;
 public readonly record struct AuthzCacheGeneration(long Tenant, long User);
 public sealed record ValkeyAuthzRead(AuthzSnapshot? Snapshot, AuthzCacheGeneration Generation);
 
+public interface IAuthzDistributedSnapshotCache
+{
+    Task<ValkeyAuthzRead> ReadAsync(Guid userId, Guid tenantId,
+        CancellationToken cancellationToken = default);
+    Task<bool> StoreIfCurrentAsync(Guid userId, Guid tenantId, AuthzSnapshot snapshot,
+        AuthzCacheGeneration generation, CancellationToken cancellationToken = default);
+    Task InvalidateAsync(Guid tenantId, IReadOnlyCollection<Guid>? userIds = null,
+        CancellationToken cancellationToken = default);
+}
+
 /// <summary>A 60-second Valkey authorization snapshot cache with race-safe invalidation.</summary>
-public sealed class ValkeyAuthzCache
+public sealed class ValkeyAuthzCache : IAuthzDistributedSnapshotCache
 {
     private const int MaxPayloadBytes = 64 * 1024;
     private const string StoreScript = """
@@ -53,7 +63,7 @@ public sealed class ValkeyAuthzCache
                 TenantGenerationKey(tenantId), UserGenerationKey(tenantId, userId), SnapshotKey(tenantId, userId)
             ]);
         }
-        catch (RedisException)
+        catch (Exception error) when (error is RedisException or ObjectDisposedException)
         {
             throw new AuthzUnavailableException();
         }
@@ -129,7 +139,7 @@ public sealed class ValkeyAuthzCache
             cancellationToken.ThrowIfCancellationRequested();
             return (long)result == 1;
         }
-        catch (RedisException)
+        catch (Exception error) when (error is RedisException or ObjectDisposedException)
         {
             throw new AuthzUnavailableException();
         }
@@ -160,7 +170,7 @@ public sealed class ValkeyAuthzCache
                 }
             }
         }
-        catch (RedisException)
+        catch (Exception error) when (error is RedisException or ObjectDisposedException)
         {
             throw new AuthzUnavailableException();
         }
