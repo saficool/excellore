@@ -2,7 +2,7 @@
 
 `TenantUnitOfWork<TDbContext>` runs database work in a transaction. It reads the tenant ID from the scoped `ITenantIdAccessor`, executes parameterized `SELECT set_config('app.tenant_id', ..., true)` as the first statement inside the transaction, then runs the work, saves changes, and commits. It rejects a missing tenant or a scope change before commit. Failed work rolls back when the transaction is disposed.
 
-Register `AddExcelloreAuthz()` in the API so `ITenantIdAccessor` resolves to the same scoped tenant context opened by the tenant gate. Worker scopes must provide an authorized tenant accessor before using the unit of work. Use the same `DbContext` instance in the work delegate; never issue tenant database commands outside this boundary. See proposed ADR-0010.
+Register `AddExcelloreAuthz()` in the API so `ITenantIdAccessor` resolves to the same scoped tenant context opened by the tenant gate. Worker hosts call `AddExcelloreWorkerTenantScope()` and run each job with `TenantWorkerScope.RunAsync<TJob, TResult>(tenantId, work)`. It binds the tenant before resolving the scoped job and disposes the scope afterward. The host uses a machine identity; the job rechecks resource ownership inside tenant context. Do not register both HTTP and worker tenant accessors in one host. Use the same `DbContext` instance in the work delegate; never issue tenant database commands outside this boundary. See proposed ADR-0010 and ADR-0013.
 
 The transaction tests use SQLite to verify statement order, commit, rollback, and scope checks.
 
