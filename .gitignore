@@ -1,0 +1,17 @@
+node_modules/
+.turbo/
+dist/
+.next/
+coverage/
+**/bin/
+**/obj/
+.vs/
+.vscode/
+.dotnet-home/
+.tools/
+*.user
+*.suo
+.env
+.env.*
+!.env.example
+
