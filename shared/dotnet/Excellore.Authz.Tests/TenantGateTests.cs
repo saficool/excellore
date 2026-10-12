@@ -2,8 +2,10 @@ using System.Collections.Immutable;
 using System.Security.Claims;
 using Excellore.Auth;
 using Excellore.Authz;
+using Excellore.Platform;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Excellore.Authz.Tests;
 
@@ -12,6 +14,22 @@ public class TenantGateTests
     private static readonly Guid TenantOne = Guid.Parse("11111111-1111-4111-8111-111111111111");
     private static readonly Guid TenantTwo = Guid.Parse("22222222-2222-4222-8222-222222222222");
     private static readonly Guid UserId = Guid.Parse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+
+    [Fact]
+    public void Database_tenant_accessor_uses_the_same_scoped_gate_context()
+    {
+        using var provider = new ServiceCollection().AddExcelloreAuthz().BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var gateContext = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        var databaseContext = scope.ServiceProvider.GetRequiredService<ITenantIdAccessor>();
+        Assert.Same(gateContext, databaseContext);
+        Assert.Throws<InvalidOperationException>(() => databaseContext.TenantId);
+
+        gateContext.Set(TenantOne, Allowed(TenantOne));
+        Assert.Equal(TenantOne, databaseContext.TenantId);
+        gateContext.Clear();
+        Assert.Throws<InvalidOperationException>(() => databaseContext.TenantId);
+    }
 
     [Fact]
     public async Task Allowed_member_reaches_handler_with_tenant_context_then_clears_it()
