@@ -1,6 +1,6 @@
 # ADR-0002: Solo-maintainer review for WP-00
 
-Status: Proposed — requires explicit approval by the repository owner before PR #1 is merged.
+Status: Expired on merge of PR #1. The proposed PR comment was not recorded before merge; ADR-0003 governs future PRs.
 Date: 2026-10-12
 Owner: @saficool (decision pending)
 Expiry / review date: On merge of WP-00, or 2026-11-12, whichever comes first.
@@ -25,3 +25,7 @@ The exception ends when PR #1 is merged or on the review date above. It does not
 ## Consequences
 
 WP-00 can be merged without pretending that a self-review is an independent approval. The decision and its limits remain visible in the PR history. Independent review is still unavailable during bootstrap, so the owner must accept that residual risk explicitly. If the proposed exception is declined, PR #1 waits for an independent security reviewer.
+
+## Post-merge record
+
+PR #1 merged on 2026-10-12 with all four CI jobs passing. The proposed owner-attestation comment was not recorded before merge, so this ADR was not accepted. The repository owner subsequently decided that an independent reviewer is not required while the repository has one developer; ADR-0003 records that policy prospectively. This note does not retroactively satisfy the missing WP-00 comment.

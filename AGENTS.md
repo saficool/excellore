@@ -126,7 +126,7 @@ docs/            handbook.md, adr/, runbooks/
 - **Errors:** RFC 9457 problem details with stable `urn:excellore:problem:<name>` types. `404` for unknown or non-member tenant, `403` for member without permission or step-up needed.
 - **Commits:** Conventional Commits with project scope, for example `feat(access-api): add custom role endpoints`.
 - **Table classes:** every new table is classified in its migration as P (platform), H (hybrid), or T (tenant). T and H tables get forced RLS. Platform tables that carry `tenant_id` must be added to `infra/db/rls-exempt.txt`, which requires security review.
-- **Security-owner review** is required for `infra/keycloak/`, `Excellore.Auth`, `Excellore.Authz`, `Excellore.Platform`, `@excellore/auth`, `services/access/`, and every `permissions.yaml`.
+- **Security-owner review record** is required for `infra/keycloak/`, `Excellore.Auth`, `Excellore.Authz`, `Excellore.Platform`, `@excellore/auth`, `services/access/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. While @saficool is the only maintainer, the owner records the review in the PR and no separate approving reviewer is required (handbook section 24.2; ADR-0003).
 
 ## 8. Never
 

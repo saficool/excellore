@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 3.1 |
+| **Document version** | 4.0 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,10 +16,11 @@
 
 | Version | Summary |
 |---|---|
-| 1.0 | Initial authentication architecture (Shell, App A, App B). |
-| 2.0 | Apps named Shell, Profile, Access. Platform catalog, app specs, events, standards. |
+| 4.0 | Solo-maintainer repository review policy accepted: owner security checklist and required CI replace mandatory independent PR approval until another maintainer joins (ADR-0003). |
 | 3.1 | Defaults in section 36 accepted. Retention reduced to a placeholder (Q-11). |
 | 3.0 | **Multi-tenant SaaS.** Tenant model, tenant-specific roles, permissions, and app access resolved by the Access authority (not Keycloak). Row-level-security data isolation. Agent operating manual, invariants, build plan with acceptance criteria, DDL and catalog appendices. |
+| 2.0 | Apps named Shell, Profile, Access. Platform catalog, app specs, events, standards. |
+| 1.0 | Initial authentication architecture (Shell, App A, App B). |
 
 ---
 
@@ -155,7 +156,7 @@ When the book does not answer your question, follow this order:
 - Branch: `wp-<nn>/<short-description>` or `fix/<short-description>`.
 - Commits: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`), scope = project (`feat(access-api): …`).
 - PR description: what and why, invariants touched, how verified, ADRs proposed, follow-ups.
-- Changes under `infra/keycloak/`, `Excellore.Auth`, `Excellore.Authz`, `@excellore/auth`, and `services/access/` need review by the platform security owner (`CODEOWNERS`).
+- Changes under the security-owned paths in [24.2](#242-branching-and-review) need a recorded security review by the platform security owner. While the repository has one maintainer, the owner records a review checklist in the PR; no separate approving reviewer is required (ADR-0003).
 
 ---
 
@@ -318,6 +319,7 @@ Final until changed through [section 37](#37-document-governance).
 | D21 | Step-up auth | Required for privileged operations | Limits damage from a hijacked session |
 | D22 | Database | PostgreSQL, one database per service | Ownership and blast radius |
 | D23 | Permission delivery | **Resolve per request with short cache and event invalidation; never in tokens** | Always-fresh, no token bloat |
+| D24 | Repository review while solo | **Owner review record and required CI on every PR; no separate approving reviewer until another maintainer joins** | Keeps checks and an audit trail while the only code owner cannot approve their own PR (ADR-0003) |
 
 ---
 
@@ -1758,7 +1760,9 @@ excellore/
 
 ### 24.2 Branching and review
 
-Trunk-based, short-lived branches, protected `main` (reviews, passing CI, signed commits recommended). `CODEOWNERS` requires the platform security owner for `infra/keycloak/`, `shared/dotnet/Excellore.Auth`, `shared/dotnet/Excellore.Authz`, `shared/dotnet/Excellore.Platform`, `packages/excellore-auth`, `services/access/`, and every `permissions.yaml`.
+Use trunk-based development and short-lived branches. Protect `main` with a pull-request requirement and passing CI on the final commit; signed commits are recommended. The required CI jobs are `javascript`, `dotnet`, `handbook`, and `secrets`. Block force pushes and branch deletion. Do not allow a bypass of these checks.
+
+`CODEOWNERS` records @saficool as the platform security owner for `infra/keycloak/`, `shared/dotnet/Excellore.Auth`, `shared/dotnet/Excellore.Authz`, `shared/dotnet/Excellore.Platform`, `packages/excellore-auth`, `services/access/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. While @saficool is the only maintainer, GitHub requires zero approving reviews. Before merging a PR, the owner reviews the full diff, records the affected invariants and test evidence in the PR, and confirms that CI passed on its final commit. For security-owned paths, the owner also records the authentication, authorization, tenant-isolation, secret-handling, and audit implications; uses an ADR for a security decision; and resolves any failed check before merge. The PR template at `.github/pull_request_template.md` captures this record. When another maintainer with write access joins, revisit ADR-0003 and require independent code-owner approval for security-owned paths.
 
 ### 24.3 Ownership
 
@@ -2027,7 +2031,7 @@ Failed-login spikes; refresh failures; elevated `401`/`403`/`404` rates per API;
 | **Custom role escalation** | Admin crafts a role with powers they lack | S1, S2, S8, step-up, audit |
 | **Invitation hijack** | Token theft or wrong person accepts | Hashed single-use token in URL fragment, email equality, expiry |
 | **Support access abuse** | Staff browse tenant data | No standing access, time-boxed grants, owner visibility, audit with grant ID |
-| **Catalog tampering** | Malicious `permissions.yaml` grants broad rights | CODEOWNERS review, CI validation, default-deny, `systemRoles` review |
+| **Catalog tampering** | Malicious `permissions.yaml` grants broad rights | Recorded owner security review, CI validation, default-deny, `systemRoles` review |
 | **Noisy neighbor** | One tenant degrades others | Per-tenant rate limits, quotas, concurrency caps |
 | Token theft from browser | XSS | No tokens in browser, strict CSP, HttpOnly cookie |
 | Session hijack | Stolen cookie | `__Host-` cookie, short idle, step-up, session list in Profile |
@@ -2377,9 +2381,9 @@ Until a human changes them through [section 37](#37-document-governance), the **
 
 | Change | Process |
 |---|---|
-| Typo, clarification | Pull request, one reviewer |
-| New standard or changed requirement | RFC (short proposal) with platform and security owners, then pull request |
-| **Change to an invariant (INV-nn)** | RFC, security owner approval, announcement. Invariants change rarely |
+| Typo, clarification | Pull request and recorded owner review; an independent reviewer is not required while solo |
+| New standard or changed requirement | RFC (short proposal), explicit platform/security owner decision, then pull request |
+| **Change to an invariant (INV-nn)** | RFC, explicit security owner decision recorded in the PR, announcement. Invariants change rarely |
 | Deviation for one app | ADR with owner and expiry date |
 | Architecture-level change | RFC, ADR, security review, announcement |
 
