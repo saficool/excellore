@@ -4,4 +4,8 @@
 
 Register `AddExcelloreAuthz()` in the API so `ITenantIdAccessor` resolves to the same scoped tenant context opened by the tenant gate. Worker scopes must provide an authorized tenant accessor before using the unit of work. Use the same `DbContext` instance in the work delegate; never issue tenant database commands outside this boundary. See proposed ADR-0010.
 
-This slice tests transaction behavior with SQLite. PostgreSQL RLS policies, EF tenant query filters and stamping, and the Testcontainers isolation harness remain WP-03 work; do not expose tenant tables until those checks pass.
+The transaction tests use SQLite to verify statement order, commit, rollback, and scope checks.
+
+`TenantDbContext` provides the EF defense in depth for class T entities. Map only `ITenantOwnedEntity` classes in a derived context; its sealed model-building step applies a filter using the current scoped tenant for every mapped class T entity. It rejects unsupported entity types and preexisting filters so a tenant filter is never silently omitted or overwritten. Synchronous and asynchronous `SaveChanges` stamp an empty `TenantId` on new rows and reject writes whose current or original tenant differs. Class P and H tables require separate, explicit context designs. This EF filter supplements PostgreSQL forced RLS; it does not replace it. See proposed ADR-0011.
+
+The PostgreSQL RLS policies and Testcontainers isolation harness remain WP-03 work. Do not expose tenant tables until those checks pass.
