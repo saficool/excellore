@@ -1,3 +1,5 @@
+using Excellore.Platform;
+
 namespace Excellore.Authz;
 
 public interface ITenantContext
@@ -6,7 +8,7 @@ public interface ITenantContext
     AuthzSnapshot Snapshot { get; }
 }
 
-public interface ITenantContextAccessor
+public interface ITenantContextAccessor : ITenantIdAccessor
 {
     ITenantContext? Current { get; }
     void Set(Guid tenantId, AuthzSnapshot snapshot);
@@ -16,6 +18,8 @@ public interface ITenantContextAccessor
 public sealed class TenantContextAccessor : ITenantContextAccessor
 {
     public ITenantContext? Current { get; private set; }
+    public Guid TenantId => Current?.TenantId ??
+        throw new InvalidOperationException("Tenant context is required for database work.");
 
     public void Set(Guid tenantId, AuthzSnapshot snapshot)
     {

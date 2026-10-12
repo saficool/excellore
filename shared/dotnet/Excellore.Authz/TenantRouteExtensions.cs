@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Excellore.Platform;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -26,7 +27,9 @@ public static class TenantRouteExtensions
 {
     public static IServiceCollection AddExcelloreAuthz(this IServiceCollection services)
     {
-        services.AddScoped<ITenantContextAccessor, TenantContextAccessor>();
+        services.AddScoped<TenantContextAccessor>();
+        services.AddScoped<ITenantContextAccessor>(provider => provider.GetRequiredService<TenantContextAccessor>());
+        services.AddScoped<ITenantIdAccessor>(provider => provider.GetRequiredService<TenantContextAccessor>());
         services.TryAddSingleton<IPrivilegeClassifier, ConservativePrivilegeClassifier>();
         return services;
     }
