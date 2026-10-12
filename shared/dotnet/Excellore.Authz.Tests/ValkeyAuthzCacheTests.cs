@@ -60,9 +60,38 @@ public sealed class ValkeyAuthzCacheTests
 
         await redis.GetDatabase().StringSetAsync(key, "malformed", TimeSpan.FromSeconds(60));
         Assert.Null((await first.ReadAsync(u1, t1)).Snapshot);
+
+        var access = new StubAccess(() => Task.FromResult(Allowed(t1, "profile.member.read")));
+        var resolving = new ValkeyAuthzSnapshotSource(first, access);
+        await resolving.ResolveFreshAsync(u1, t1, CancellationToken.None);
+        Assert.Equal(1, access.Calls);
+        var replica = new ValkeyAuthzSnapshotSource(second,
+            new StubAccess(() => throw new AuthzUnavailableException()));
+        Assert.Contains("profile.member.read",
+            (await replica.ResolveFreshAsync(u1, t1, CancellationToken.None)).Permissions);
+
+        await first.InvalidateAsync(t1, [u1]);
+        await Assert.ThrowsAsync<AuthzUnavailableException>(() =>
+            replica.ResolveFreshAsync(u1, t1, CancellationToken.None));
+
+        redis.Dispose();
+        var fallback = new ValkeyAuthzSnapshotSource(first,
+            new StubAccess(() => Task.FromResult(Allowed(t1))));
+        Assert.Empty((await fallback.ResolveFreshAsync(u1, t1, CancellationToken.None)).Permissions);
     }
 
     private static AuthzSnapshot Allowed(Guid tenantId, params string[] permissions) =>
         new(tenantId, AuthzDecision.Allow, "active", "active",
             ImmutableHashSet.CreateRange(StringComparer.Ordinal, permissions));
+
+    private sealed class StubAccess(Func<Task<AuthzSnapshot>> resolve) : IAuthzSnapshotSource
+    {
+        public int Calls { get; private set; }
+        public Task<AuthzSnapshot> ResolveFreshAsync(Guid userId, Guid tenantId,
+            CancellationToken cancellationToken)
+        {
+            Calls++;
+            return resolve();
+        }
+    }
 }
