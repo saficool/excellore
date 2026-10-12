@@ -9,6 +9,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\Excellore.Auth\Excellore.Auth.csproj" />
+    <ProjectReference Include="..\Excellore.Contracts\Excellore.Contracts.csproj" />
     <ProjectReference Include="..\Excellore.Platform\Excellore.Platform.csproj" />
   </ItemGroup>
 

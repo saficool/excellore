@@ -154,6 +154,7 @@ public static class CachedAuthzResolverRegistration
         services.AddSingleton<CachedAuthzResolver>();
         services.AddSingleton<IAuthzResolver>(provider => provider.GetRequiredService<CachedAuthzResolver>());
         services.AddSingleton<IAuthzCacheInvalidator>(provider => provider.GetRequiredService<CachedAuthzResolver>());
+        services.AddSingleton<AccessAuthzChangedHandler>();
         return services;
     }
 }
