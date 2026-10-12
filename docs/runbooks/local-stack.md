@@ -26,15 +26,24 @@ The endpoints bind to `127.0.0.1` only:
 
 The Keycloak bootstrap admin username is `admin`; its password is in your local `.env`. RabbitMQ and SeaweedFS credentials are there too. Do not use these credentials outside this local stack.
 
-## Hostnames and local HTTPS
+## Hostnames
 
-Add this line to the Windows hosts file (`C:\Windows\System32\drivers\etc\hosts`, edit as Administrator), or `/etc/hosts` on Linux or macOS:
+`*.localhost` names normally resolve to the local machine without a hosts-file entry. On this Windows development machine, `auth.excellore.localhost` resolves to `127.0.0.1` and reaches Keycloak. Check the name before changing your hosts file:
+
+```powershell
+Resolve-DnsName auth.excellore.localhost -Type A
+curl.exe --fail --silent --show-error --output NUL --write-out '%{http_code}' http://auth.excellore.localhost:8080/realms/master/.well-known/openid-configuration
+```
+
+If the name does not resolve on your machine, add this line to the Windows hosts file (`C:\Windows\System32\drivers\etc\hosts`, edit as Administrator), or `/etc/hosts` on Linux or macOS:
 
 ```text
 127.0.0.1  excellore.localhost  profile.excellore.localhost  access.excellore.localhost  auth.excellore.localhost
 ```
 
-Install [mkcert](https://github.com/FiloSottile/mkcert#installation), then run:
+## Local HTTPS for later browser flows
+
+WP-01 serves Keycloak over HTTP. No certificate is needed to start or verify this stack. Before testing `__Host-` cookies and OIDC browser flows in WP-02/WP-04, install [mkcert](https://github.com/FiloSottile/mkcert#installation) and generate a certificate:
 
 ```sh
 mkcert -install
@@ -43,7 +52,7 @@ mkcert -cert-file .local/certs/excellore.pem -key-file .local/certs/excellore-ke
   excellore.localhost profile.excellore.localhost access.excellore.localhost auth.excellore.localhost
 ```
 
-The certificates stay in ignored `.local/certs`. WP-01 serves Keycloak over local HTTP; wire these certificates into a local HTTPS proxy before testing `__Host-` cookies and OIDC browser flows (WP-02/WP-04). Register the exact HTTPS redirect URLs in the development realm when that realm is added.
+The certificates stay in ignored `.local/certs`. `mkcert -install` adds a local CA to your machine's trust store; keep its private CA key on your machine and never commit or share it. The certificate does not turn on HTTPS by itself. Connect it to a local HTTPS proxy when the browser flows are built, then register the exact HTTPS redirect URLs in the development realm. Node.js does not automatically trust the system CA; set `NODE_EXTRA_CA_CERTS` to the `rootCA.pem` file reported by `mkcert -CAROOT` when a Node process calls a locally secured endpoint.
 
 ## Stop
 
