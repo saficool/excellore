@@ -10,7 +10,8 @@ public interface IAuthzSnapshotSource
 
 public interface IAuthzCacheInvalidator
 {
-    void Invalidate(Guid tenantId, IReadOnlyCollection<Guid>? userIds = null);
+    Task InvalidateAsync(Guid tenantId, IReadOnlyCollection<Guid>? userIds = null,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class CachedAuthzResolver : IAuthzResolver, IAuthzCacheInvalidator, IDisposable
@@ -112,6 +113,14 @@ public sealed class CachedAuthzResolver : IAuthzResolver, IAuthzCacheInvalidator
                 _entries.Remove(key);
             }
         }
+    }
+
+    Task IAuthzCacheInvalidator.InvalidateAsync(Guid tenantId, IReadOnlyCollection<Guid>? userIds,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Invalidate(tenantId, userIds);
+        return Task.CompletedTask;
     }
 
     private bool TryRead(CacheKey key, out AuthzSnapshot snapshot)

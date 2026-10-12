@@ -6,14 +6,16 @@ namespace Excellore.Authz;
 public sealed class AccessAuthzChangedHandler(IAuthzCacheInvalidator invalidator)
 {
     private const int MaxRememberedEvents = 10_000;
-    private readonly object _sync = new();
+    private readonly SemaphoreSlim _sync = new(1, 1);
     private readonly HashSet<Guid> _handled = [];
     private readonly Queue<Guid> _order = new();
 
-    public void Handle(ReadOnlySpan<byte> eventJson)
+    public async Task HandleAsync(ReadOnlyMemory<byte> eventJson,
+        CancellationToken cancellationToken = default)
     {
-        var envelope = AccessAuthzChangedV1.Parse(eventJson);
-        lock (_sync)
+        var envelope = AccessAuthzChangedV1.Parse(eventJson.Span);
+        await _sync.WaitAsync(cancellationToken);
+        try
         {
             if (_handled.Contains(envelope.Id))
             {
@@ -21,13 +23,18 @@ public sealed class AccessAuthzChangedHandler(IAuthzCacheInvalidator invalidator
             }
 
             // Mark the event only after invalidation succeeds, so failed deliveries can retry.
-            invalidator.Invalidate(envelope.TenantId, envelope.Data!.UserIds);
+            await invalidator.InvalidateAsync(envelope.TenantId, envelope.Data!.UserIds,
+                cancellationToken);
             _handled.Add(envelope.Id);
             _order.Enqueue(envelope.Id);
             if (_order.Count > MaxRememberedEvents)
             {
                 _handled.Remove(_order.Dequeue());
             }
+        }
+        finally
+        {
+            _sync.Release();
         }
     }
 }
