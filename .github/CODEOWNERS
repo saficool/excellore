@@ -1,0 +1,9 @@
+/.github/CODEOWNERS @saficool
+/infra/keycloak/ @saficool
+/shared/dotnet/Excellore.Auth/ @saficool
+/shared/dotnet/Excellore.Authz/ @saficool
+/shared/dotnet/Excellore.Platform/ @saficool
+/packages/excellore-auth/ @saficool
+/services/access/ @saficool
+**/permissions.yaml @saficool
+/infra/db/rls-exempt.txt @saficool

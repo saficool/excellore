@@ -1,0 +1,23 @@
+{
+  "name": "excellore",
+  "private": true,
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"*.{json,mjs,yaml}\"",
+    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"*.{json,mjs,yaml}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.10.0",
+    "prettier": "3.9.10",
+    "turbo": "2.11.2",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.0"
+  }
+}

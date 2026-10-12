@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+set -eu
+
+command -v pnpm >/dev/null 2>&1 || { echo 'pnpm is required for the pre-commit hook.' >&2; exit 1; }
+command -v gitleaks >/dev/null 2>&1 || { echo 'gitleaks is required for the pre-commit hook.' >&2; exit 1; }
+
+git diff --cached --name-only --diff-filter=ACMR -z |
+  xargs -0 -r pnpm exec prettier --check --ignore-unknown
+gitleaks git --pre-commit --redact --staged --no-banner

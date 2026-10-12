@@ -1,0 +1,11 @@
+node_modules
+.turbo
+dist
+.next
+coverage
+**/bin
+**/obj
+excellore-platform-handbook.md
+docs/handbook.md
+AGENTS.md
+pnpm-lock.yaml
