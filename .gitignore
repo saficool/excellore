@@ -9,6 +9,7 @@ coverage/
 .vscode/
 .dotnet-home/
 .tools/
+.local/
 *.user
 *.suo
 .env

@@ -1,0 +1,145 @@
+name: excellore
+
+services:
+  keycloak-db:
+    image: postgres:16.12
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run scripts/dev-up.sh first}
+    volumes:
+      - keycloak-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U keycloak -d keycloak']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.3
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_PORT: 5432
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run scripts/dev-up.sh first}
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Run scripts/dev-up.sh first}
+      KC_HOSTNAME: http://auth.excellore.localhost:8080
+      KC_HEALTH_ENABLED: 'true'
+    ports:
+      - 127.0.0.1:8080:8080
+      - 127.0.0.1:9000:9000
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          CMD,
+          bash,
+          -c,
+          "{ printf 'HEAD /health/ready HTTP/1.0\r\n\r\n' >&0; grep 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  postgres-profile:
+    image: postgres:16.12
+    environment:
+      POSTGRES_DB: profile
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PROFILE_DB_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_SERVICE: profile
+      DB_MIGRATOR_PASSWORD: ${PROFILE_MIGRATOR_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_APP_PASSWORD: ${PROFILE_APP_PASSWORD:?Run scripts/dev-up.sh first}
+    ports:
+      - 127.0.0.1:5433:5432
+    volumes:
+      - profile-data:/var/lib/postgresql/data
+      - ../db/bootstrap-roles.sql:/opt/excellore/bootstrap-roles.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d profile']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  postgres-access:
+    image: postgres:16.12
+    environment:
+      POSTGRES_DB: access
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${ACCESS_DB_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_SERVICE: access
+      DB_MIGRATOR_PASSWORD: ${ACCESS_MIGRATOR_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_APP_PASSWORD: ${ACCESS_APP_PASSWORD:?Run scripts/dev-up.sh first}
+    ports:
+      - 127.0.0.1:5434:5432
+    volumes:
+      - access-data:/var/lib/postgresql/data
+      - ../db/bootstrap-roles.sql:/opt/excellore/bootstrap-roles.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d access']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  valkey:
+    image: valkey/valkey:8.1
+    ports:
+      - 127.0.0.1:6379:6379
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:4.3.5-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Run scripts/dev-up.sh first}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Run scripts/dev-up.sh first}
+    ports:
+      - 127.0.0.1:5672:5672
+      - 127.0.0.1:15672:15672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  objectstore:
+    image: chrislusf/seaweedfs:4.48
+    command: 'server -s3 -s3.config=/etc/seaweedfs/s3.json'
+    ports:
+      - 127.0.0.1:8333:8333
+    volumes:
+      - objectstore-data:/data
+      - ../../.local/objectstore/s3.json:/etc/seaweedfs/s3.json:ro
+
+  mailpit:
+    image: axllent/mailpit:v1.31.5
+    ports:
+      - 127.0.0.1:8025:8025
+      - 127.0.0.1:1025:1025
+    volumes:
+      - mailpit-data:/data
+    environment:
+      MP_DATABASE: /data/mailpit.db
+
+volumes:
+  keycloak-data:
+  profile-data:
+  access-data:
+  valkey-data:
+  rabbitmq-data:
+  objectstore-data:
+  mailpit-data:

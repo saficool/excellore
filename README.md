@@ -1,6 +1,6 @@
 # Excellore
 
-The platform handbook is the [single source of truth](excellore-platform-handbook.md). This repository is currently at **WP-00: repository bootstrap**. The app and service projects are scaffolds; they do not yet implement authentication, authorization, tenant APIs, or business behavior.
+The platform handbook is the [single source of truth](excellore-platform-handbook.md). WP-00 is complete; WP-01 adds the local dependency stack. The app and service projects are scaffolds; they do not yet implement authentication, authorization, tenant APIs, or business behavior.
 
 ## Prerequisites
 
@@ -34,6 +34,8 @@ pnpm -w format:check
 dotnet build Excellore.sln
 dotnet test Excellore.sln
 ```
+
+To start and verify local dependencies, see [Local platform stack](docs/runbooks/local-stack.md).
 
 CI runs these checks and Gitleaks on pushes to `main` and pull requests. Security-sensitive paths are assigned to `@saficool` in `.github/CODEOWNERS`.
 
