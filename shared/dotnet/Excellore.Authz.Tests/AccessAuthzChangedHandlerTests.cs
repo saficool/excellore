@@ -24,13 +24,13 @@ public class AccessAuthzChangedHandlerTests
         Assert.Equal(3, source.Calls);
 
         var message = Event(TenantOne, [UserOne]);
-        handler.Handle(message);
+        await handler.HandleAsync(message);
         await resolver.ResolveAsync(UserOne, TenantOne, CancellationToken.None);
         await resolver.ResolveAsync(UserTwo, TenantOne, CancellationToken.None);
         await resolver.ResolveAsync(UserOne, TenantTwo, CancellationToken.None);
         Assert.Equal(4, source.Calls);
 
-        handler.Handle(message);
+        await handler.HandleAsync(message);
         await resolver.ResolveAsync(UserOne, TenantOne, CancellationToken.None);
         Assert.Equal(4, source.Calls);
     }
@@ -45,7 +45,7 @@ public class AccessAuthzChangedHandlerTests
         await resolver.ResolveAsync(UserTwo, TenantOne, CancellationToken.None);
         await resolver.ResolveAsync(UserOne, TenantTwo, CancellationToken.None);
 
-        handler.Handle(Event(TenantOne));
+        await handler.HandleAsync(Event(TenantOne));
         await resolver.ResolveAsync(UserOne, TenantOne, CancellationToken.None);
         await resolver.ResolveAsync(UserTwo, TenantOne, CancellationToken.None);
         await resolver.ResolveAsync(UserOne, TenantTwo, CancellationToken.None);
@@ -54,7 +54,7 @@ public class AccessAuthzChangedHandlerTests
     }
 
     [Fact]
-    public void Malformed_or_cross_tenant_events_do_not_invalidate()
+    public async Task Malformed_or_cross_tenant_events_do_not_invalidate()
     {
         var invalidator = new CountingInvalidator();
         var handler = new AccessAuthzChangedHandler(invalidator);
@@ -68,25 +68,26 @@ public class AccessAuthzChangedHandlerTests
             message with { Actor = null }
         })
         {
-            var error = Assert.Throws<InvalidPlatformEventException>(() =>
-                handler.Handle(JsonSerializer.SerializeToUtf8Bytes(broken)));
+            var error = await Assert.ThrowsAsync<InvalidPlatformEventException>(() =>
+                handler.HandleAsync(JsonSerializer.SerializeToUtf8Bytes(broken)));
             Assert.Equal("Invalid platform event.", error.Message);
         }
 
-        Assert.Throws<InvalidPlatformEventException>(() => handler.Handle("not json"u8));
+        await Assert.ThrowsAsync<InvalidPlatformEventException>(() =>
+            handler.HandleAsync("not json"u8.ToArray()));
         Assert.Equal(0, invalidator.Calls);
     }
 
     [Fact]
-    public void Failed_invalidation_is_retried_on_duplicate_delivery()
+    public async Task Failed_invalidation_is_retried_on_duplicate_delivery()
     {
         var invalidator = new CountingInvalidator { FailOnce = true };
         var handler = new AccessAuthzChangedHandler(invalidator);
         var message = Event(TenantOne, [UserOne]);
 
-        Assert.Throws<InvalidOperationException>(() => handler.Handle(message));
-        handler.Handle(message);
-        handler.Handle(message);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(message));
+        await handler.HandleAsync(message);
+        await handler.HandleAsync(message);
 
         Assert.Equal(2, invalidator.Calls);
     }
@@ -158,13 +159,16 @@ public class AccessAuthzChangedHandlerTests
         public int Calls { get; private set; }
         public bool FailOnce { get; init; }
 
-        public void Invalidate(Guid tenantId, IReadOnlyCollection<Guid>? userIds = null)
+        public Task InvalidateAsync(Guid tenantId, IReadOnlyCollection<Guid>? userIds = null,
+            CancellationToken cancellationToken = default)
         {
             Calls++;
             if (FailOnce && Calls == 1)
             {
                 throw new InvalidOperationException("Synthetic failure.");
             }
+
+            return Task.CompletedTask;
         }
     }
 }
