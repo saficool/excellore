@@ -1,0 +1,20 @@
+apps:
+  - id: profile
+    name: Profile
+    description: Your account and your profile in this organization
+    icon: user
+    originEnv: PROFILE_ORIGIN
+    urlTemplate: '{origin}/t/{slug}'
+    userLevelUrl: '{origin}/account'
+    appPermission: profile.app.access
+    core: true
+    order: 10
+  - id: access
+    name: Access
+    description: People, roles, and permissions
+    icon: key
+    originEnv: ACCESS_ORIGIN
+    urlTemplate: '{origin}/t/{slug}'
+    appPermission: access.app.access
+    core: true
+    order: 20

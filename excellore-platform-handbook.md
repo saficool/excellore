@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.9 |
+| **Document version** | 4.10 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.10 | Shared app catalog resolves public app origins from environment configuration, validates links, and supplies the shared tenant/app header (ADR-0035 proposed). |
 | 4.9 | Access user-scoped internal lookups send opaque user IDs in POST bodies instead of URLs; the BFF may resolve fresh on every request (owner decision; ADR-0034 proposed). |
 | 4.8 | RP-initiated logout sends the ID token by server-side POST to Keycloak, never in a browser URL (owner decision; ADR-0033 proposed). |
 | 4.7 | Erasure confirmations have concrete Access and Profile event types; tenant and user scopes require exactly one matching opaque target ID (ADR-0032 proposed). |
@@ -1030,8 +1031,9 @@ apps:
   - id: profile
     name: Profile
     description: Your account and your profile in this organization
-    urlTemplate: https://profile.excellore.com/t/{slug}
-    userLevelUrl: https://profile.excellore.com/account
+    originEnv: PROFILE_ORIGIN
+    urlTemplate: '{origin}/t/{slug}'
+    userLevelUrl: '{origin}/account'
     icon: user
     appPermission: profile.app.access
     core: true
@@ -1039,12 +1041,15 @@ apps:
   - id: access
     name: Access
     description: People, roles, and permissions
-    urlTemplate: https://access.excellore.com/t/{slug}
+    originEnv: ACCESS_ORIGIN
+    urlTemplate: '{origin}/t/{slug}'
     icon: key
     appPermission: access.app.access
     core: true
     order: 20
 ```
+
+The catalog loader resolves `originEnv` from deployment environment configuration at build or deploy time. Origins must be HTTPS; explicitly flagged local development may use HTTP on `localhost` or a `.localhost` host. Slugs are validated before URL interpolation. The UI receives only apps enabled for the tenant and backed by the member's `<app>.app.access` permission; these links remain visibility hints, not authorization decisions.
 
 ### 13.5 Technology
 
@@ -2560,6 +2565,8 @@ AUTHZ_CLIENT_SECRET=***
 STEP_UP_ACR_VALUES=2                                          # Access only
 ALLOWED_KC_ACTIONS=UPDATE_PASSWORD,UPDATE_EMAIL,CONFIGURE_TOTP   # Profile only
 ```
+
+Shell also supplies `PROFILE_ORIGIN` and `ACCESS_ORIGIN` to the shared app catalog loader; the local values are in `.env.example`.
 
 ### D.2 API (per service)
 

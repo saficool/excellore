@@ -3,10 +3,26 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src",
     "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "yaml": "2.9.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15"
   }
 }
