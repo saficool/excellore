@@ -110,8 +110,8 @@ These hold for every change. A change that violates one is rejected, whatever th
 
 **Do**
 
-- Work in small, reviewable changes. One work package step per pull request where possible.
-- Read the relevant sections and invariants before each task. Quote the invariant IDs your change touches in the PR description.
+- Work in small, reviewable changes. One work package step per commit where possible.
+- Read the relevant sections and invariants before each task. Quote the invariant IDs your change touches in the commit body (or PR description when a PR is required).
 - Generate code from the **templates and shared libraries**. If something security-relevant is missing from a library, add it to the library, not to one app.
 - Write the tests first or together with the code. Run the full checks listed in [section 34](#34-work-packages) before declaring a step done.
 - Keep names exactly as in [Appendix E](#appendix-e-naming-conventions).
@@ -136,8 +136,8 @@ When the book does not answer your question, follow this order:
 
 1. **Search the book** (invariants, section 36 defaults, glossary, appendices).
 2. If section 36 gives a **binding default**, use it and move on.
-3. If the choice is **low-risk and reversible** (naming of an internal helper, file layout inside a project), pick the simplest option consistent with the book, and note it in the PR.
-4. If the choice **affects security, tenant isolation, data models, public contracts, or cost**, write a short proposed ADR (template in [37.2](#372-adr-template)), implement the **safest** option, and flag it in the PR for a human decision.
+3. If the choice is **low-risk and reversible** (naming of an internal helper, file layout inside a project), pick the simplest option consistent with the book, and note it in the commit body (or PR).
+4. If the choice **affects security, tenant isolation, data models, public contracts, or cost**, write a short proposed ADR (template in [37.2](#372-adr-template)), implement the **safest** option, and flag it in the commit body (or PR) for a human decision.
 5. If an invariant seems to conflict with a requirement, **stop and ask a human**. Never resolve it silently.
 
 ## 0.6 Definition of done (every change)
@@ -154,10 +154,10 @@ When the book does not answer your question, follow this order:
 
 ## 0.7 PR and commit conventions
 
-- Branch: `wp-<nn>/<short-description>` or `fix/<short-description>`.
+- Direct commits to `main` are the solo-maintainer default (ADR-0017). For a required PR, use `wp-<nn>/<short-description>` or `fix/<short-description>`.
 - Commits: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`), scope = project (`feat(access-api): …`).
-- PR description: what and why, invariants touched, how verified, ADRs proposed, follow-ups.
-- Changes under the security-owned paths in [24.2](#242-branching-and-review) need a recorded security review by the platform security owner. While the repository has one maintainer, the owner records a review checklist in the PR; no separate approving reviewer is required (ADR-0003).
+- Commit body (or PR description): what and why, invariants touched, how verified, ADRs proposed, follow-ups.
+- Changes under the security-owned paths in [24.2](#242-branching-and-review) need a recorded security review. While the repository has one maintainer, the author records this in the commit body (or PR when required); no separate approving reviewer is required (ADR-0017).
 
 ---
 
@@ -1761,9 +1761,9 @@ excellore/
 
 ### 24.2 Branching and review
 
-Use trunk-based development and short-lived branches. Protect `main` with a pull-request requirement and passing CI on the final commit; signed commits are recommended. The required CI jobs are `javascript`, `dotnet`, `handbook`, and `secrets`. Block force pushes and branch deletion. Do not allow a bypass of these checks.
+While @saficool is the only maintainer, use small direct commits to `main` (ADR-0017). Run the full local build, lint, test, formatting, and secret checks before each push, then verify the `javascript`, `dotnet`, `handbook`, and `secrets` CI jobs on `main`. Fix a failed job immediately with a follow-up commit; do not force-push or delete `main`. Signed commits are recommended. Use a short-lived branch and PR when a change explicitly requires independent approval, such as production platform-staff assignments.
 
-`CODEOWNERS` records @saficool as the platform security owner for `infra/keycloak/`, `shared/dotnet/Excellore.Auth`, `shared/dotnet/Excellore.Authz`, `shared/dotnet/Excellore.Platform`, `packages/excellore-auth`, `services/access/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. While @saficool is the only maintainer, GitHub requires zero approving reviews. Before merging a PR, the owner reviews the full diff, records the affected invariants and test evidence in the PR, and confirms that CI passed on its final commit. For security-owned paths, the owner also records the authentication, authorization, tenant-isolation, secret-handling, and audit implications; uses an ADR for a security decision; and resolves any failed check before merge. The PR template at `.github/pull_request_template.md` captures this record. When another maintainer with write access joins, revisit ADR-0003 and require independent code-owner approval for security-owned paths.
+`CODEOWNERS` records @saficool as the platform security owner for `infra/keycloak/`, `shared/dotnet/Excellore.Auth`, `shared/dotnet/Excellore.Authz`, `shared/dotnet/Excellore.Platform`, `packages/excellore-auth`, `services/access/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. Before a direct push, the author reviews the full diff and records affected invariants and test evidence in the commit body. For security-owned paths, the author also records authentication, authorization, tenant-isolation, secret-handling, and audit implications; uses an ADR for a security decision; and resolves failed local checks before pushing. The PR template remains available for changes that require a PR. When another maintainer with write access joins, revisit ADR-0017 and require independent code-owner approval for security-owned paths.
 
 ### 24.3 Ownership
 
@@ -2185,7 +2185,7 @@ Custom role example in `acme`: `billing-manager` with a subset of permissions. A
 1. **Vertical slices over layers.** Prove each security-critical path end to end (login → tenant gate → RLS → audit) before widening features.
 2. **Foundations first.** Realm, shared libraries, templates, and the Access authority come before the apps that depend on them.
 3. **Tests are part of the work.** Isolation, permission, and safeguard tests are written with the code, not after (INV-16).
-4. **Small pull requests.** One step of a work package per PR, each independently reviewable and revertible.
+4. **Small commits.** One step of a work package per commit, each independently reviewable and revertible; use a PR when independent approval is required.
 5. **Shared code goes in shared libraries.** Never copy security-sensitive code between apps.
 6. **Ask a human for:** real secrets, domains and DNS, legal and compliance choices (Q-05, Q-11), anything in section 0.5 step 4 or 5, and production access.
 7. **Never "temporarily" weaken a control.** If a control blocks progress, the control or the design is wrong; raise it.
@@ -2383,7 +2383,7 @@ Until a human changes them through [section 37](#37-document-governance), the **
 | Change | Process |
 |---|---|
 | Typo, clarification | Pull request and recorded owner review; an independent reviewer is not required while solo |
-| New standard or changed requirement | RFC (short proposal), explicit platform/security owner decision, then pull request |
+| New standard or changed requirement | RFC (short proposal), explicit platform/security owner decision, then a reviewed change; use a PR when independent approval is required |
 | **Change to an invariant (INV-nn)** | RFC, explicit security owner decision recorded in the PR, announcement. Invariants change rarely |
 | Deviation for one app | ADR with owner and expiry date |
 | Architecture-level change | RFC, ADR, security review, announcement |
@@ -3041,7 +3041,7 @@ then the sections relevant to your task. If anything here conflicts with the han
 
 ## How to work
 1. Pick the next unfinished work package in handbook section 34 (in order). State which one.
-2. Implement in small steps; one PR per step. Use the templates and shared libraries.
+2. Implement in small, reviewable commits on `main`; use a PR when independent approval is required. Use the templates and shared libraries.
 3. Run: `pnpm -w build && pnpm -w lint && pnpm -w test` and `dotnet build && dotnet test`.
 4. Meet the acceptance criteria of the package and the definition of done (handbook 0.6).
 5. If the handbook is silent: follow section 0.5 and the binding defaults in section 36.

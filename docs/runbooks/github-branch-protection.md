@@ -1,14 +1,10 @@
-# GitHub branch protection for a solo repository
+# GitHub main protection for a solo repository
 
 Owner: @saficool
-Decision: ADR-0003 and handbook section 24.2
+Decision: ADR-0017 and handbook section 24.2
 
-The repository owner applies this ruleset in GitHub under **Settings → Rulesets → Rulesets → New ruleset → New branch ruleset**. Target only the default branch, `main`, and set enforcement to **Active**. See [GitHub's ruleset instructions](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository).
+While the repository has one maintainer, ordinary changes may be pushed directly to `main` after the local checks and review record required by ADR-0017. GitHub Actions runs `javascript`, `dotnet`, `handbook`, and `secrets` on every push to `main`. Check their result after each push and fix failures immediately with a new commit.
 
-- Require a pull request before merging, with **0 required approvals** while the repository has one maintainer.
-- Require status checks to pass before merging: `javascript`, `dotnet`, `handbook`, and `secrets` from the `CI` workflow. Select checks from a completed run; do not type unchecked lookalike names.
-- Require the branch to be up to date before merging when GitHub offers the option.
-- Select **Block force pushes** and **Restrict deletions** for `main`.
-- Do not grant a bypass actor for the pull-request or status-check rules.
+If a GitHub ruleset currently requires a pull request or pre-push status checks, @saficool must update it in **Settings → Rules → Rulesets** to allow direct pushes. Keep force pushes and branch deletion blocked. Do not grant an actor permission to bypass those protections. Use a PR and record independent approval for exceptional changes even though the ordinary direct-push ruleset cannot enforce it selectively.
 
-After saving, verify GitHub reports `main` as protected. Open a small test PR or inspect the next PR to confirm all four jobs appear as required checks and merge is blocked until they pass. When another maintainer gains write access, revisit ADR-0003 and enable independent code-owner approval for security-owned paths.
+When another maintainer gains write access, revisit ADR-0017 and restore independent review for security-owned paths before that maintainer contributes.

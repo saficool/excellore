@@ -46,10 +46,10 @@ If a requirement seems to conflict with an invariant, **stop and ask a human**. 
 ## 3. How to work
 
 1. **Pick the next unfinished work package** in handbook section 34 (WP-00 to WP-15, in order). State which one you are doing.
-2. Work in **small steps, one pull request per step**. Branch name: `wp-<nn>/<short-description>`.
+2. Work in **small, reviewable commits on `main`**. Run all required local checks before each push, then verify CI on `main`. Use a short-lived `wp-<nn>/<short-description>` branch only when a PR is specifically required.
 3. Use the **templates and shared libraries** (`Excellore.Auth`, `Excellore.Authz`, `Excellore.Platform`, `@excellore/auth`, `@excellore/ui`). If something security-relevant is missing, add it to the library, never to one app.
 4. Write tests with the code. Meet the work package's **acceptance criteria** and the **definition of done** (handbook 0.6).
-5. Quote the invariant IDs you touched in the PR description.
+5. Quote the invariant IDs you touched in the commit body (or PR description when a PR is required).
 
 ### Commands
 
@@ -80,7 +80,7 @@ scripts/check-realm.sh
 
 1. Search the handbook (invariants, section 36 defaults, glossary, appendices).
 2. If section 36 gives a **binding default**, use it.
-3. If the choice is low-risk and reversible, pick the simplest option consistent with the handbook and note it in the PR.
+3. If the choice is low-risk and reversible, pick the simplest option consistent with the handbook and note it in the commit body (or PR).
 4. If it affects security, tenant isolation, data models, public contracts, or cost: write a **proposed ADR** in `docs/adr/`, implement the **safest** option, and flag it for human review.
 5. If an invariant conflicts with a requirement, stop and ask.
 
@@ -126,7 +126,7 @@ docs/            handbook.md, adr/, runbooks/
 - **Errors:** RFC 9457 problem details with stable `urn:excellore:problem:<name>` types. `404` for unknown or non-member tenant, `403` for member without permission or step-up needed.
 - **Commits:** Conventional Commits with project scope, for example `feat(access-api): add custom role endpoints`.
 - **Table classes:** every new table is classified in its migration as P (platform), H (hybrid), or T (tenant). T and H tables get forced RLS. Platform tables that carry `tenant_id` must be added to `infra/db/rls-exempt.txt`, which requires security review.
-- **Security-owner review record** is required for `infra/keycloak/`, `Excellore.Auth`, `Excellore.Authz`, `Excellore.Platform`, `@excellore/auth`, `services/access/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. While @saficool is the only maintainer, the owner records the review in the PR and no separate approving reviewer is required (handbook section 24.2; ADR-0003).
+- **Security review record** is required for `infra/keycloak/`, `Excellore.Auth`, `Excellore.Authz`, `Excellore.Platform`, `@excellore/auth`, `services/access/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. While @saficool is the only maintainer, the author records the review in the commit body (or PR when required); no separate approving reviewer is required (handbook section 24.2; ADR-0017).
 
 ## 8. Never
 

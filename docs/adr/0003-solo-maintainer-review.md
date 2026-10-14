@@ -1,6 +1,6 @@
 # ADR-0003: Solo-maintainer repository review
 
-Status: Accepted by @saficool on 2026-10-12; effective when the accompanying handbook change merges.
+Status: Superseded by ADR-0017 for the solo workflow on 2026-10-14.
 Date: 2026-10-12
 Owner: @saficool (platform and security owner while solo)
 Review date: 2027-01-12, or when another maintainer gains write access, whichever comes first.
