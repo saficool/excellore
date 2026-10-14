@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.5 |
+| **Document version** | 4.6 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.6 | Global Profile account, export, and deletion events omit tenant ID; Profile update events carry bounded changed field names only (RFC-0005). |
 | 4.5 | Access role events carry only opaque tenant and role IDs; custom names and permission lists are omitted by owner decision (RFC-0004). |
 | 4.4 | Membership-added events use opaque tenant, user, and membership IDs without role names, by owner decision (RFC-0003). |
 | 4.3 | Tenant metadata events carry opaque IDs and bounded codes, without names, slugs, plans, or free-form features, by owner decision (RFC-0002). |
@@ -1307,7 +1308,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 }
 ```
 
-`tenantid` is absent (null) only for global identity events.
+`tenantid` is absent (null) only for global user events: identity lifecycle events and the global Profile account, export, and deletion events. Every tenant-scoped event carries `tenantid`.
 
 ### 16.3 Event catalog
 
@@ -1324,7 +1325,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 | `access.role.created.v1` / `updated.v1` / `deleted.v1` | Access | Interested services | Role changes (informational) |
 | `access.assignment.granted.v1` / `revoked.v1` | Access | Notifications | Assignment changes |
 | `access.supportgrant.created.v1` / `revoked.v1` | Access | Security, notifications | Support access visibility |
-| `profile.updated.v1` | Profile | Interested services | Display data changed |
+| `profile.updated.v1` | Profile | Interested services | Global profile fields changed |
 | `profile.deletion.requested.v1` | Profile | Access | Start account deletion flow |
 | `profile.export.ready.v1` | Profile | Notifications | Export available |
 | `<service>.erasure.confirmed.v1` | Each service | Access | Confirms erasure of a tenant or identity |
@@ -1332,6 +1333,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 Routing keys follow `<domain>.<entity>.<verb>.v<N>`. Schemas are in [Appendix H](#appendix-h-event-schemas) and `Excellore.Contracts`.
 Tenant metadata events contain IDs and changed field names only. Consumers resolve current names, slugs, plans, and feature values through an authorized Access contract. A `tenant.updated.v1` consumer invalidates all slug keys indexed to that tenant ID; if it has no reverse index, it clears the slug cache namespace.
 Access role events are informational and contain opaque IDs only. Consumers resolve current role details and permissions through the Access authority; event payloads never grant access.
+Global Profile events carry no tenant ID or tenant-scoped data. Consumers process them without tenant context and never use them to authorize tenant work (RFC-0005).
 
 ### 16.4 Delivery rules
 
@@ -2968,7 +2970,7 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 | `access.role.created.v1` / `updated.v1` / `deleted.v1` | `tenantId`, `roleId` |
 | `access.assignment.granted.v1` / `revoked.v1` | `tenantId`, `userId`, `roleId`, `expiresAt?` |
 | `access.supportgrant.created.v1` / `revoked.v1` | `tenantId`, `grantId`, `staffUserId`, `expiresAt` |
-| `profile.updated.v1` | `userId`, `changed: [..]` (no values) |
+| `profile.updated.v1` | `userId`, `changed: ["displayName","timeZone","avatar","preferences"]` (field names only, no values) |
 | `profile.deletion.requested.v1` | `userId` |
 | `profile.export.ready.v1` | `userId`, `exportId` |
 | `<service>.erasure.confirmed.v1` | `scope: "tenant"\|"user"`, `tenantId?`, `userId?`, `service` |

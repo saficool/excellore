@@ -1,0 +1,15 @@
+{
+  "specversion": "1.0",
+  "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2",
+  "type": "profile.deletion.requested.v1",
+  "source": "excellore/profile",
+  "time": "2026-01-01T12:00:00Z",
+  "correlationid": "33333333-3333-4333-8333-333333333333",
+  "actor": {
+    "sub": "44444444-4444-4444-8444-444444444444",
+    "type": "machine"
+  },
+  "data": {
+    "userId": "55555555-5555-4555-8555-555555555555"
+  }
+}

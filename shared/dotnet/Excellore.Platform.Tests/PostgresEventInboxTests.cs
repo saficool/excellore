@@ -270,6 +270,25 @@ public sealed class PostgresEventInboxTests
         }
         Assert.Equal(27, await CountAsync(admin, "SELECT count(*) FROM inbox"));
         Assert.Equal(21, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        foreach (var type in new[]
+        {
+            ProfileUpdatedV1.EventType,
+            ProfileDeletionRequestedV1.EventType,
+            ProfileExportReadyV1.EventType
+        })
+        {
+            var json = ProfileEventsV1Tests.EventJson(type, ProfileEventsV1Tests.Data(type));
+            var parsed = ProfileEventsV1Tests.Parse(type, json);
+            Assert.True(await inbox.RunOnceAsync(app, parsed.Id, null,
+                (transaction, cancellationToken) => InsertGlobalEffectAsync(transaction,
+                    parsed.Id, cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, parsed.Id, null,
+                (_, _) => throw new InvalidOperationException("Duplicate global profile work ran.")));
+        }
+        Assert.Equal(30, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(8, await CountAsync(admin, "SELECT count(*) FROM global_event_effects"));
+        Assert.Equal(21, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
     }
 
     private static async Task InsertGlobalEffectAsync(DbTransaction transaction, Guid eventId,

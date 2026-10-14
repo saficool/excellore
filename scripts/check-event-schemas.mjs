@@ -111,6 +111,21 @@ for (const file of schemaFiles) {
       },
     );
   }
+  if (eventType.startsWith('profile.')) {
+    invalidExamples.push(
+      { ...example, tenantid: '22222222-2222-4222-8222-222222222222' },
+      { ...example, data: { ...example.data, email: 'personal@example.test' } },
+      { ...example, data: { ...example.data, displayName: 'personal value' } },
+      {
+        ...example,
+        data: { ...example.data, downloadUrl: 'https://example.test/export' },
+      },
+      {
+        ...example,
+        data: { ...example.data, signedUrl: 'https://example.test/export' },
+      },
+    );
+  }
   for (const invalid of invalidExamples) {
     assert.equal(
       validate(invalid),
