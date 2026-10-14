@@ -1,0 +1,12 @@
+app: __APP_SLUG__
+permissions:
+  - key: __APP_SLUG__.app.access
+    description: Open this app within a tenant
+    privileged: false
+    ownerOnly: false
+    systemRoles: [owner, admin, member, viewer]
+  - key: __APP_SLUG__.item.read
+    description: Read a sample item
+    privileged: false
+    ownerOnly: false
+    systemRoles: [owner, admin, member, viewer]

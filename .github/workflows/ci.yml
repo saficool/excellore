@@ -40,6 +40,11 @@ jobs:
           dotnet-version: '10.0.x'
       - run: dotnet build Excellore.sln --configuration Release
       - run: dotnet test Excellore.sln --configuration Release --no-build
+      - run: dotnet new install ./templates/excellore-service
+      - run: dotnet new excellore-service --name Excellore.Probe --appSlug probe --output .local/template-probe
+      - run: dotnet build .local/template-probe/Excellore.Probe.Api/Excellore.Probe.Api.csproj --configuration Release
+      - run: dotnet build .local/template-probe/Excellore.Probe.Worker/Excellore.Probe.Worker.csproj --configuration Release
+      - run: dotnet test .local/template-probe/Excellore.Probe.Tests/Excellore.Probe.Tests.csproj --configuration Release
 
   secrets:
     runs-on: ubuntu-latest

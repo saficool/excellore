@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <ProjectReference Include="../Excellore.Sample.Domain/Excellore.Sample.Domain.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Authz/Excellore.Authz.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Platform/Excellore.Platform.csproj" />
+  </ItemGroup>
+</Project>

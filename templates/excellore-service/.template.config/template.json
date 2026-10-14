@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Excellore",
+  "classifications": ["Web", "Worker", "Excellore"],
+  "identity": "Excellore.Service.Template",
+  "name": "Excellore service",
+  "shortName": "excellore-service",
+  "sourceName": "Excellore.Sample",
+  "defaultName": "Excellore.Sample",
+  "preferNameDirectory": false,
+  "sources": [
+    {
+      "modifiers": [{ "exclude": ["**/bin/**", "**/obj/**", "**/.vs/**"] }]
+    }
+  ],
+  "symbols": {
+    "appSlug": {
+      "type": "parameter",
+      "datatype": "text",
+      "defaultValue": "sample",
+      "description": "Lowercase app ID matching the Keycloak audience and permission prefix",
+      "replaces": "__APP_SLUG__"
+    }
+  },
+  "primaryOutputs": [
+    { "path": "Excellore.Sample.Api/Excellore.Sample.Api.csproj" },
+    { "path": "Excellore.Sample.Worker/Excellore.Sample.Worker.csproj" },
+    { "path": "Excellore.Sample.Tests/Excellore.Sample.Tests.csproj" }
+  ]
+}

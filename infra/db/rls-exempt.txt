@@ -1,1 +1,3 @@
-# No exemptions in WP-00. Changes require security-owner review.
+# Class P service outbox (tenant_id is a routing key, not tenant-owned data).
+# Approved by ADR-0018; the publisher needs to select pending rows across tenants.
+outbox
