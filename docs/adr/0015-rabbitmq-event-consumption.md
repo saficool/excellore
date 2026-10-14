@@ -18,4 +18,4 @@ The transport processes one delivery at a time. A successful handler is acknowle
 
 ## Consequences
 
-RabbitMQ and Valkey integration tests prove success acknowledgement, bounded retry and dead lettering, and broker-to-cache invalidation. The dead-letter queue needs backlog alerts and a replay runbook before production. The durable inbox for general service events remains WP-03 work; this authorization handler already treats repeated event IDs idempotently. `RabbitMQ.Client` 7.2.2 is Apache-2.0 OR MPL-2.0 licensed; `Testcontainers.RabbitMq` 4.16.0 is MIT licensed, checked against their NuGet listings at adoption.
+RabbitMQ and Valkey integration tests prove success acknowledgement, bounded retry and dead lettering, and broker-to-cache invalidation. The dead-letter queue needs backlog alerts and a replay runbook before production. The durable inbox primitive for service database handlers is in ADR-0016; this authorization handler treats repeated event IDs idempotently. `RabbitMQ.Client` 7.2.2 is Apache-2.0 OR MPL-2.0 licensed; `Testcontainers.RabbitMq` 4.16.0 is MIT licensed, checked against their NuGet listings at adoption.
