@@ -252,6 +252,24 @@ public sealed class PostgresEventInboxTests
         }
         Assert.Equal(25, await CountAsync(admin, "SELECT count(*) FROM inbox"));
         Assert.Equal(19, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        foreach (var type in new[]
+        {
+            AccessSupportGrantCreatedV1.EventType,
+            AccessSupportGrantRevokedV1.EventType
+        })
+        {
+            var json = TenantLifecycleEventsV1Tests.EventJson(type, tenantOne,
+                AccessSupportGrantEventsV1Tests.Data(tenantOne));
+            var parsed = AccessSupportGrantEventsV1Tests.Parse(type, json);
+            Assert.True(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (transaction, cancellationToken) => InsertItemAsync(transaction, parsed.Id,
+                    parsed.TenantId, cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (_, _) => throw new InvalidOperationException("Duplicate support grant work ran.")));
+        }
+        Assert.Equal(27, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(21, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
     }
 
     private static async Task InsertGlobalEffectAsync(DbTransaction transaction, Guid eventId,

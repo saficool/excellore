@@ -97,6 +97,20 @@ for (const file of schemaFiles) {
       },
     );
   }
+  if (eventType.startsWith('access.supportgrant.')) {
+    invalidExamples.push(
+      { ...example, data: { ...example.data, expiresAt: null } },
+      { ...example, data: { ...example.data, expiresAt: '2026-01-01' } },
+      { ...example, data: { ...example.data, description: 'personal value' } },
+      { ...example, data: { ...example.data, staffName: 'personal value' } },
+      { ...example, data: { ...example.data, email: 'personal@example.test' } },
+      { ...example, data: { ...example.data, reason: 'personal value' } },
+      {
+        ...example,
+        data: { ...example.data, permissions: ['app.resource.read'] },
+      },
+    );
+  }
   for (const invalid of invalidExamples) {
     assert.equal(
       validate(invalid),

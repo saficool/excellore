@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 
 namespace Excellore.Contracts;
 
@@ -70,12 +69,8 @@ internal static class AccessAssignmentEventDataValidator
 
         using var document = JsonDocument.Parse(json.ToArray());
         var data = document.RootElement.GetProperty("data");
-        if (data.TryGetProperty("expiresAt", out var expiresAt))
-        {
-            if (expiresAt.ValueKind != JsonValueKind.String ||
-                !Regex.IsMatch(expiresAt.GetString()!, @"(?:[Zz]|[+-]\d{2}:\d{2})$"))
-                throw new InvalidPlatformEventException();
-        }
+        if (data.TryGetProperty("expiresAt", out _))
+            EventTimestampValidator.RequireOffsetTimestamp(data, "expiresAt");
 
         foreach (var forbidden in new[]
         {
