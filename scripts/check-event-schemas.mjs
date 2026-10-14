@@ -44,6 +44,13 @@ for (const file of schemaFiles) {
       data: { ...example.data, [required]: undefined },
     });
   }
+  if (eventType.startsWith('identity.user.')) {
+    invalidExamples.push(
+      { ...example, tenantid: '22222222-2222-4222-8222-222222222222' },
+      { ...example, data: { ...example.data, email: 'personal@example.test' } },
+      { ...example, data: { ...example.data, givenName: 'Personal' } },
+    );
+  }
   for (const invalid of invalidExamples) {
     assert.equal(
       validate(invalid),

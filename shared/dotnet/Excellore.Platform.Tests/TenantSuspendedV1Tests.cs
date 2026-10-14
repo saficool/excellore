@@ -29,6 +29,7 @@ public sealed class TenantSuspendedV1Tests
         var original = Event();
         var broken = new[]
         {
+            original with { TenantId = null },
             original with { TenantId = Guid.NewGuid() },
             original with { Type = "tenant.reactivated.v1" },
             original with { Source = "excellore/profile" },

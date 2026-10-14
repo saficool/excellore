@@ -27,6 +27,8 @@ public sealed class PostgresEventInboxTests
                 received_at timestamptz NOT NULL DEFAULT now()
             );
             COMMENT ON TABLE inbox IS 'Class P: consumer event IDs';
+            CREATE TABLE global_event_effects (event_id uuid PRIMARY KEY);
+            COMMENT ON TABLE global_event_effects IS 'Class P: global identity consumer fixture';
             CREATE TABLE tenant_items (
                 id uuid PRIMARY KEY,
                 tenant_id uuid NOT NULL
@@ -38,7 +40,7 @@ public sealed class PostgresEventInboxTests
               USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
               WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
             GRANT USAGE ON SCHEMA public TO inbox_app;
-            GRANT SELECT, INSERT ON inbox, tenant_items TO inbox_app;
+            GRANT SELECT, INSERT ON inbox, tenant_items, global_event_effects TO inbox_app;
             """);
 
         var appConnectionString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
@@ -115,13 +117,55 @@ public sealed class PostgresEventInboxTests
             var parsed = TenantSuspendedV1.Parse(suspensionJson);
             return await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
                 (transaction, cancellationToken) => InsertItemAsync(transaction, suspensionItem,
-                    parsed.TenantId, cancellationToken));
+                    parsed.TenantId!.Value, cancellationToken));
         }
 
         Assert.True(await ConsumeSuspensionAsync());
         Assert.False(await ConsumeSuspensionAsync());
         Assert.Equal(4, await CountAsync(admin, "SELECT count(*) FROM inbox"));
         Assert.Equal(3, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        var identityTypes = new[]
+        {
+            IdentityUserCreatedV1.EventType,
+            IdentityUserUpdatedV1.EventType,
+            IdentityUserDisabledV1.EventType,
+            IdentityUserEnabledV1.EventType,
+            IdentityUserDeletedV1.EventType
+        };
+        foreach (var type in identityTypes)
+        {
+            var data = new Dictionary<string, object> { ["userId"] = Guid.NewGuid() };
+            if (type == IdentityUserUpdatedV1.EventType) data["changed"] = new[] { "locale" };
+            var json = IdentityUserEventsV1Tests.EventJson(type, data);
+            var eventId = type switch
+            {
+                IdentityUserCreatedV1.EventType => IdentityUserCreatedV1.Parse(json).Id,
+                IdentityUserUpdatedV1.EventType => IdentityUserUpdatedV1.Parse(json).Id,
+                IdentityUserDisabledV1.EventType => IdentityUserDisabledV1.Parse(json).Id,
+                IdentityUserEnabledV1.EventType => IdentityUserEnabledV1.Parse(json).Id,
+                IdentityUserDeletedV1.EventType => IdentityUserDeletedV1.Parse(json).Id,
+                _ => throw new InvalidOperationException("Unexpected identity event type.")
+            };
+            Assert.True(await inbox.RunOnceAsync(app, eventId, null,
+                (transaction, cancellationToken) => InsertGlobalEffectAsync(transaction, eventId,
+                    cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, eventId, null,
+                (_, _) => throw new InvalidOperationException("Duplicate global work ran.")));
+        }
+        Assert.Equal(9, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(5, await CountAsync(admin, "SELECT count(*) FROM global_event_effects"));
+        Assert.Equal(3, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+    }
+
+    private static async Task InsertGlobalEffectAsync(DbTransaction transaction, Guid eventId,
+        CancellationToken cancellationToken)
+    {
+        await using var command = transaction.Connection!.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "INSERT INTO global_event_effects (event_id) VALUES (@event_id)";
+        AddGuid(command, "event_id", eventId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task InsertItemAsync(DbTransaction transaction, Guid id, Guid tenantId,

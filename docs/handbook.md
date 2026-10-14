@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.1 |
+| **Document version** | 4.2 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.2 | Global identity lifecycle events carry opaque user IDs and changed field names only; the `identity.user.created.v1` email exception was removed by owner decision (RFC-0001). |
 | 4.1 | Keycloak login and admin events remain in the Keycloak event store until a redacting export path is available (ADR-0004). |
 | 4.0 | Solo-maintainer repository review policy accepted: owner security checklist and required CI replace mandatory independent PR approval until another maintainer joins (ADR-0003). |
 | 3.1 | Defaults in section 36 accepted. Retention reduced to a placeholder (Q-11). |
@@ -1282,7 +1283,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 ### 16.1 Principles
 
 - Events travel on the RabbitMQ topic exchange `excellore.events`. An event states a **fact that already happened**.
-- Events MUST NOT carry tokens, passwords, or unnecessary personal data. They carry identifiers.
+- Events MUST NOT carry tokens, passwords, or personal data. They carry opaque identifiers.
 - Events are **versioned** (`.v1`). A breaking change adds `.v2` alongside `.v1` until consumers migrate.
 - Every tenant-related event carries `tenantid` (INV-07).
 
@@ -2946,7 +2947,7 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 
 | Event type | `data` fields |
 |---|---|
-| `identity.user.created.v1` | `userId`, `email`, `emailVerified` |
+| `identity.user.created.v1` | `userId` |
 | `identity.user.updated.v1` | `userId`, `changed: ["givenName","familyName","locale","email"]` |
 | `identity.user.disabled.v1` / `enabled.v1` | `userId` |
 | `identity.user.deleted.v1` | `userId` |
@@ -2967,7 +2968,7 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 | `profile.export.ready.v1` | `userId`, `exportId` |
 | `<service>.erasure.confirmed.v1` | `scope: "tenant"\|"user"`, `tenantId?`, `userId?`, `service` |
 
-Rules: no personal data beyond identifiers (email only where indicated and justified); consumers de-duplicate on envelope `id`; unknown fields are ignored (forward compatibility).
+Rules: no personal data beyond opaque identifiers; `changed` lists field names only, never values; consumers de-duplicate on envelope `id`; unknown fields are ignored (forward compatibility).
 
 ---
 

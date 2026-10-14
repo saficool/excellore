@@ -20,7 +20,8 @@ public sealed record PlatformEvent<TData> where TData : class
     public DateTimeOffset Time { get; init; }
 
     [JsonPropertyName("tenantid")]
-    public Guid TenantId { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Guid? TenantId { get; init; }
 
     [JsonPropertyName("subject")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

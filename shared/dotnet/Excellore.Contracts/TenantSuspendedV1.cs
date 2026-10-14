@@ -15,7 +15,7 @@ public sealed record TenantSuspendedV1
 
     public static PlatformEvent<TenantSuspendedV1> Parse(ReadOnlySpan<byte> json)
     {
-        var envelope = TenantEventParser.Parse<TenantSuspendedV1>(json, EventType, EventSource);
+        var envelope = PlatformEventParser.Parse<TenantSuspendedV1>(json, EventType, EventSource, true);
         if (envelope.Data!.TenantId != envelope.TenantId || !IsReasonCode(envelope.Data.ReasonCode))
         {
             throw new InvalidPlatformEventException();

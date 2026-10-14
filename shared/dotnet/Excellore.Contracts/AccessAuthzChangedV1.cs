@@ -19,7 +19,7 @@ public sealed record AccessAuthzChangedV1
 
     public static PlatformEvent<AccessAuthzChangedV1> Parse(ReadOnlySpan<byte> json)
     {
-        var envelope = TenantEventParser.Parse<AccessAuthzChangedV1>(json, EventType, EventSource);
+        var envelope = PlatformEventParser.Parse<AccessAuthzChangedV1>(json, EventType, EventSource, true);
         if (envelope.Data!.TenantId != envelope.TenantId ||
             envelope.Data.AuthzVersion < 1)
         {

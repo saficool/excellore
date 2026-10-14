@@ -2,12 +2,12 @@ using System.Text.Json;
 
 namespace Excellore.Contracts;
 
-internal static class TenantEventParser
+internal static class PlatformEventParser
 {
     private const int MaxEventBytes = 64 * 1024;
 
     public static PlatformEvent<TData> Parse<TData>(ReadOnlySpan<byte> json, string eventType,
-        string eventSource) where TData : class
+        string eventSource, bool tenantScoped) where TData : class
     {
         if (json.Length == 0 || json.Length > MaxEventBytes)
         {
@@ -26,7 +26,9 @@ internal static class TenantEventParser
 
         if (envelope is null || envelope.SpecVersion != "1.0" || envelope.Id == Guid.Empty ||
             envelope.Type != eventType || envelope.Source != eventSource ||
-            envelope.Time == default || envelope.TenantId == Guid.Empty ||
+            envelope.Time == default ||
+            (tenantScoped ? envelope.TenantId is null || envelope.TenantId == Guid.Empty :
+                envelope.TenantId is not null) ||
             envelope.CorrelationId == Guid.Empty || envelope.Actor is null ||
             string.IsNullOrWhiteSpace(envelope.Actor.Sub) ||
             envelope.Actor.Type is not ("human" or "machine") || envelope.Data is null)

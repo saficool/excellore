@@ -23,7 +23,7 @@ public sealed class AccessAuthzChangedHandler(IAuthzCacheInvalidator invalidator
             }
 
             // Mark the event only after invalidation succeeds, so failed deliveries can retry.
-            await invalidator.InvalidateAsync(envelope.TenantId, envelope.Data!.UserIds,
+            await invalidator.InvalidateAsync(envelope.TenantId!.Value, envelope.Data!.UserIds,
                 cancellationToken);
             _handled.Add(envelope.Id);
             _order.Enqueue(envelope.Id);
