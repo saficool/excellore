@@ -28,6 +28,28 @@ public sealed class RabbitMqEventBus : IEventBus
         };
     }
 
+    public async Task<IEventPublisher> CreatePublisherAsync(CancellationToken cancellationToken = default)
+    {
+        IConnection? connection = null;
+        IChannel? channel = null;
+        try
+        {
+            connection = await _factory.CreateConnectionAsync(cancellationToken);
+            channel = await connection.CreateChannelAsync(new CreateChannelOptions(
+                publisherConfirmationsEnabled: true,
+                publisherConfirmationTrackingEnabled: true), cancellationToken);
+            await channel.ExchangeDeclareAsync(EventExchange, ExchangeType.Topic,
+                durable: true, autoDelete: false, cancellationToken: cancellationToken);
+            return new Publisher(connection, channel);
+        }
+        catch
+        {
+            if (channel is not null) await channel.DisposeAsync();
+            if (connection is not null) await connection.DisposeAsync();
+            throw;
+        }
+    }
+
     public async Task<IAsyncDisposable> SubscribeAsync(string serviceName,
         IReadOnlyDictionary<string, PlatformEventHandler> handlers,
         CancellationToken cancellationToken = default)
@@ -173,6 +195,63 @@ public sealed class RabbitMqEventBus : IEventBus
                 await channel.DisposeAsync();
                 await connection.DisposeAsync();
                 lifetime.Dispose();
+            }
+        }
+    }
+
+    private sealed class Publisher(IConnection connection, IChannel channel) : IEventPublisher
+    {
+        private readonly SemaphoreSlim _publishGate = new(1, 1);
+
+        public async Task PublishAsync(Guid eventId, string eventType, ReadOnlyMemory<byte> body,
+            CancellationToken cancellationToken = default)
+        {
+            if (eventId == Guid.Empty)
+            {
+                throw new ArgumentException("A valid event ID is required.", nameof(eventId));
+            }
+            if (string.IsNullOrWhiteSpace(eventType) || eventType.Length > 128 ||
+                eventType.Any(character => !char.IsAsciiLetterLower(character) &&
+                                           !char.IsAsciiDigit(character) &&
+                                           character is not ('.' or '-')))
+            {
+                throw new ArgumentException("A valid event type is required.", nameof(eventType));
+            }
+            if (body.IsEmpty || body.Length > MaxBodyBytes)
+            {
+                throw new ArgumentException("The event body size is invalid.", nameof(body));
+            }
+
+            await _publishGate.WaitAsync(cancellationToken);
+            try
+            {
+                await channel.BasicPublishAsync(EventExchange, eventType, mandatory: true,
+                    new BasicProperties
+                    {
+                        Persistent = true,
+                        ContentType = "application/cloudevents+json",
+                        MessageId = eventId.ToString("D"),
+                        Type = eventType
+                    }, body, cancellationToken);
+            }
+            finally
+            {
+                _publishGate.Release();
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _publishGate.WaitAsync();
+            try
+            {
+                await channel.DisposeAsync();
+                await connection.DisposeAsync();
+            }
+            finally
+            {
+                _publishGate.Release();
+                _publishGate.Dispose();
             }
         }
     }

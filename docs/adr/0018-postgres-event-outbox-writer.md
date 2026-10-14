@@ -1,8 +1,8 @@
 # ADR-0018: Transactional PostgreSQL outbox writer
 
-Status: proposed
+Status: accepted by @saficool on 2026-10-14
 Date: 2026-10-14
-Owner: agent: needs human review
+Owner: @saficool
 
 ## Context
 

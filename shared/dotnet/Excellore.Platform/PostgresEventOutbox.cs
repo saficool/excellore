@@ -15,6 +15,31 @@ public sealed class PostgresEventOutbox
         Guid? tenantId, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(transaction);
+        var json = ValidateEnvelope(eventId, eventType, tenantId, payload);
+
+        var connection = transaction.Connection ??
+                         throw new InvalidOperationException("An active database transaction is required.");
+        if (connection.State != ConnectionState.Open)
+        {
+            throw new InvalidOperationException("An open database connection is required.");
+        }
+
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO outbox (id, type, tenant_id, payload)
+            VALUES (@id, @type, @tenant_id, CAST(@payload AS jsonb))
+            """;
+        AddParameter(command, "id", DbType.Guid, eventId);
+        AddParameter(command, "type", DbType.String, eventType);
+        AddParameter(command, "tenant_id", DbType.Guid, tenantId ?? (object)DBNull.Value);
+        AddParameter(command, "payload", DbType.String, json);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    internal static string ValidateEnvelope(Guid eventId, string eventType, Guid? tenantId,
+        ReadOnlyMemory<byte> payload)
+    {
         if (eventId == Guid.Empty || tenantId == Guid.Empty)
         {
             throw new ArgumentException("A valid event ID and tenant context are required.");
@@ -57,24 +82,7 @@ public sealed class PostgresEventOutbox
             throw new ArgumentException("The event payload must be UTF-8 JSON.", nameof(payload));
         }
 
-        var connection = transaction.Connection ??
-                         throw new InvalidOperationException("An active database transaction is required.");
-        if (connection.State != ConnectionState.Open)
-        {
-            throw new InvalidOperationException("An open database connection is required.");
-        }
-
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction;
-        command.CommandText = """
-            INSERT INTO outbox (id, type, tenant_id, payload)
-            VALUES (@id, @type, @tenant_id, CAST(@payload AS jsonb))
-            """;
-        AddParameter(command, "id", DbType.Guid, eventId);
-        AddParameter(command, "type", DbType.String, eventType);
-        AddParameter(command, "tenant_id", DbType.Guid, tenantId ?? (object)DBNull.Value);
-        AddParameter(command, "payload", DbType.String, json);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        return json;
     }
 
     private static bool MatchesTenant(JsonElement root, Guid? tenantId)
