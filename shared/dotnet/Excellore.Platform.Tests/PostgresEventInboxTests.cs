@@ -156,6 +156,45 @@ public sealed class PostgresEventInboxTests
         Assert.Equal(9, await CountAsync(admin, "SELECT count(*) FROM inbox"));
         Assert.Equal(5, await CountAsync(admin, "SELECT count(*) FROM global_event_effects"));
         Assert.Equal(3, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        foreach (var type in new[]
+        {
+            TenantReactivatedV1.EventType,
+            TenantDeletionRequestedV1.EventType,
+            TenantDeletedV1.EventType
+        })
+        {
+            var json = TenantLifecycleEventsV1Tests.EventJson(type, tenantOne,
+                TenantLifecycleEventsV1Tests.Data(type, tenantOne));
+            var parsed = TenantLifecycleEventsV1Tests.Parse(type, json);
+            Assert.True(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (transaction, cancellationToken) => InsertItemAsync(transaction, parsed.Id,
+                    parsed.TenantId, cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (_, _) => throw new InvalidOperationException("Duplicate tenant work ran.")));
+        }
+        Assert.Equal(12, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(6, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        foreach (var type in new[]
+        {
+            TenantCreatedV1.EventType,
+            TenantUpdatedV1.EventType,
+            TenantAppEnabledV1.EventType,
+            TenantAppDisabledV1.EventType
+        })
+        {
+            var json = TenantLifecycleEventsV1Tests.EventJson(type, tenantOne,
+                TenantMetadataEventsV1Tests.Data(type, tenantOne));
+            var parsed = TenantMetadataEventsV1Tests.Parse(type, json);
+            Assert.True(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (transaction, cancellationToken) => InsertItemAsync(transaction, parsed.Id,
+                    parsed.TenantId, cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (_, _) => throw new InvalidOperationException("Duplicate metadata work ran.")));
+        }
+        Assert.Equal(16, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(10, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
     }
 
     private static async Task InsertGlobalEffectAsync(DbTransaction transaction, Guid eventId,

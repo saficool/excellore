@@ -51,6 +51,22 @@ for (const file of schemaFiles) {
       { ...example, data: { ...example.data, givenName: 'Personal' } },
     );
   }
+  if (
+    [
+      'tenant.created.v1',
+      'tenant.updated.v1',
+      'tenant.app.enabled.v1',
+      'tenant.app.disabled.v1',
+    ].includes(eventType)
+  ) {
+    invalidExamples.push(
+      { ...example, data: { ...example.data, slug: 'identifying-slug' } },
+      {
+        ...example,
+        data: { ...example.data, features: { freeForm: 'value' } },
+      },
+    );
+  }
   for (const invalid of invalidExamples) {
     assert.equal(
       validate(invalid),

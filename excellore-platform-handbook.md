@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.2 |
+| **Document version** | 4.3 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.3 | Tenant metadata events carry opaque IDs and bounded codes, without names, slugs, plans, or free-form features, by owner decision (RFC-0002). |
 | 4.2 | Global identity lifecycle events carry opaque user IDs and changed field names only; the `identity.user.created.v1` email exception was removed by owner decision (RFC-0001). |
 | 4.1 | Keycloak login and admin events remain in the Keycloak event store until a redacting export path is available (ADR-0004). |
 | 4.0 | Solo-maintainer repository review policy accepted: owner security checklist and required CI replace mandatory independent PR approval until another maintainer joins (ADR-0003). |
@@ -619,7 +620,7 @@ The **BFF** uses the same contract (through its app's `svc-*-authz` identity) to
 |---|---|---|---|
 | PEP snapshot | `authz:{tenantId}:{userId}` (Valkey, with a short in-memory layer) | 60 s | `access.authz.changed.v1` event `{tenantId, userIds? }`; absent `userIds` means the whole tenant |
 | BFF context | `ctx:{sid}:{slug}` | 60 s | Session end |
-| Slug → id | `slug:{slug}` | 5 min | `tenant.updated.v1` |
+| Slug → id | `slug:{slug}` | 5 min | `tenant.updated.v1` via tenant-ID reverse index, or clear the slug cache namespace |
 
 Access increments a per-tenant `authz_version` on every change that can affect permissions (role, assignment, group, membership, tenant status, app enablement) and publishes `access.authz.changed.v1` through the outbox. Consumers drop matching cache entries. The 60 s TTL is the backstop if an event is delayed.
 
@@ -1327,6 +1328,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 | `<service>.erasure.confirmed.v1` | Each service | Access | Confirms erasure of a tenant or identity |
 
 Routing keys follow `<domain>.<entity>.<verb>.v<N>`. Schemas are in [Appendix H](#appendix-h-event-schemas) and `Excellore.Contracts`.
+Tenant metadata events contain IDs and changed field names only. Consumers resolve current names, slugs, plans, and feature values through an authorized Access contract. A `tenant.updated.v1` consumer invalidates all slug keys indexed to that tenant ID; if it has no reverse index, it clears the slug cache namespace.
 
 ### 16.4 Delivery rules
 
@@ -2951,12 +2953,12 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 | `identity.user.updated.v1` | `userId`, `changed: ["givenName","familyName","locale","email"]` |
 | `identity.user.disabled.v1` / `enabled.v1` | `userId` |
 | `identity.user.deleted.v1` | `userId` |
-| `tenant.created.v1` | `tenantId`, `slug`, `name`, `plan`, `apps: [..]` |
-| `tenant.updated.v1` | `tenantId`, `slug`, `name`, `plan`, `previousSlug?` |
+| `tenant.created.v1` | `tenantId` |
+| `tenant.updated.v1` | `tenantId`, `changed: ["slug","name","plan"]` (field names only) |
 | `tenant.suspended.v1` / `reactivated.v1` | `tenantId`, `reasonCode` |
 | `tenant.deletion.requested.v1` | `tenantId`, `dueAt` |
 | `tenant.deleted.v1` | `tenantId` |
-| `tenant.app.enabled.v1` / `disabled.v1` | `tenantId`, `appId`, `features?` |
+| `tenant.app.enabled.v1` / `disabled.v1` | `tenantId`, `appId` (bounded machine-safe code) |
 | `tenant.member.added.v1` | `tenantId`, `userId`, `roles: [..]` |
 | `tenant.member.suspended.v1` / `reactivated.v1` / `removed.v1` | `tenantId`, `userId` |
 | `access.authz.changed.v1` | `tenantId`, `userIds?` (absent means whole tenant), `authzVersion` |

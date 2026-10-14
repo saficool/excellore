@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:excellore:event:tenant.deletion.requested.v1",
+  "title": "tenant.deletion.requested.v1",
+  "type": "object",
+  "required": [
+    "specversion",
+    "id",
+    "type",
+    "source",
+    "time",
+    "tenantid",
+    "correlationid",
+    "actor",
+    "data"
+  ],
+  "properties": {
+    "specversion": {
+      "const": "1.0"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "type": {
+      "const": "tenant.deletion.requested.v1"
+    },
+    "source": {
+      "const": "excellore/access"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tenantid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "correlationid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "actor": {
+      "type": "object",
+      "required": ["sub", "type"],
+      "properties": {
+        "sub": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "enum": ["human", "machine"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "data": {
+      "type": "object",
+      "required": ["tenantId", "dueAt"],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
