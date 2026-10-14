@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.4 |
+| **Document version** | 4.5 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.5 | Access role events carry only opaque tenant and role IDs; custom names and permission lists are omitted by owner decision (RFC-0004). |
 | 4.4 | Membership-added events use opaque tenant, user, and membership IDs without role names, by owner decision (RFC-0003). |
 | 4.3 | Tenant metadata events carry opaque IDs and bounded codes, without names, slugs, plans, or free-form features, by owner decision (RFC-0002). |
 | 4.2 | Global identity lifecycle events carry opaque user IDs and changed field names only; the `identity.user.created.v1` email exception was removed by owner decision (RFC-0001). |
@@ -1330,6 +1331,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 
 Routing keys follow `<domain>.<entity>.<verb>.v<N>`. Schemas are in [Appendix H](#appendix-h-event-schemas) and `Excellore.Contracts`.
 Tenant metadata events contain IDs and changed field names only. Consumers resolve current names, slugs, plans, and feature values through an authorized Access contract. A `tenant.updated.v1` consumer invalidates all slug keys indexed to that tenant ID; if it has no reverse index, it clears the slug cache namespace.
+Access role events are informational and contain opaque IDs only. Consumers resolve current role details and permissions through the Access authority; event payloads never grant access.
 
 ### 16.4 Delivery rules
 
@@ -2963,7 +2965,7 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 | `tenant.member.added.v1` | `tenantId`, `userId`, `membershipId` |
 | `tenant.member.suspended.v1` / `reactivated.v1` / `removed.v1` | `tenantId`, `userId` |
 | `access.authz.changed.v1` | `tenantId`, `userIds?` (absent means whole tenant), `authzVersion` |
-| `access.role.created.v1` / `updated.v1` / `deleted.v1` | `tenantId`, `roleId`, `name`, `permissions?` |
+| `access.role.created.v1` / `updated.v1` / `deleted.v1` | `tenantId`, `roleId` |
 | `access.assignment.granted.v1` / `revoked.v1` | `tenantId`, `userId`, `roleId`, `expiresAt?` |
 | `access.supportgrant.created.v1` / `revoked.v1` | `tenantId`, `grantId`, `staffUserId`, `expiresAt` |
 | `profile.updated.v1` | `userId`, `changed: [..]` (no values) |

@@ -1,0 +1,17 @@
+{
+  "specversion": "1.0",
+  "id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3",
+  "type": "access.role.deleted.v1",
+  "source": "excellore/access",
+  "time": "2026-01-01T12:00:00Z",
+  "tenantid": "22222222-2222-4222-8222-222222222222",
+  "correlationid": "33333333-3333-4333-8333-333333333333",
+  "actor": {
+    "sub": "44444444-4444-4444-8444-444444444444",
+    "type": "machine"
+  },
+  "data": {
+    "tenantId": "22222222-2222-4222-8222-222222222222",
+    "roleId": "99999999-9999-4999-8999-999999999999"
+  }
+}

@@ -73,6 +73,15 @@ for (const file of schemaFiles) {
       { ...example, data: { ...example.data, roleNames: ['custom role'] } },
     );
   }
+  if (eventType.startsWith('access.role.')) {
+    invalidExamples.push(
+      { ...example, data: { ...example.data, name: 'custom value' } },
+      {
+        ...example,
+        data: { ...example.data, permissions: ['app.resource.read'] },
+      },
+    );
+  }
   for (const invalid of invalidExamples) {
     assert.equal(
       validate(invalid),
