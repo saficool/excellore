@@ -160,10 +160,10 @@ public static class CachedAuthzResolverRegistration
     public static IServiceCollection AddCachedAuthzResolver(this IServiceCollection services)
     {
         services.TryAddSingleton(TimeProvider.System);
-        services.AddSingleton<CachedAuthzResolver>();
-        services.AddSingleton<IAuthzResolver>(provider => provider.GetRequiredService<CachedAuthzResolver>());
-        services.AddSingleton<IAuthzCacheInvalidator>(provider => provider.GetRequiredService<CachedAuthzResolver>());
-        services.AddSingleton<AccessAuthzChangedHandler>();
+        services.TryAddSingleton<CachedAuthzResolver>();
+        services.TryAddSingleton<IAuthzResolver>(provider => provider.GetRequiredService<CachedAuthzResolver>());
+        services.TryAddSingleton<IAuthzCacheInvalidator>(provider => provider.GetRequiredService<CachedAuthzResolver>());
+        services.TryAddSingleton<AccessAuthzChangedHandler>();
         return services;
     }
 }

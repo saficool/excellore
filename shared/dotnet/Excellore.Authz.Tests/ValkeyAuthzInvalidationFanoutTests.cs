@@ -1,6 +1,10 @@
 using System.Collections.Immutable;
+using System.Net;
 using System.Text.Json;
 using Excellore.Contracts;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using StackExchange.Redis;
 using Testcontainers.Redis;
 
@@ -10,6 +14,67 @@ public sealed class ValkeyAuthzInvalidationFanoutTests
 {
     private const string ValkeyRepository = "valkey/valkey";
     private const string ImageRelease = "8.1.10-alpine3.24";
+
+    [Fact]
+    public async Task Registration_uses_one_resolver_and_starts_its_invalidation_subscriber()
+    {
+        await using var container = new RedisBuilder($"{ValkeyRepository}:{ImageRelease}").Build();
+        await container.StartAsync();
+        using var redis = await ConnectionMultiplexer.ConnectAsync(container.GetConnectionString());
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Authz:AccessInternalUrl"] = new UriBuilder(Uri.UriSchemeHttp,
+                    IPAddress.Loopback.ToString(), 1).Uri.ToString(),
+                ["Authz:TokenEndpoint"] = new UriBuilder(Uri.UriSchemeHttps,
+                    IPAddress.Loopback.ToString(), 443,
+                    "/realms/test/protocol/openid-connect/token").Uri.ToString(),
+                ["Authz:ClientId"] = "test-client",
+                ["Authz:ClientSecret"] = Guid.NewGuid().ToString("N")
+            }).Build();
+        var services = new ServiceCollection();
+        services.AddSingleton<IConnectionMultiplexer>(redis);
+        services.AddValkeyAuthzResolver(configuration, "profile");
+        services.AddCachedAuthzResolver();
+        services.AddAccessAuthzClient(configuration);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+        var resolver = provider.GetRequiredService<IAuthzResolver>();
+        var cache = provider.GetRequiredService<ValkeyAuthzCache>();
+        var fanout = provider.GetRequiredService<ValkeyAuthzInvalidationFanout>();
+        Assert.Same(fanout, provider.GetRequiredService<IAuthzCacheInvalidator>());
+        Assert.Same(fanout, Assert.Single(provider.GetServices<IHostedService>()));
+        Assert.IsType<ValkeyAuthzSnapshotSource>(provider.GetRequiredService<IAuthzSnapshotSource>());
+        Assert.Same(cache, provider.GetRequiredService<IAuthzDistributedSnapshotCache>());
+        Assert.Same(resolver, provider.GetRequiredService<CachedAuthzResolver>());
+
+        var tenant = Guid.NewGuid();
+        var user = Guid.NewGuid();
+        var initial = await cache.ReadAsync(user, tenant);
+        Assert.True(await cache.StoreIfCurrentAsync(user, tenant,
+            Allowed(tenant), initial.Generation));
+        await fanout.StartAsync(CancellationToken.None);
+        try
+        {
+            Assert.Equal(AuthzDecision.Allow,
+                (await resolver.ResolveAsync(user, tenant, CancellationToken.None)).Decision);
+            await provider.GetRequiredService<AccessAuthzChangedHandler>()
+                .HandleAsync(Event(tenant, [user]));
+            var refreshed = await cache.ReadAsync(user, tenant);
+            Assert.Null(refreshed.Snapshot);
+            Assert.True(await cache.StoreIfCurrentAsync(user, tenant,
+                Denied(tenant), refreshed.Generation));
+            Assert.Equal(AuthzDecision.Deny,
+                (await resolver.ResolveAsync(user, tenant, CancellationToken.None)).Decision);
+        }
+        finally
+        {
+            await fanout.StopAsync(CancellationToken.None);
+        }
+    }
 
     [Fact]
     public async Task Event_on_one_replica_invalidates_other_replica_without_cross_tenant_leakage()
@@ -100,6 +165,12 @@ public sealed class ValkeyAuthzInvalidationFanoutTests
                 AuthzVersion = 1
             }
         });
+
+    private static AuthzSnapshot Allowed(Guid tenantId) =>
+        new(tenantId, AuthzDecision.Allow, "active", "active", ImmutableHashSet<string>.Empty);
+
+    private static AuthzSnapshot Denied(Guid tenantId) =>
+        new(tenantId, AuthzDecision.Deny, null, null, ImmutableHashSet<string>.Empty);
 
     private sealed class Source : IAuthzSnapshotSource
     {

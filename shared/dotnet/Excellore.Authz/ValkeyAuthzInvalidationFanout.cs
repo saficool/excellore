@@ -19,12 +19,7 @@ public sealed class ValkeyAuthzInvalidationFanout : IAuthzCacheInvalidator, IHos
         ArgumentNullException.ThrowIfNull(local);
         ArgumentNullException.ThrowIfNull(distributed);
         ArgumentNullException.ThrowIfNull(connection);
-        if (string.IsNullOrWhiteSpace(appPrefix) ||
-            appPrefix.Any(character => !char.IsAsciiLetterLower(character) &&
-                                       !char.IsAsciiDigit(character) && character != '-'))
-        {
-            throw new ArgumentException("A lowercase app cache prefix is required.", nameof(appPrefix));
-        }
+        ValkeyAuthzCache.ValidateAppPrefix(appPrefix);
 
         _local = local;
         _distributed = distributed;
