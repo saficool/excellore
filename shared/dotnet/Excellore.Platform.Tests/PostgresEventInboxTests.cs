@@ -289,6 +289,34 @@ public sealed class PostgresEventInboxTests
         Assert.Equal(30, await CountAsync(admin, "SELECT count(*) FROM inbox"));
         Assert.Equal(8, await CountAsync(admin, "SELECT count(*) FROM global_event_effects"));
         Assert.Equal(21, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        foreach (var type in new[]
+        {
+            AccessErasureConfirmedV1.EventType,
+            ProfileErasureConfirmedV1.EventType
+        })
+        {
+            var tenantJson = ErasureConfirmedEventsV1Tests.EventJson(type,
+                ErasureConfirmedEventsV1Tests.TenantData(type, tenantOne), tenantOne);
+            var tenantEvent = ErasureConfirmedEventsV1Tests.Parse(type, tenantJson);
+            Assert.True(await inbox.RunOnceAsync(app, tenantEvent.Id, tenantEvent.TenantId,
+                (transaction, cancellationToken) => InsertItemAsync(transaction,
+                    tenantEvent.Id, tenantEvent.TenantId!.Value, cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, tenantEvent.Id, tenantEvent.TenantId,
+                (_, _) => throw new InvalidOperationException("Duplicate tenant erasure work ran.")));
+
+            var userJson = ErasureConfirmedEventsV1Tests.EventJson(type,
+                ErasureConfirmedEventsV1Tests.UserData(type, Guid.NewGuid()));
+            var userEvent = ErasureConfirmedEventsV1Tests.Parse(type, userJson);
+            Assert.True(await inbox.RunOnceAsync(app, userEvent.Id, null,
+                (transaction, cancellationToken) => InsertGlobalEffectAsync(transaction,
+                    userEvent.Id, cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, userEvent.Id, null,
+                (_, _) => throw new InvalidOperationException("Duplicate user erasure work ran.")));
+        }
+        Assert.Equal(34, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(10, await CountAsync(admin, "SELECT count(*) FROM global_event_effects"));
+        Assert.Equal(23, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
     }
 
     private static async Task InsertGlobalEffectAsync(DbTransaction transaction, Guid eventId,

@@ -14,6 +14,7 @@ const schemaFiles = readdirSync(schemasDir).filter((name) =>
   name.endsWith('.schema.json'),
 );
 assert.ok(schemaFiles.length > 0, 'No event schemas found');
+let validatedExamples = 0;
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 addFormats(ajv);
@@ -32,6 +33,7 @@ for (const file of schemaFiles) {
 
   const validate = ajv.compile(schema);
   assert.ok(validate(example), `${eventType}: valid example was rejected`);
+  validatedExamples += 1;
 
   const invalidExamples = [
     { ...example, id: 'not-a-uuid' },
@@ -111,7 +113,7 @@ for (const file of schemaFiles) {
       },
     );
   }
-  if (eventType.startsWith('profile.')) {
+  if (eventType.startsWith('profile.') && !eventType.includes('.erasure.')) {
     invalidExamples.push(
       { ...example, tenantid: '22222222-2222-4222-8222-222222222222' },
       { ...example, data: { ...example.data, email: 'personal@example.test' } },
@@ -126,11 +128,41 @@ for (const file of schemaFiles) {
       },
     );
   }
-  for (const invalid of invalidExamples) {
+  if (eventType.endsWith('.erasure.confirmed.v1')) {
+    const userExample = JSON.parse(
+      readFileSync(join(examplesDir, `${eventType}.user.example.json`), 'utf8'),
+    );
+    assert.equal(userExample.type, eventType);
+    assert.ok(validate(userExample), `${eventType}: user example was rejected`);
+    validatedExamples += 1;
+    invalidExamples.push(
+      { ...example, tenantid: undefined },
+      {
+        ...example,
+        data: {
+          ...example.data,
+          userId: '55555555-5555-4555-8555-555555555555',
+        },
+      },
+      { ...userExample, tenantid: '22222222-2222-4222-8222-222222222222' },
+      {
+        ...userExample,
+        data: {
+          ...userExample.data,
+          tenantId: '22222222-2222-4222-8222-222222222222',
+        },
+      },
+      { ...userExample, data: { ...userExample.data, userId: undefined } },
+      { ...example, data: { ...example.data, service: 'other' } },
+      { ...example, data: { ...example.data, scope: 'other' } },
+      { ...example, data: { ...example.data, email: 'personal@example.test' } },
+    );
+  }
+  for (const [index, invalid] of invalidExamples.entries()) {
     assert.equal(
       validate(invalid),
       false,
-      `${eventType}: invalid event was accepted`,
+      `${eventType}: invalid event case ${index} was accepted`,
     );
   }
 
@@ -144,4 +176,6 @@ for (const file of schemaFiles) {
   );
 }
 
-console.log(`Validated ${schemaFiles.length} event schema(s) and examples.`);
+console.log(
+  `Validated ${schemaFiles.length} event schema(s) and ${validatedExamples} example(s).`,
+);

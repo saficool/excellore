@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.6 |
+| **Document version** | 4.7 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.7 | Erasure confirmations have concrete Access and Profile event types; tenant and user scopes require exactly one matching opaque target ID (ADR-0032 proposed). |
 | 4.6 | Global Profile account, export, and deletion events omit tenant ID; Profile update events carry bounded changed field names only (RFC-0005). |
 | 4.5 | Access role events carry only opaque tenant and role IDs; custom names and permission lists are omitted by owner decision (RFC-0004). |
 | 4.4 | Membership-added events use opaque tenant, user, and membership IDs without role names, by owner decision (RFC-0003). |
@@ -1308,7 +1309,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 }
 ```
 
-`tenantid` is absent (null) only for global user events: identity lifecycle events and the global Profile account, export, and deletion events. Every tenant-scoped event carries `tenantid`.
+`tenantid` is absent (null) only for global user events: identity lifecycle events, global Profile account/export/deletion events, and user-scope erasure confirmations. Every tenant-scoped event carries `tenantid`.
 
 ### 16.3 Event catalog
 
@@ -1328,7 +1329,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 | `profile.updated.v1` | Profile | Interested services | Global profile fields changed |
 | `profile.deletion.requested.v1` | Profile | Access | Start account deletion flow |
 | `profile.export.ready.v1` | Profile | Notifications | Export available |
-| `<service>.erasure.confirmed.v1` | Each service | Access | Confirms erasure of a tenant or identity |
+| `access.erasure.confirmed.v1` / `profile.erasure.confirmed.v1` | Respective service | Access | Confirms erasure of a tenant or identity |
 
 Routing keys follow `<domain>.<entity>.<verb>.v<N>`. Schemas are in [Appendix H](#appendix-h-event-schemas) and `Excellore.Contracts`.
 Tenant metadata events contain IDs and changed field names only. Consumers resolve current names, slugs, plans, and feature values through an authorized Access contract. A `tenant.updated.v1` consumer invalidates all slug keys indexed to that tenant ID; if it has no reverse index, it clears the slug cache namespace.
@@ -2973,7 +2974,7 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 | `profile.updated.v1` | `userId`, `changed: ["displayName","timeZone","avatar","preferences"]` (field names only, no values) |
 | `profile.deletion.requested.v1` | `userId` |
 | `profile.export.ready.v1` | `userId`, `exportId` |
-| `<service>.erasure.confirmed.v1` | `scope: "tenant"\|"user"`, `tenantId?`, `userId?`, `service` |
+| `access.erasure.confirmed.v1` / `profile.erasure.confirmed.v1` | `scope: "tenant"\|"user"`, `service` (matches event type); tenant scope: `tenantId` matching envelope `tenantid`; user scope: `userId` and no tenant ID |
 
 Rules: no personal data beyond opaque identifiers; `changed` lists field names only, never values; consumers de-duplicate on envelope `id`; unknown fields are ignored (forward compatibility).
 
