@@ -245,10 +245,12 @@ public static class AccessAuthzClientRegistration
         {
             client.Timeout = TimeSpan.FromSeconds(5);
         }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
-        services.AddSingleton<IAccessMachineTokenProvider>(provider => new ClientCredentialsTokenProvider(
+        services.TryAddSingleton<IAccessMachineTokenProvider>(provider => new ClientCredentialsTokenProvider(
             provider.GetRequiredService<IHttpClientFactory>(), tokenUrl, clientId, clientSecret,
             provider.GetRequiredService<TimeProvider>()));
-        services.AddSingleton<IAuthzSnapshotSource, HttpAccessAuthzSource>();
+        services.TryAddSingleton<HttpAccessAuthzSource>();
+        services.TryAddSingleton<IAuthzSnapshotSource>(provider =>
+            provider.GetRequiredService<HttpAccessAuthzSource>());
         return services;
     }
 

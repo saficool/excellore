@@ -40,15 +40,20 @@ public sealed class ValkeyAuthzCache : IAuthzDistributedSnapshotCache
     public ValkeyAuthzCache(IConnectionMultiplexer connection, string appPrefix)
     {
         ArgumentNullException.ThrowIfNull(connection);
+        ValidateAppPrefix(appPrefix);
+
+        _database = connection.GetDatabase();
+        _appPrefix = appPrefix;
+    }
+
+    internal static void ValidateAppPrefix(string appPrefix)
+    {
         if (string.IsNullOrWhiteSpace(appPrefix) ||
             appPrefix.Any(character => !char.IsAsciiLetterLower(character) &&
                                        !char.IsAsciiDigit(character) && character != '-'))
         {
             throw new ArgumentException("A lowercase app cache prefix is required.", nameof(appPrefix));
         }
-
-        _database = connection.GetDatabase();
-        _appPrefix = appPrefix;
     }
 
     public async Task<ValkeyAuthzRead> ReadAsync(Guid userId, Guid tenantId,
