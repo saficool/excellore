@@ -234,6 +234,24 @@ public sealed class PostgresEventInboxTests
         }
         Assert.Equal(23, await CountAsync(admin, "SELECT count(*) FROM inbox"));
         Assert.Equal(17, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        foreach (var type in new[]
+        {
+            AccessAssignmentGrantedV1.EventType,
+            AccessAssignmentRevokedV1.EventType
+        })
+        {
+            var json = TenantLifecycleEventsV1Tests.EventJson(type, tenantOne,
+                AccessAssignmentEventsV1Tests.Data(tenantOne));
+            var parsed = AccessAssignmentEventsV1Tests.Parse(type, json);
+            Assert.True(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (transaction, cancellationToken) => InsertItemAsync(transaction, parsed.Id,
+                    parsed.TenantId, cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (_, _) => throw new InvalidOperationException("Duplicate assignment work ran.")));
+        }
+        Assert.Equal(25, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(19, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
     }
 
     private static async Task InsertGlobalEffectAsync(DbTransaction transaction, Guid eventId,

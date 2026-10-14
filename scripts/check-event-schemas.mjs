@@ -82,6 +82,21 @@ for (const file of schemaFiles) {
       },
     );
   }
+  if (eventType.startsWith('access.assignment.')) {
+    invalidExamples.push(
+      { ...example, data: { ...example.data, expiresAt: null } },
+      { ...example, data: { ...example.data, expiresAt: '2026-12-01' } },
+      { ...example, data: { ...example.data, name: 'personal value' } },
+      { ...example, data: { ...example.data, description: 'personal value' } },
+      { ...example, data: { ...example.data, email: 'personal@example.test' } },
+      { ...example, data: { ...example.data, reason: 'personal value' } },
+      { ...example, data: { ...example.data, roleName: 'personal value' } },
+      {
+        ...example,
+        data: { ...example.data, permissions: ['app.resource.read'] },
+      },
+    );
+  }
   for (const invalid of invalidExamples) {
     assert.equal(
       validate(invalid),
