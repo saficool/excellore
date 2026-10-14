@@ -9,11 +9,14 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"*.{json,mjs,yaml}\"",
-    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"*.{json,mjs,yaml}\""
+    "contracts:check": "node scripts/check-event-schemas.mjs",
+    "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"*.{json,mjs,yaml}\"",
+    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"*.{json,mjs,yaml}\""
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
     "eslint": "10.10.0",
     "prettier": "3.9.10",
     "turbo": "2.11.2",

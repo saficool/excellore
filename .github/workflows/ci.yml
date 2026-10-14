@@ -21,6 +21,7 @@ jobs:
       - run: pnpm -w build
       - run: pnpm -w lint
       - run: pnpm -w test
+      - run: pnpm -w contracts:check
       - run: pnpm -w format:check
 
   handbook:
