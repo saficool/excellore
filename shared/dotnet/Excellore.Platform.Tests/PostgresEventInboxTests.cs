@@ -195,6 +195,26 @@ public sealed class PostgresEventInboxTests
         }
         Assert.Equal(16, await CountAsync(admin, "SELECT count(*) FROM inbox"));
         Assert.Equal(10, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        foreach (var type in new[]
+        {
+            TenantMemberAddedV1.EventType,
+            TenantMemberSuspendedV1.EventType,
+            TenantMemberReactivatedV1.EventType,
+            TenantMemberRemovedV1.EventType
+        })
+        {
+            var json = TenantLifecycleEventsV1Tests.EventJson(type, tenantOne,
+                TenantMemberEventsV1Tests.Data(type, tenantOne));
+            var parsed = TenantMemberEventsV1Tests.Parse(type, json);
+            Assert.True(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (transaction, cancellationToken) => InsertItemAsync(transaction, parsed.Id,
+                    parsed.TenantId, cancellationToken)));
+            Assert.False(await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (_, _) => throw new InvalidOperationException("Duplicate member work ran.")));
+        }
+        Assert.Equal(20, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(14, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
     }
 
     private static async Task InsertGlobalEffectAsync(DbTransaction transaction, Guid eventId,

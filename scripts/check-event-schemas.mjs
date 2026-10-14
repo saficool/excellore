@@ -67,6 +67,12 @@ for (const file of schemaFiles) {
       },
     );
   }
+  if (eventType.startsWith('tenant.member.')) {
+    invalidExamples.push(
+      { ...example, data: { ...example.data, roles: ['custom role'] } },
+      { ...example, data: { ...example.data, roleNames: ['custom role'] } },
+    );
+  }
   for (const invalid of invalidExamples) {
     assert.equal(
       validate(invalid),

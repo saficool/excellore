@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.3 |
+| **Document version** | 4.4 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.4 | Membership-added events use opaque tenant, user, and membership IDs without role names, by owner decision (RFC-0003). |
 | 4.3 | Tenant metadata events carry opaque IDs and bounded codes, without names, slugs, plans, or free-form features, by owner decision (RFC-0002). |
 | 4.2 | Global identity lifecycle events carry opaque user IDs and changed field names only; the `identity.user.created.v1` email exception was removed by owner decision (RFC-0001). |
 | 4.1 | Keycloak login and admin events remain in the Keycloak event store until a redacting export path is available (ADR-0004). |
@@ -1301,7 +1302,7 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
   "subject": "user:4a1c…",
   "correlationid": "7d3f…",
   "actor": { "sub": "b19e…", "type": "human" },
-  "data": { "membershipId": "…", "roles": ["member"] }
+  "data": { "tenantId": "0192…", "userId": "4a1c…", "membershipId": "…" }
 }
 ```
 
@@ -2959,7 +2960,7 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 | `tenant.deletion.requested.v1` | `tenantId`, `dueAt` |
 | `tenant.deleted.v1` | `tenantId` |
 | `tenant.app.enabled.v1` / `disabled.v1` | `tenantId`, `appId` (bounded machine-safe code) |
-| `tenant.member.added.v1` | `tenantId`, `userId`, `roles: [..]` |
+| `tenant.member.added.v1` | `tenantId`, `userId`, `membershipId` |
 | `tenant.member.suspended.v1` / `reactivated.v1` / `removed.v1` | `tenantId`, `userId` |
 | `access.authz.changed.v1` | `tenantId`, `userIds?` (absent means whole tenant), `authzVersion` |
 | `access.role.created.v1` / `updated.v1` / `deleted.v1` | `tenantId`, `roleId`, `name`, `permissions?` |
