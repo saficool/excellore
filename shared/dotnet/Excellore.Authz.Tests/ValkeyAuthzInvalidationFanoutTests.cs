@@ -5,7 +5,9 @@ using Excellore.Contracts;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using RabbitMQ.Client;
 using StackExchange.Redis;
+using Testcontainers.RabbitMq;
 using Testcontainers.Redis;
 
 namespace Excellore.Authz.Tests;
@@ -14,12 +16,17 @@ public sealed class ValkeyAuthzInvalidationFanoutTests
 {
     private const string ValkeyRepository = "valkey/valkey";
     private const string ImageRelease = "8.1.10-alpine3.24";
+    private const string RabbitRepository = "rabbitmq";
+    private const string RabbitRelease = "4.3.5-management";
 
     [Fact]
     public async Task Registration_uses_one_resolver_and_starts_its_invalidation_subscriber()
     {
         await using var container = new RedisBuilder($"{ValkeyRepository}:{ImageRelease}").Build();
         await container.StartAsync();
+        await using var rabbit = new RabbitMqBuilder($"{RabbitRepository}:{RabbitRelease}").Build();
+        await rabbit.StartAsync();
+        var brokerUri = new Uri(rabbit.GetConnectionString());
         using var redis = await ConnectionMultiplexer.ConnectAsync(container.GetConnectionString());
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?>
@@ -35,6 +42,7 @@ public sealed class ValkeyAuthzInvalidationFanoutTests
         var services = new ServiceCollection();
         services.AddSingleton<IConnectionMultiplexer>(redis);
         services.AddValkeyAuthzResolver(configuration, "profile");
+        services.AddRabbitMqAuthzChangedConsumer("profile", brokerUri);
         services.AddCachedAuthzResolver();
         services.AddAccessAuthzClient(configuration);
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions
@@ -46,7 +54,10 @@ public sealed class ValkeyAuthzInvalidationFanoutTests
         var cache = provider.GetRequiredService<ValkeyAuthzCache>();
         var fanout = provider.GetRequiredService<ValkeyAuthzInvalidationFanout>();
         Assert.Same(fanout, provider.GetRequiredService<IAuthzCacheInvalidator>());
-        Assert.Same(fanout, Assert.Single(provider.GetServices<IHostedService>()));
+        var hosted = provider.GetServices<IHostedService>().ToArray();
+        Assert.Equal(2, hosted.Length);
+        Assert.Same(fanout, hosted[0]);
+        Assert.IsType<RabbitMqAuthzChangedConsumer>(hosted[1]);
         Assert.IsType<ValkeyAuthzSnapshotSource>(provider.GetRequiredService<IAuthzSnapshotSource>());
         Assert.Same(cache, provider.GetRequiredService<IAuthzDistributedSnapshotCache>());
         Assert.Same(resolver, provider.GetRequiredService<CachedAuthzResolver>());
@@ -56,14 +67,29 @@ public sealed class ValkeyAuthzInvalidationFanoutTests
         var initial = await cache.ReadAsync(user, tenant);
         Assert.True(await cache.StoreIfCurrentAsync(user, tenant,
             Allowed(tenant), initial.Generation));
-        await fanout.StartAsync(CancellationToken.None);
+        foreach (var service in hosted)
+        {
+            await service.StartAsync(CancellationToken.None);
+        }
         try
         {
             Assert.Equal(AuthzDecision.Allow,
                 (await resolver.ResolveAsync(user, tenant, CancellationToken.None)).Decision);
-            await provider.GetRequiredService<AccessAuthzChangedHandler>()
-                .HandleAsync(Event(tenant, [user]));
-            var refreshed = await cache.ReadAsync(user, tenant);
+            await using (var connection = await new ConnectionFactory { Uri = brokerUri }
+                             .CreateConnectionAsync())
+            await using (var channel = await connection.CreateChannelAsync())
+            {
+                await channel.BasicPublishAsync("excellore.events", AccessAuthzChangedV1.EventType,
+                    mandatory: false, new BasicProperties { Persistent = true }, Event(tenant, [user]));
+            }
+
+            ValkeyAuthzRead refreshed;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            do
+            {
+                refreshed = await cache.ReadAsync(user, tenant, timeout.Token);
+                if (refreshed.Snapshot is not null) await Task.Delay(20, timeout.Token);
+            } while (refreshed.Snapshot is not null);
             Assert.Null(refreshed.Snapshot);
             Assert.True(await cache.StoreIfCurrentAsync(user, tenant,
                 Denied(tenant), refreshed.Generation));
@@ -72,7 +98,10 @@ public sealed class ValkeyAuthzInvalidationFanoutTests
         }
         finally
         {
-            await fanout.StopAsync(CancellationToken.None);
+            foreach (var service in hosted.Reverse())
+            {
+                await service.StopAsync(CancellationToken.None);
+            }
         }
     }
 

@@ -16,4 +16,4 @@ The handler remembers up to 10,000 successfully handled event IDs in process mem
 
 ## Consequences
 
-The schema is packaged with `Excellore.Contracts`, and tests cover targeted and tenant-wide invalidation, duplicate delivery, invalid events, and failed-delivery retry. Broker subscription, durable inbox, and Valkey invalidation remain for later WP-03 slices. Review this bounded in-memory behavior before connecting the live event stream.
+The schema is packaged with `Excellore.Contracts`, and tests cover targeted and tenant-wide invalidation, duplicate delivery, invalid events, and failed-delivery retry. Broker subscription and Valkey invalidation are implemented as shared components (ADR-0014 and ADR-0015). The durable inbox for general service events remains WP-03 work. Review this bounded in-memory behavior before connecting an app to the live event stream.
