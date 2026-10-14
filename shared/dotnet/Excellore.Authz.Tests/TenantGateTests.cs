@@ -1,11 +1,15 @@
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Security.Claims;
 using Excellore.Auth;
 using Excellore.Authz;
 using Excellore.Platform;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Excellore.Authz.Tests;
 
@@ -36,20 +40,27 @@ public class TenantGateTests
     {
         var resolver = new StubResolver(Allowed(TenantOne, "profile.member.read"));
         var tenantContext = new TenantContextAccessor();
-        var filter = new TenantGateFilter(resolver, new StubUser(true), tenantContext, new StubClassifier(false));
+        var logger = new ScopeCapturingLogger();
+        var filter = new TenantGateFilter(resolver, new StubUser(true), tenantContext,
+            new StubClassifier(false), logger);
         var invocation = Invocation(TenantOne);
+        using var activity = new Activity("request").Start();
+        invocation.HttpContext.Features.Set<IHttpActivityFeature>(new RequestActivityFeature(activity));
         var called = false;
 
         var result = await filter.InvokeAsync(invocation, _ =>
         {
             called = true;
             Assert.Equal(TenantOne, tenantContext.Current?.TenantId);
+            Assert.Equal(TenantOne.ToString("D"), activity.GetTagItem("tenant.id"));
+            Assert.Equal(TenantOne.ToString("D"), logger.ScopeTenantId);
             return ValueTask.FromResult<object?>("ok");
         });
 
         Assert.True(called);
         Assert.Equal("ok", result);
         Assert.Null(tenantContext.Current);
+        Assert.Null(logger.ScopeTenantId);
         Assert.Equal(UserId, resolver.LastUserId);
         Assert.Equal(TenantOne, resolver.LastTenantId);
     }
@@ -58,15 +69,17 @@ public class TenantGateTests
     public async Task Handler_failure_does_not_leave_tenant_context_open()
     {
         var tenantContext = new TenantContextAccessor();
+        var logger = new ScopeCapturingLogger();
         var filter = new TenantGateFilter(
             new StubResolver(Allowed(TenantOne, "profile.member.read")),
-            new StubUser(true), tenantContext, new StubClassifier(false));
+            new StubUser(true), tenantContext, new StubClassifier(false), logger);
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await filter.InvokeAsync(Invocation(TenantOne), _ =>
                 throw new InvalidOperationException("handler failed")));
 
         Assert.Null(tenantContext.Current);
+        Assert.Null(logger.ScopeTenantId);
     }
 
     [Theory]
@@ -87,11 +100,16 @@ public class TenantGateTests
         };
         var resolver = new StubResolver(snapshot);
         var tenantContext = new TenantContextAccessor();
+        var logger = new ScopeCapturingLogger();
         var filter = new TenantGateFilter(
-            resolver, new StubUser(false), tenantContext, new StubClassifier(scenario == "step-up"));
+            resolver, new StubUser(false), tenantContext,
+            new StubClassifier(scenario == "step-up"), logger);
+        var invocation = Invocation(TenantOne);
+        using var activity = new Activity("request").Start();
+        invocation.HttpContext.Features.Set<IHttpActivityFeature>(new RequestActivityFeature(activity));
         var called = false;
 
-        var result = await filter.InvokeAsync(Invocation(TenantOne), _ =>
+        var result = await filter.InvokeAsync(invocation, _ =>
         {
             called = true;
             return ValueTask.FromResult<object?>("leaked");
@@ -99,6 +117,8 @@ public class TenantGateTests
 
         Assert.False(called);
         Assert.Null(tenantContext.Current);
+        Assert.Null(activity.GetTagItem("tenant.id"));
+        Assert.Null(logger.ScopeTenantId);
         AssertProblem(result, status, problem);
     }
 
@@ -109,7 +129,8 @@ public class TenantGateTests
             new StubResolver(Allowed(TenantOne, "profile.member.read")),
             new StubUser(true),
             new TenantContextAccessor(),
-            new StubClassifier(true));
+            new StubClassifier(true),
+            NullLogger<TenantGateFilter>.Instance);
 
         var result = await filter.InvokeAsync(Invocation(TenantOne), _ => ValueTask.FromResult<object?>("ok"));
 
@@ -126,7 +147,8 @@ public class TenantGateTests
     public async Task Unavailable_authority_fails_closed()
     {
         var resolver = new StubResolver(Allowed(TenantOne)) { Unavailable = true };
-        var filter = new TenantGateFilter(resolver, new StubUser(true), new TenantContextAccessor(), new StubClassifier(false));
+        var filter = new TenantGateFilter(resolver, new StubUser(true),
+            new TenantContextAccessor(), new StubClassifier(false), NullLogger<TenantGateFilter>.Instance);
         var called = false;
 
         var result = await filter.InvokeAsync(Invocation(TenantOne), _ =>
@@ -143,7 +165,8 @@ public class TenantGateTests
     public async Task Missing_permission_metadata_fails_before_resolving()
     {
         var resolver = new StubResolver(Allowed(TenantOne, "profile.member.read"));
-        var filter = new TenantGateFilter(resolver, new StubUser(true), new TenantContextAccessor(), new StubClassifier(false));
+        var filter = new TenantGateFilter(resolver, new StubUser(true),
+            new TenantContextAccessor(), new StubClassifier(false), NullLogger<TenantGateFilter>.Instance);
 
         var result = await filter.InvokeAsync(Invocation(TenantOne, permission: null), _ =>
             ValueTask.FromResult<object?>("leaked"));
@@ -156,7 +179,8 @@ public class TenantGateTests
     public async Task Invalid_route_tenant_does_not_call_resolver()
     {
         var resolver = new StubResolver(Allowed(TenantOne, "profile.member.read"));
-        var filter = new TenantGateFilter(resolver, new StubUser(true), new TenantContextAccessor(), new StubClassifier(false));
+        var filter = new TenantGateFilter(resolver, new StubUser(true),
+            new TenantContextAccessor(), new StubClassifier(false), NullLogger<TenantGateFilter>.Instance);
         var invocation = Invocation(TenantOne);
         invocation.HttpContext.Request.RouteValues["tenantId"] = "not-a-guid";
 
@@ -220,5 +244,32 @@ public class TenantGateTests
     private sealed class StubClassifier(bool privileged) : IPrivilegeClassifier
     {
         public bool IsPrivileged(string permission) => privileged;
+    }
+
+    private sealed class RequestActivityFeature(Activity activity) : IHttpActivityFeature
+    {
+        public Activity Activity { get; set; } = activity;
+    }
+
+    private sealed class ScopeCapturingLogger : ILogger<TenantGateFilter>
+    {
+        public string? ScopeTenantId { get; private set; }
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull
+        {
+            var values = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object>>(state);
+            ScopeTenantId = Assert.IsType<string>(values["tenant.id"]);
+            return new Scope(this);
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter) { }
+
+        private sealed class Scope(ScopeCapturingLogger logger) : IDisposable
+        {
+            public void Dispose() => logger.ScopeTenantId = null;
+        }
     }
 }
