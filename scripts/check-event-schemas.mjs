@@ -38,6 +38,12 @@ for (const file of schemaFiles) {
     { ...example, type: `${eventType}.unknown` },
     { ...example, data: undefined },
   ];
+  for (const required of schema.properties.data.required) {
+    invalidExamples.push({
+      ...example,
+      data: { ...example.data, [required]: undefined },
+    });
+  }
   for (const invalid of invalidExamples) {
     assert.equal(
       validate(invalid),

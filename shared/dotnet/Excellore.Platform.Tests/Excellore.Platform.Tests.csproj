@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Excellore.Contracts\Excellore.Contracts.csproj" />
     <ProjectReference Include="..\Excellore.Platform\Excellore.Platform.csproj" />
     <ProjectReference Include="..\Excellore.Platform.Testing\Excellore.Platform.Testing.csproj" />
     <Using Include="Xunit" />

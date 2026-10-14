@@ -1,5 +1,7 @@
 using System.Data.Common;
 using System.Security.Cryptography;
+using System.Text.Json;
+using Excellore.Contracts;
 using Excellore.Platform;
 using Npgsql;
 using Testcontainers.PostgreSql;
@@ -93,6 +95,33 @@ public sealed class PostgresEventInboxTests
                     cancellationToken))));
         Assert.Equal(3, await CountAsync(admin, "SELECT count(*) FROM inbox"));
         Assert.Equal(2, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
+
+        var suspension = new PlatformEvent<TenantSuspendedV1>
+        {
+            SpecVersion = "1.0",
+            Id = Guid.NewGuid(),
+            Type = TenantSuspendedV1.EventType,
+            Source = TenantSuspendedV1.EventSource,
+            Time = DateTimeOffset.UtcNow,
+            TenantId = tenantOne,
+            CorrelationId = Guid.NewGuid(),
+            Actor = new EventActor { Sub = Guid.NewGuid().ToString("D"), Type = "machine" },
+            Data = new TenantSuspendedV1 { TenantId = tenantOne, ReasonCode = "platform_security" }
+        };
+        var suspensionJson = JsonSerializer.SerializeToUtf8Bytes(suspension);
+        var suspensionItem = Guid.NewGuid();
+        async Task<bool> ConsumeSuspensionAsync()
+        {
+            var parsed = TenantSuspendedV1.Parse(suspensionJson);
+            return await inbox.RunOnceAsync(app, parsed.Id, parsed.TenantId,
+                (transaction, cancellationToken) => InsertItemAsync(transaction, suspensionItem,
+                    parsed.TenantId, cancellationToken));
+        }
+
+        Assert.True(await ConsumeSuspensionAsync());
+        Assert.False(await ConsumeSuspensionAsync());
+        Assert.Equal(4, await CountAsync(admin, "SELECT count(*) FROM inbox"));
+        Assert.Equal(3, await CountAsync(admin, "SELECT count(*) FROM tenant_items"));
     }
 
     private static async Task InsertItemAsync(DbTransaction transaction, Guid id, Guid tenantId,
