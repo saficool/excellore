@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 
 namespace Excellore.Platform;
@@ -15,18 +16,31 @@ public sealed class TenantUnitOfWork<TDbContext>(TDbContext db, ITenantIdAccesso
             throw new InvalidOperationException("Tenant context is required for database work.");
         }
 
-        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
-        await db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT set_config('app.tenant_id', {tenantId.ToString()}, true)", cancellationToken);
-
-        var result = await work();
-        if (tenant.TenantId != tenantId)
+        using var activity = ExcelloreTelemetry.StartTenantActivity("tenant.db.transaction", tenantId);
+        try
         {
-            throw new InvalidOperationException("Tenant context changed during database work.");
-        }
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"SELECT set_config('app.tenant_id', {tenantId.ToString()}, true)", cancellationToken);
 
-        await db.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-        return result;
+            var result = await work();
+            if (tenant.TenantId != tenantId)
+            {
+                throw new InvalidOperationException("Tenant context changed during database work.");
+            }
+
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return result;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
     }
 }

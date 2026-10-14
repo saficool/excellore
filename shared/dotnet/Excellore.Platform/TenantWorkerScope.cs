@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Excellore.Platform;
@@ -18,16 +19,29 @@ public sealed class TenantWorkerScope(IServiceScopeFactory scopeFactory)
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var tenant = scope.ServiceProvider.GetRequiredService<WorkerTenantIdAccessor>();
-        if (!ReferenceEquals(tenant, scope.ServiceProvider.GetRequiredService<ITenantIdAccessor>()))
+        using var activity = ExcelloreTelemetry.StartTenantActivity("tenant.worker.job", tenantId);
+        try
         {
-            throw new InvalidOperationException("Worker tenant context registration was replaced.");
-        }
+            await using var scope = scopeFactory.CreateAsyncScope();
+            var tenant = scope.ServiceProvider.GetRequiredService<WorkerTenantIdAccessor>();
+            if (!ReferenceEquals(tenant, scope.ServiceProvider.GetRequiredService<ITenantIdAccessor>()))
+            {
+                throw new InvalidOperationException("Worker tenant context registration was replaced.");
+            }
 
-        tenant.Open(tenantId);
-        var job = scope.ServiceProvider.GetRequiredService<TJob>();
-        return await work(job, cancellationToken);
+            tenant.Open(tenantId);
+            var job = scope.ServiceProvider.GetRequiredService<TJob>();
+            return await work(job, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error);
+            throw;
+        }
     }
 }
 

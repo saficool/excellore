@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Excellore.Platform;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -90,6 +92,52 @@ public sealed class TenantWorkerScopeTests
                 .RunAsync<ProbeJob, Guid>(Guid.NewGuid(),
                     (job, _) => Task.FromResult(job.TenantId)));
         Assert.Equal(0, constructions);
+    }
+
+    [Fact]
+    public async Task Worker_spans_use_each_bound_tenant_without_leaking_failure_details()
+    {
+        var stopped = new ConcurrentQueue<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == ExcelloreTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = stopped.Enqueue
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        using var provider = CreateProvider();
+        var worker = provider.GetRequiredService<TenantWorkerScope>();
+        var firstTenant = Guid.NewGuid();
+        var secondTenant = Guid.NewGuid();
+        var canceledTenant = Guid.NewGuid();
+
+        await worker.RunAsync<ProbeJob, bool>(firstTenant, (_, _) => Task.FromResult(true));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            worker.RunAsync<ProbeJob, bool>(secondTenant, (_, _) =>
+                throw new InvalidOperationException("private failure details")));
+        using var cancellation = new CancellationTokenSource();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            worker.RunAsync<ProbeJob, bool>(canceledTenant, (_, token) =>
+            {
+                cancellation.Cancel();
+                throw new OperationCanceledException(token);
+            }, cancellation.Token));
+
+        var first = Assert.Single(stopped, activity =>
+            activity.GetTagItem("tenant.id")?.ToString() == firstTenant.ToString("D"));
+        var second = Assert.Single(stopped, activity =>
+            activity.GetTagItem("tenant.id")?.ToString() == secondTenant.ToString("D"));
+        var canceled = Assert.Single(stopped, activity =>
+            activity.GetTagItem("tenant.id")?.ToString() == canceledTenant.ToString("D"));
+        Assert.Equal("tenant.worker.job", first.DisplayName);
+        Assert.Equal("tenant.worker.job", second.DisplayName);
+        Assert.Equal(ActivityStatusCode.Unset, first.Status);
+        Assert.Equal(ActivityStatusCode.Error, second.Status);
+        Assert.Equal(ActivityStatusCode.Unset, canceled.Status);
+        Assert.Null(second.StatusDescription);
+        Assert.DoesNotContain(second.Tags, tag => tag.Value?.Contains("private failure details") == true);
     }
 
     private static ServiceProvider CreateProvider()

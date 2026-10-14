@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Excellore.Platform;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -80,6 +82,34 @@ public class TenantUnitOfWorkTests
         await unit.RunAsync(() => Task.FromResult(2), CancellationToken.None);
         Assert.Equal(tenant.TenantId.ToString(), fixture.SettingValue);
         Assert.Equal(["set", "set"], fixture.Steps);
+    }
+
+    [Fact]
+    public async Task Failed_transaction_span_has_validated_tenant_without_exception_details()
+    {
+        var stopped = new ConcurrentQueue<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == ExcelloreTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = stopped.Enqueue
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        await using var fixture = await Fixture.CreateAsync();
+        var tenantId = Guid.NewGuid();
+        var unit = new TenantUnitOfWork<TestDbContext>(fixture.Db, new StubTenant(tenantId));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => unit.RunAsync<int>(
+            () => throw new InvalidOperationException("private failure details"),
+            CancellationToken.None));
+
+        var span = Assert.Single(stopped, activity =>
+            activity.GetTagItem("tenant.id")?.ToString() == tenantId.ToString("D"));
+        Assert.Equal("tenant.db.transaction", span.DisplayName);
+        Assert.Equal(ActivityStatusCode.Error, span.Status);
+        Assert.Null(span.StatusDescription);
+        Assert.DoesNotContain(span.Tags, tag => tag.Value?.Contains("private failure details") == true);
     }
 
     private sealed class StubTenant(Guid tenantId) : ITenantIdAccessor
