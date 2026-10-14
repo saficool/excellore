@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.8 |
+| **Document version** | 4.9 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.9 | Access user-scoped internal lookups send opaque user IDs in POST bodies instead of URLs; the BFF may resolve fresh on every request (owner decision; ADR-0034 proposed). |
 | 4.8 | RP-initiated logout sends the ID token by server-side POST to Keycloak, never in a browser URL (owner decision; ADR-0033 proposed). |
 | 4.7 | Erasure confirmations have concrete Access and Profile event types; tenant and user scopes require exactly one matching opaque target ID (ADR-0032 proposed). |
 | 4.6 | Global Profile account, export, and deletion events omit tenant ID; Profile update events carry bounded changed field names only (RFC-0005). |
@@ -604,12 +605,16 @@ ETag: "42"
 Denied cases return `200` with `"decision": "deny"` and an empty permission list (so callers cache denials briefly and never see differing error shapes). Unknown tenant or user is a deny, not an error.
 
 ```
-GET /internal/v1/users/{userId}/tenants
+POST /internal/v1/users/tenants:list
+{ "userId": "…" }
 → [{ "tenantId", "slug", "name", "status", "roles": [...], "apps": [...] }]   # active memberships only
 
-GET /internal/v1/tenants:resolve-slug?slug=acme&userId=…
+POST /internal/v1/tenants:resolve-slug
+{ "userId": "…", "slug": "acme" }
 → { "tenantId", "slug", "name" } or 404 if not an active member
 ```
+
+User IDs are sent in request bodies, never in URLs (INV-11). These endpoints use the same machine-token protection as the authorization resolver.
 
 **PEP in every API** uses the shared library `Excellore.Authz`:
 
@@ -624,7 +629,7 @@ The **BFF** uses the same contract (through its app's `svc-*-authz` identity) to
 | Cache | Key | TTL | Invalidated by |
 |---|---|---|---|
 | PEP snapshot | `authz:{tenantId}:{userId}` (Valkey, with a short in-memory layer) | 60 s | `access.authz.changed.v1` event `{tenantId, userIds? }`; absent `userIds` means the whole tenant |
-| BFF context | `ctx:{sid}:{slug}` | 60 s | Session end |
+| BFF context | `ctx:{sid}:{slug}` | Up to 60 s (fresh resolution is allowed) | Session end |
 | Slug → id | `slug:{slug}` | 5 min | `tenant.updated.v1` via tenant-ID reverse index, or clear the slug cache namespace |
 
 Access increments a per-tenant `authz_version` on every change that can affect permissions (role, assignment, group, membership, tenant status, app enablement) and publishes `access.authz.changed.v1` through the outbox. Consumers drop matching cache entries. The 60 s TTL is the backstop if an event is delayed.
@@ -2256,7 +2261,7 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 
 - **Goal:** The authority: tenants, membership, catalog, resolve contract, outbox.
 - **Depends on:** WP-02, WP-03.
-- **Deliverables:** migrations from [Appendix F](#appendix-f-access-database-ddl) with RLS; `permissions.yaml` for Access ([Appendix G](#appendix-g-permission-catalog-initial)); catalog sync endpoint and CI step; system roles; internal contracts `POST /internal/v1/authz/resolve`, `GET /internal/v1/users/{id}/tenants`, `GET /internal/v1/tenants:resolve-slug`; `identities` JIT upsert; `user_tenant_index` maintenance; platform tenant creation (minimal) with owner invitation placeholder; outbox publisher; `access.authz.changed.v1`.
+- **Deliverables:** migrations from [Appendix F](#appendix-f-access-database-ddl) with RLS; `permissions.yaml` for Access ([Appendix G](#appendix-g-permission-catalog-initial)); catalog sync endpoint and CI step; system roles; internal contracts `POST /internal/v1/authz/resolve`, `POST /internal/v1/users/tenants:list`, `POST /internal/v1/tenants:resolve-slug`; `identities` JIT upsert; `user_tenant_index` maintenance; platform tenant creation (minimal) with owner invitation placeholder; outbox publisher; `access.authz.changed.v1`.
 - **AC:** the effective permission algorithm ([7.5](#75-effective-permission-algorithm)) is unit-tested with a table of cases (including expired assignments, disabled app, suspended tenant, removed member); the isolation harness and DB meta-test pass; catalog sync is idempotent and refuses invalid files; internal endpoints reject user tokens and tokens without `access.authz.resolve`; resolve p95 under the SLO in the local load test.
 
 ### WP-06: Access service domain: roles, assignments, groups, invitations, audit
@@ -3017,8 +3022,8 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `POST /v1/platform/support-requests` | P support | Request a grant |
 | `POST /v1/platform/users/{id}/sign-out`, `…/disable` | P security | Emergency actions |
 | `POST /internal/v1/authz/resolve` | I `access.authz.resolve` | Resolve `(user, tenant)` |
-| `GET /internal/v1/users/{userId}/tenants` | I `access.authz.resolve` | User's tenants |
-| `GET /internal/v1/tenants:resolve-slug` | I `access.authz.resolve` | Slug to ID for a member |
+| `POST /internal/v1/users/tenants:list` | I `access.authz.resolve` | User's tenants |
+| `POST /internal/v1/tenants:resolve-slug` | I `access.authz.resolve` | Slug to ID for a member |
 | `PUT /internal/v1/catalog/{app}` | I `access.catalog.sync` | Publish a permission catalog |
 
 ### I.2 Profile API (`api-profile`)

@@ -96,3 +96,35 @@ export function loadAuthConfig(
 ): AuthConfig {
   return authConfigSchema.parse(env);
 }
+
+export const accessClientConfigSchema = z
+  .object({
+    ACCESS_INTERNAL_URL: z.url(),
+    AUTHZ_CLIENT_ID: z.string().min(1),
+    AUTHZ_CLIENT_SECRET: z.string().min(1),
+  })
+  .superRefine((value, context) => {
+    const url = new URL(value.ACCESS_INTERNAL_URL);
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      url.pathname !== '/' ||
+      url.search ||
+      url.hash
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ACCESS_INTERNAL_URL'],
+        message: 'Use an HTTP(S) origin without credentials, path, or query',
+      });
+    }
+  });
+
+export type AccessClientConfig = z.infer<typeof accessClientConfigSchema>;
+
+export function loadAccessClientConfig(
+  env: Record<string, string | undefined> = process.env,
+): AccessClientConfig {
+  return accessClientConfigSchema.parse(env);
+}

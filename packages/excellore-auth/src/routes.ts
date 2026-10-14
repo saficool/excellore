@@ -1,18 +1,10 @@
 import * as oidc from 'openid-client';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { AuthConfig } from './config.js';
+import { readOpaqueCookie } from './cookies.js';
 import { randomOpaqueId, type ValkeySessionStore } from './session-store.js';
 
 const LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout';
-const cookieId = /^[A-Za-z0-9_-]{43}$/;
-
-function cookie(request: Request, name: string): string | null {
-  for (const part of (request.headers.get('cookie') ?? '').split(';')) {
-    const [key, value] = part.trim().split('=', 2);
-    if (key === name && value && cookieId.test(value)) return value;
-  }
-  return null;
-}
 
 function setCookie(
   name: string,
@@ -145,7 +137,7 @@ export function createAuthHandlers(
         new URL(request.url).pathname !== '/auth/callback'
       )
         return badRequest();
-      const flowId = cookie(request, flowCookie);
+      const flowId = readOpaqueCookie(request, flowCookie);
       if (!flowId) return badRequest();
       const flow = await store.consumeFlow(flowId);
       if (
@@ -186,7 +178,7 @@ export function createAuthHandlers(
           refreshToken: tokens.refresh_token,
           idToken: tokens.id_token,
         });
-        const old = cookie(request, config.SESSION_COOKIE_NAME);
+        const old = readOpaqueCookie(request, config.SESSION_COOKIE_NAME);
         if (old) await store.delete(old);
         const headers = new Headers({
           Location: new URL(flow.returnTo, appOrigin).href,
@@ -218,7 +210,7 @@ export function createAuthHandlers(
         new URL(request.url).pathname !== '/auth/session'
       )
         return badRequest();
-      const sid = cookie(request, config.SESSION_COOKIE_NAME);
+      const sid = readOpaqueCookie(request, config.SESSION_COOKIE_NAME);
       const session = sid ? await store.get(sid) : null;
       const headers = new Headers({ 'Content-Type': 'application/json' });
       noStore(headers);
@@ -240,7 +232,7 @@ export function createAuthHandlers(
         request.headers.get('origin') !== appOrigin
       )
         return badRequest();
-      const sid = cookie(request, config.SESSION_COOKIE_NAME);
+      const sid = readOpaqueCookie(request, config.SESSION_COOKIE_NAME);
       const session = sid ? await store.get(sid) : null;
       let remoteSucceeded = true;
       if (session) {
