@@ -6,6 +6,7 @@ dist/
 next-env.d.ts
 coverage/
 **/bin/
+!packages/create-excellore-app/bin/
 **/obj/
 .vs/
 .vscode/
