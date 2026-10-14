@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+@import '@excellore/ui/styles.css';
+
+body {
+  margin: 0;
+  background: var(--ex-color-background);
+  color: var(--ex-color-text);
+  font-family: system-ui, sans-serif;
+}
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+a {
+  color: var(--ex-color-accent);
+}
+.ex-card {
+  background: var(--ex-color-surface);
+  border: 1px solid var(--ex-color-border);
+  border-radius: var(--ex-radius-medium);
+  padding: 1.5rem;
+}

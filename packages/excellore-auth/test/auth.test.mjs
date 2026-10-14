@@ -103,9 +103,11 @@ let refreshCalls = 0;
 let logoutCalls = 0;
 let lastLogoutBody;
 let tamperNextIdToken = false;
+let nextAcr = '2';
 const secret = randomBytes(32).toString('base64url');
 const clientSecret = randomBytes(32).toString('base64url');
 const userId = randomBytes(16).toString('hex');
+let nextSub = userId;
 const keycloakSid = randomBytes(16).toString('hex');
 
 async function sign(claims, audience = 'excellore-profile') {
@@ -177,10 +179,10 @@ before(async () => {
           return;
         }
         let idToken = await sign({
-          sub: userId,
+          sub: nextSub,
           sid: keycloakSid,
           nonce,
-          acr: '2',
+          acr: nextAcr,
         });
         if (tamperNextIdToken) {
           tamperNextIdToken = false;
@@ -257,6 +259,87 @@ test('config requires secure production origins and host cookies', () => {
     }).SESSION_COOKIE_NAME,
     '__Host-excellore-profile',
   );
+});
+
+test('step-up binds the same subject and account actions are allow-listed', async () => {
+  const existing = await store.create({
+    kcSid: 'kc-step-up',
+    sub: userId,
+    acr: '1',
+    accessToken: 'opaque',
+    accessTokenExpiresAt: Math.floor(Date.now() / 1000) + 300,
+    refreshToken: 'opaque',
+    idToken: 'opaque',
+  });
+  const headers = { Cookie: `excellore-dev-profile=${existing.sid}` };
+  const step = await handlers.stepUp(
+    new Request(`${config.APP_BASE_URL}/auth/step-up?returnTo=%2Faccount`, {
+      headers,
+    }),
+  );
+  assert.equal(step.status, 302);
+  const stepUrl = new URL(step.headers.get('location'));
+  assert.equal(stepUrl.searchParams.get('acr_values'), '2');
+  assert.equal(stepUrl.searchParams.get('prompt'), 'login');
+  challenge = stepUrl.searchParams.get('code_challenge');
+  nonce = stepUrl.searchParams.get('nonce');
+  code = randomBytes(32).toString('base64url');
+  nextAcr = '1';
+  try {
+    const callback = await handlers.callback(
+      new Request(
+        `${config.APP_BASE_URL}/auth/callback?state=${stepUrl.searchParams.get('state')}&code=${code}`,
+        { headers: { Cookie: step.headers.get('set-cookie').split(';')[0] } },
+      ),
+    );
+    assert.equal(callback.status, 400, 'A low-ACR step-up must fail');
+    assert.ok(
+      await store.get(existing.sid),
+      'Failed step-up must retain the old session',
+    );
+  } finally {
+    nextAcr = '2';
+  }
+  const rejected = await handlers.accountAction(
+    new Request(
+      `${config.APP_BASE_URL}/auth/account-action?action=DELETE_ACCOUNT`,
+      { headers },
+    ),
+  );
+  assert.equal(rejected.status, 400);
+  const accepted = await handlers.accountAction(
+    new Request(
+      `${config.APP_BASE_URL}/auth/account-action?action=CONFIGURE_TOTP`,
+      { headers },
+    ),
+  );
+  assert.equal(accepted.status, 302);
+  assert.equal(
+    new URL(accepted.headers.get('location')).searchParams.get('kc_action'),
+    'CONFIGURE_TOTP',
+  );
+  const actionUrl = new URL(accepted.headers.get('location'));
+  challenge = actionUrl.searchParams.get('code_challenge');
+  nonce = actionUrl.searchParams.get('nonce');
+  code = randomBytes(32).toString('base64url');
+  nextSub = 'another-user';
+  try {
+    const callback = await handlers.callback(
+      new Request(
+        `${config.APP_BASE_URL}/auth/callback?state=${actionUrl.searchParams.get('state')}&code=${code}`,
+        {
+          headers: { Cookie: accepted.headers.get('set-cookie').split(';')[0] },
+        },
+      ),
+    );
+    assert.equal(
+      callback.status,
+      400,
+      'Switching subjects during account action must fail',
+    );
+  } finally {
+    nextSub = userId;
+  }
 });
 
 test('login and callback bind PKCE, nonce, state, and browser flow cookie', async () => {

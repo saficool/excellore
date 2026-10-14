@@ -72,3 +72,16 @@ docker compose --env-file .env -f infra/compose/docker-compose.yml down
 ```
 
 This keeps named database and broker volumes. Removing those volumes deletes local data.
+
+## Profile BFF login (WP-04)
+
+After `scripts/dev-up.sh`, run from the repository root:
+
+```sh
+node scripts/setup-next-local.mjs profile
+pnpm --filter @excellore/profile dev
+```
+
+Open `http://profile.excellore.localhost:3001`, choose **Sign in**, and use the local `olivia.owner` account. Its password is `DEV_USER_PASSWORD` in ignored `.env`; the current OTP comes from the `DEV_OTP_SECRET` seed. The login completes at `/account`. The browser receives an opaque `excellore-dev-profile` cookie; tokens stay in Valkey. The local HTTP cookie name and insecure OIDC transport work only with `EXCELLORE_INSECURE_LOCAL_DEV=true`. Production requires HTTPS and a `__Host-` cookie.
+
+The generated tenant route and API proxy call the Access authority. They fail closed until WP-05 starts that service; this first UI checks the login and server-side session, not tenant workflows. To verify the route wiring automatically after the app starts, run `node scripts/check-profile-login.mjs`. The script uses the local seed credentials in ignored `.env` and prints no credentials.

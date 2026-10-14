@@ -23,6 +23,8 @@ export interface LoginFlow {
   nonce: string;
   verifier: string;
   returnTo: string;
+  expectedSub?: string | undefined;
+  minimumAcr?: string | undefined;
 }
 
 const IDLE_SECONDS = 30 * 60;
@@ -101,6 +103,8 @@ export class ValkeySessionStore {
         nonce: z.string(),
         verifier: z.string(),
         returnTo: z.string(),
+        expectedSub: z.string().optional(),
+        minimumAcr: z.string().optional(),
       })
       .parse(await this.decrypt(value));
   }

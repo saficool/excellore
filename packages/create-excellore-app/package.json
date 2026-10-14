@@ -1,0 +1,14 @@
+{
+  "name": "@excellore/create-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "create-excellore-app": "./bin/create-excellore-app.mjs"
+  },
+  "scripts": {
+    "build": "node --check bin/create-excellore-app.mjs",
+    "lint": "node --check bin/create-excellore-app.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

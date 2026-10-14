@@ -27,3 +27,6 @@ export {
   TenantAccessError,
 } from './tenant.js';
 export type { TenantContext } from './tenant.js';
+export { proxyBffApi, validateApiProxyRequest } from './bff-api.js';
+export type { BffApiOptions } from './bff-api.js';
+export { canonicalBffRequest } from './next-request.js';

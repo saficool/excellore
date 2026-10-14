@@ -93,6 +93,44 @@ export function createAuthHandlers(
     return new URL(request.url).origin === appOrigin;
   }
 
+  async function beginAuthorization(
+    returnTo: string,
+    expectedSub?: string,
+    extra: Record<string, string> = {},
+  ): Promise<Response> {
+    const flowId = randomOpaqueId();
+    const state = oidc.randomState();
+    const nonce = oidc.randomNonce();
+    const verifier = oidc.randomPKCECodeVerifier();
+    const challenge = await oidc.calculatePKCECodeChallenge(verifier);
+    await store.createFlow(flowId, {
+      state,
+      nonce,
+      verifier,
+      returnTo,
+      ...(expectedSub ? { expectedSub } : {}),
+      ...(extra.acr_values ? { minimumAcr: extra.acr_values } : {}),
+    });
+    const redirect = oidc.buildAuthorizationUrl(client, {
+      response_type: 'code',
+      client_id: config.OIDC_CLIENT_ID,
+      redirect_uri: new URL('/auth/callback', appOrigin).href,
+      scope: config.OIDC_SCOPES,
+      state,
+      nonce,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
+      ...extra,
+    });
+    const headers = new Headers({ Location: redirect.href });
+    noStore(headers);
+    headers.append(
+      'Set-Cookie',
+      setCookie(flowCookie, flowId, secureCookie, 300),
+    );
+    return new Response(null, { status: 302, headers });
+  }
+
   return {
     async login(request: Request): Promise<Response> {
       if (
@@ -105,29 +143,49 @@ export function createAuthHandlers(
         new URL(request.url).searchParams.get('returnTo'),
       );
       if (!returnTo) return badRequest();
-      const flowId = randomOpaqueId();
-      const state = oidc.randomState();
-      const nonce = oidc.randomNonce();
-      const verifier = oidc.randomPKCECodeVerifier();
-      const challenge = await oidc.calculatePKCECodeChallenge(verifier);
-      await store.createFlow(flowId, { state, nonce, verifier, returnTo });
-      const redirect = oidc.buildAuthorizationUrl(client, {
-        response_type: 'code',
-        client_id: config.OIDC_CLIENT_ID,
-        redirect_uri: new URL('/auth/callback', appOrigin).href,
-        scope: config.OIDC_SCOPES,
-        state,
-        nonce,
-        code_challenge: challenge,
-        code_challenge_method: 'S256',
-      });
-      const headers = new Headers({ Location: redirect.href });
-      noStore(headers);
-      headers.append(
-        'Set-Cookie',
-        setCookie(flowCookie, flowId, secureCookie, 300),
+      return beginAuthorization(returnTo);
+    },
+
+    async stepUp(request: Request): Promise<Response> {
+      if (
+        request.method !== 'GET' ||
+        !correctOrigin(request) ||
+        new URL(request.url).pathname !== '/auth/step-up'
+      )
+        return badRequest();
+      const returnTo = validateReturnTo(
+        new URL(request.url).searchParams.get('returnTo'),
       );
-      return new Response(null, { status: 302, headers });
+      if (!returnTo) return badRequest();
+      const sid = readOpaqueCookie(request, config.SESSION_COOKIE_NAME);
+      const session = sid ? await store.get(sid) : null;
+      if (!session) return badRequest();
+      return beginAuthorization(returnTo, session.sub, {
+        acr_values: '2',
+        prompt: 'login',
+      });
+    },
+
+    async accountAction(request: Request): Promise<Response> {
+      if (
+        request.method !== 'GET' ||
+        !correctOrigin(request) ||
+        new URL(request.url).pathname !== '/auth/account-action'
+      )
+        return badRequest();
+      const url = new URL(request.url);
+      const returnTo = validateReturnTo(url.searchParams.get('returnTo'));
+      const action = url.searchParams.get('action');
+      if (
+        !returnTo ||
+        !action ||
+        !['UPDATE_PASSWORD', 'UPDATE_EMAIL', 'CONFIGURE_TOTP'].includes(action)
+      )
+        return badRequest();
+      const sid = readOpaqueCookie(request, config.SESSION_COOKIE_NAME);
+      const session = sid ? await store.get(sid) : null;
+      if (!session) return badRequest();
+      return beginAuthorization(returnTo, session.sub, { kc_action: action });
     },
 
     async callback(request: Request): Promise<Response> {
@@ -168,6 +226,15 @@ export function createAuthHandlers(
         ) {
           return badRequest();
         }
+        if (flow.expectedSub && claims.sub !== flow.expectedSub)
+          return badRequest();
+        if (
+          flow.minimumAcr &&
+          (typeof claims.acr !== 'string' ||
+            !/^\d+$/.test(claims.acr) ||
+            Number(claims.acr) < Number(flow.minimumAcr))
+        )
+          return badRequest();
         const session = await store.create({
           kcSid: claims.sid,
           sub: claims.sub,
