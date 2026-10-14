@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.7 |
+| **Document version** | 4.8 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 4.8 | RP-initiated logout sends the ID token by server-side POST to Keycloak, never in a browser URL (owner decision; ADR-0033 proposed). |
 | 4.7 | Erasure confirmations have concrete Access and Profile event types; tenant and user scopes require exactly one matching opaque target ID (ADR-0032 proposed). |
 | 4.6 | Global Profile account, export, and deletion events omit tenant ID; Profile update events carry bounded changed field names only (RFC-0005). |
 | 4.5 | Access role events carry only opaque tenant and role IDs; custom names and permission lists are omitted by owner decision (RFC-0004). |
@@ -966,9 +967,9 @@ Tenant authorization changes (roles, assignments, memberships) never touch Keycl
 ### 12.1 User-initiated logout (RP-initiated)
 
 1. Browser → BFF `POST /auth/logout` (CSRF protected).
-2. BFF deletes its session and cookie, then redirects to Keycloak `end_session_endpoint` with `id_token_hint` and an allow-listed `post_logout_redirect_uri`.
-3. Keycloak ends the SSO session and sends **back-channel logout** tokens to every other BFF.
-4. Other BFFs validate the token and delete matching sessions.
+2. BFF sends `id_token_hint` in a server-side form POST to Keycloak's discovered `end_session_endpoint`. The token MUST NOT appear in a browser URL or redirect. The browser receives only a redirect to the app root.
+3. BFF deletes its local session and cookie. Keycloak ends the SSO session and sends **back-channel logout** tokens to every other BFF.
+4. Other BFFs validate the token and delete matching sessions. If the Keycloak POST fails, the BFF still ends its local session and reports the global logout failure without exposing the ID token.
 
 The Shell's **Sign out of all Excellore apps** triggers this flow.
 

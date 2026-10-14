@@ -7,6 +7,17 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "test:valkey": "node --test test/*.integration.mjs",
+    "test:realm": "node --test test/*.realm.mjs"
+  },
+  "dependencies": {
+    "iovalkey": "0.4.0",
+    "jose": "6.2.12",
+    "openid-client": "6.8.8",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15"
   }
 }
