@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
+using System.Text;
+using System.Text.Json;
 using Excellore.Platform;
 using RabbitMQ.Client;
-using System.Text.Json;
 using Testcontainers.RabbitMq;
 
 namespace Excellore.Platform.Tests;
@@ -14,6 +17,7 @@ public sealed class RabbitMqEventBusTests
     [Fact]
     public async Task Publisher_confirms_persistent_routed_events_and_rejects_unroutable_events()
     {
+        using var listener = TraceListener();
         await using var container = new RabbitMqBuilder($"{RabbitRepository}:{ImageRelease}").Build();
         await container.StartAsync();
         var brokerUri = new Uri(container.GetConnectionString());
@@ -34,6 +38,8 @@ public sealed class RabbitMqEventBusTests
             type = EventType,
             tenantid = Guid.NewGuid()
         });
+        using var parent = new Activity("api-request").Start();
+        parent.AddBaggage("private-value", "must-not-propagate");
         await publisher.PublishAsync(eventId, EventType, body);
         var delivered = await channel.BasicGetAsync(queue, autoAck: true);
         Assert.NotNull(delivered);
@@ -42,10 +48,79 @@ public sealed class RabbitMqEventBusTests
         Assert.Equal(EventType, delivered.BasicProperties.Type);
         Assert.Equal("application/cloudevents+json", delivered.BasicProperties.ContentType);
         Assert.True(delivered.BasicProperties.Persistent);
+        var headers = delivered.BasicProperties.Headers!;
+        Assert.DoesNotContain("baggage", headers.Keys);
+        Assert.DoesNotContain("tracestate", headers.Keys);
+        var traceParent = Encoding.ASCII.GetString(Assert.IsType<byte[]>(headers["traceparent"]));
+        Assert.True(ActivityContext.TryParse(traceParent, null, out var publishedContext));
+        Assert.Equal(parent.TraceId, publishedContext.TraceId);
+        Assert.NotEqual(parent.SpanId, publishedContext.SpanId);
 
         await Assert.ThrowsAnyAsync<Exception>(() => publisher.PublishAsync(
             Guid.NewGuid(), "profile.updated.v1", body));
         Assert.Null(await channel.BasicGetAsync(queue, autoAck: true));
+    }
+
+    [Fact]
+    public async Task Consumer_uses_valid_traceparent_and_ignores_malformed_trace_context()
+    {
+        var stopped = new ConcurrentQueue<Activity>();
+        using var listener = TraceListener(stopped);
+        await using var container = new RabbitMqBuilder($"{RabbitRepository}:{ImageRelease}").Build();
+        await container.StartAsync();
+        var brokerUri = new Uri(container.GetConnectionString());
+        var bus = new RabbitMqEventBus(brokerUri);
+        var valid = new TaskCompletionSource<(ActivityContext Context, ActivitySpanId ParentSpanId)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var malformed = new TaskCompletionSource<(ActivityContext Context, ActivitySpanId ParentSpanId)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var missing = new TaskCompletionSource<(ActivityContext Context, ActivitySpanId ParentSpanId)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await using var subscription = await bus.SubscribeAsync("trace-test",
+            new Dictionary<string, PlatformEventHandler>
+            {
+                [EventType] = (body, _) =>
+                {
+                    var activity = Activity.Current!;
+                    var observed = (activity.Context, activity.ParentSpanId);
+                    if (body.Span.SequenceEqual("valid"u8)) valid.TrySetResult(observed);
+                    if (body.Span.SequenceEqual("malformed"u8)) malformed.TrySetResult(observed);
+                    if (body.Span.SequenceEqual("missing"u8)) missing.TrySetResult(observed);
+                    return Task.CompletedTask;
+                }
+            });
+        await using var publisher = await bus.CreatePublisherAsync();
+        using var parent = new Activity("api-request").Start();
+        await publisher.PublishAsync(Guid.NewGuid(), EventType, "valid"u8.ToArray());
+        var consumed = await valid.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var producer = Assert.Single(stopped, activity =>
+            activity.DisplayName == "messaging.publish" && activity.TraceId == parent.TraceId);
+        Assert.Equal(parent.TraceId, consumed.Context.TraceId);
+        Assert.Equal(producer.SpanId, consumed.ParentSpanId);
+
+        parent.Stop();
+        await using var connection = await new ConnectionFactory { Uri = brokerUri }.CreateConnectionAsync();
+        await using var channel = await connection.CreateChannelAsync();
+        await channel.BasicPublishAsync("excellore.events", EventType, mandatory: false,
+            new BasicProperties
+            {
+                Persistent = true,
+                Headers = new Dictionary<string, object?>
+                {
+                    ["traceparent"] = Encoding.ASCII.GetBytes("invalid"),
+                    ["baggage"] = Encoding.ASCII.GetBytes("must-not-propagate")
+                }
+            }, "malformed"u8.ToArray());
+        var independent = await malformed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.NotEqual(parent.TraceId, independent.Context.TraceId);
+        Assert.Equal(default, independent.ParentSpanId);
+
+        await channel.BasicPublishAsync("excellore.events", EventType, mandatory: false,
+            new BasicProperties { Persistent = true }, "missing"u8.ToArray());
+        var withoutHeader = await missing.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.NotEqual(parent.TraceId, withoutHeader.Context.TraceId);
+        Assert.Equal(default, withoutHeader.ParentSpanId);
     }
 
     [Fact]
@@ -107,5 +182,18 @@ public sealed class RabbitMqEventBusTests
         await using var channel = await connection.CreateChannelAsync();
         await channel.BasicPublishAsync("excellore.events", EventType, mandatory: false,
             new BasicProperties { Persistent = true }, body);
+    }
+
+    private static ActivityListener TraceListener(ConcurrentQueue<Activity>? stopped = null)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == ExcelloreTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) =>
+                ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity => stopped?.Enqueue(activity)
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 }

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -8,6 +10,7 @@ public sealed class RabbitMqEventBus : IEventBus
 {
     private const string EventExchange = "excellore.events";
     private const string DeadExchange = "excellore.dead";
+    private const string TraceParentHeader = "traceparent";
     private const int MaxBodyBytes = 256 * 1024;
     private readonly ConnectionFactory _factory;
 
@@ -120,6 +123,10 @@ public sealed class RabbitMqEventBus : IEventBus
 
                 // Delivery bodies are valid only during this callback; copy before awaiting the handler.
                 var body = delivery.Body.ToArray();
+                using var activity = ExcelloreTelemetry.Source.StartActivity(
+                    "messaging.process", ActivityKind.Consumer, ReadParentContext(delivery.BasicProperties));
+                activity?.SetTag("messaging.system", "rabbitmq");
+                activity?.SetTag("messaging.destination.name", EventExchange);
                 var delays = new[] { TimeSpan.FromMilliseconds(200), TimeSpan.FromSeconds(1) };
                 var handled = false;
                 for (var attempt = 0; attempt <= delays.Length; attempt++)
@@ -161,6 +168,7 @@ public sealed class RabbitMqEventBus : IEventBus
                 }
                 else
                 {
+                    activity?.SetStatus(ActivityStatusCode.Error);
                     await channel.BasicRejectAsync(delivery.DeliveryTag, requeue: false);
                 }
             };
@@ -175,6 +183,30 @@ public sealed class RabbitMqEventBus : IEventBus
             if (connection is not null) await connection.DisposeAsync();
             throw;
         }
+    }
+
+    private static ActivityContext ReadParentContext(IReadOnlyBasicProperties properties)
+    {
+        if (properties.Headers is null)
+        {
+            return default;
+        }
+
+        foreach (var header in properties.Headers)
+        {
+            if (!string.Equals(header.Key, TraceParentHeader, StringComparison.OrdinalIgnoreCase) ||
+                header.Value is not byte[] bytes || bytes.Length is < 55 or > 128)
+            {
+                continue;
+            }
+
+            if (ActivityContext.TryParse(Encoding.ASCII.GetString(bytes), null, out var context))
+            {
+                return context;
+            }
+        }
+
+        return default;
     }
 
     private sealed class Subscription(IConnection connection, IChannel channel, string consumerTag,
@@ -222,17 +254,34 @@ public sealed class RabbitMqEventBus : IEventBus
                 throw new ArgumentException("The event body size is invalid.", nameof(body));
             }
 
+            using var activity = ExcelloreTelemetry.Source.StartActivity(
+                "messaging.publish", ActivityKind.Producer);
+            activity?.SetTag("messaging.system", "rabbitmq");
+            activity?.SetTag("messaging.destination.name", EventExchange);
             await _publishGate.WaitAsync(cancellationToken);
             try
             {
+                var traceActivity = activity ?? Activity.Current;
+                var traceParent = traceActivity?.IdFormat == ActivityIdFormat.W3C
+                    ? traceActivity.Id
+                    : null;
                 await channel.BasicPublishAsync(EventExchange, eventType, mandatory: true,
                     new BasicProperties
                     {
                         Persistent = true,
                         ContentType = "application/cloudevents+json",
                         MessageId = eventId.ToString("D"),
-                        Type = eventType
+                        Type = eventType,
+                        Headers = traceParent is null ? null : new Dictionary<string, object?>
+                        {
+                            [TraceParentHeader] = Encoding.ASCII.GetBytes(traceParent)
+                        }
                     }, body, cancellationToken);
+            }
+            catch (Exception)
+            {
+                activity?.SetStatus(ActivityStatusCode.Error);
+                throw;
             }
             finally
             {
