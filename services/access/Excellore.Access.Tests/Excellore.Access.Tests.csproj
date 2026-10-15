@@ -31,6 +31,7 @@
     <None Include="../Excellore.Access.Infrastructure/Migrations/005_audit_append_only.sql" Link="005_audit_append_only.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/006_custom_role_lifecycle.sql" Link="006_custom_role_lifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/007_group_role_assignment_uniqueness.sql" Link="007_group_role_assignment_uniqueness.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Access.Infrastructure/Migrations/008_membership_identity.sql" Link="008_membership_identity.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../infra/db/rls-exempt.txt" Link="rls-exempt.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

@@ -19,6 +19,8 @@ builder.Services.AddScoped<AccessRoleReader>();
 builder.Services.AddScoped<CustomRoleService>();
 builder.Services.AddScoped<RoleAssignmentService>();
 builder.Services.AddScoped<AccessGroupService>();
+builder.Services.AddScoped<InvitationAcceptanceService>();
+builder.Services.AddScoped<InvitationManagementService>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
 builder.Services.AddScoped<IPrivilegeClassifier, AccessPrivilegeClassifier>();
 builder.Services.AddExcelloreAuthz();
@@ -132,6 +134,29 @@ app.MapPost("/internal/v1/tenants:resolve-slug", async (ResolveSlugRequest reque
     return tenant is null ? Results.NotFound() : Results.Json(tenant);
 }).RequireAuthorization("Internal.Authz");
 
+app.MapPost("/v1/me/invitations/accept", async (AcceptInvitationRequest request,
+    InvitationAcceptanceService service, CancellationToken cancellationToken) =>
+{
+    var result = await service.AcceptAsync(request, cancellationToken);
+    return result.Status switch
+    {
+        InvitationAcceptanceStatus.Accepted => Results.Json(new { result.TenantId }),
+        InvitationAcceptanceStatus.Invalid => Results.Problem(statusCode: 400,
+            type: "urn:excellore:problem:invalid-invitation", title: "Invalid invitation"),
+        InvitationAcceptanceStatus.Unavailable => Results.NotFound(),
+        InvitationAcceptanceStatus.Conflict => Results.Problem(statusCode: 409,
+            type: "urn:excellore:problem:invitation-conflict", title: "Invitation unavailable"),
+        _ => Results.StatusCode(500)
+    };
+}).RequireAuthorization();
+app.MapGet("/v1/me/invitations", async (HttpContext context, InvitationManagementService service,
+    CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Json(await service.ListMineAsync(cancellationToken));
+})
+    .RequireAuthorization();
+
 var tenantRoutes = app.MapGroup("/v1/tenants/{tenantId:guid}").AddTenantGate();
 tenantRoutes.MapGet("/me/access", async (ICurrentUser user, ITenantContextAccessor tenant,
     AccessResolutionService service, CancellationToken cancellationToken) =>
@@ -143,6 +168,25 @@ tenantRoutes.MapGet("/me/access", async (ICurrentUser user, ITenantContextAccess
         result.Version, result.ResolvedAt
     }) : Results.NotFound();
 }).RequirePermission("access.app.access");
+tenantRoutes.MapGet("/invitations", async (HttpContext context, InvitationManagementService service,
+    CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Json(await service.ListAsync(cancellationToken));
+})
+    .RequirePermission("access.member.invite");
+tenantRoutes.MapDelete("/invitations/{invitationId:guid}", async (Guid invitationId,
+    InvitationManagementService service, CancellationToken cancellationToken) =>
+{
+    var status = await service.RevokeAsync(invitationId, cancellationToken);
+    return status switch
+    {
+        InvitationRevocationStatus.Revoked => Results.NoContent(),
+        InvitationRevocationStatus.NotFound => Results.NotFound(),
+        InvitationRevocationStatus.Forbidden => Results.Forbid(),
+        _ => Results.StatusCode(500)
+    };
+}).RequirePermission("access.member.invite");
 tenantRoutes.MapGet("/roles", async (AccessRoleReader service, CancellationToken cancellationToken) =>
     Results.Json(await service.ListRolesAsync(cancellationToken)))
     .RequirePermission("access.role.read");

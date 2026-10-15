@@ -60,7 +60,8 @@ public sealed class AccessGroupApiTests
             await new CatalogSyncService(appDb).SyncAsync("access", new PermissionCatalog("access", [
                 new CatalogPermission("access.app.access", "Open Access", false, false, false, ["owner", "admin"]),
                 new CatalogPermission("access.group.manage", "Manage groups", false, false, false, ["owner", "admin"]),
-                new CatalogPermission("access.member.read", "Read members", true, false, false, ["owner"])
+                new CatalogPermission("access.member.read", "Read members", true, false, false, ["owner"]),
+                new CatalogPermission("access.member.invite", "Invite members", false, false, false, ["owner", "admin"])
             ]), platformActor));
         var ownerOne = Guid.NewGuid();
         var ownerTwo = Guid.NewGuid();
@@ -128,6 +129,32 @@ public sealed class AccessGroupApiTests
                         options.DefaultChallengeScheme = "Test";
                     }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { })));
             using var client = factory.CreateClient();
+            var invitationsPath = $"/v1/tenants/{tenantOne:D}/invitations";
+            var foreignInvitation = (Guid)(await ScalarAsync(admin,
+                "SELECT id FROM invitations WHERE tenant_id = @tenant", ("tenant", tenantTwo)))!;
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, ownerOne,
+                $"/v1/tenants/{tenantTwo:D}/invitations");
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Get, recipient,
+                invitationsPath);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Delete, recipient,
+                $"{invitationsPath}/{foreignInvitation:D}");
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Delete, ownerOne,
+                $"/v1/tenants/{tenantTwo:D}/invitations/{foreignInvitation:D}");
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Delete, ownerOne,
+                $"{invitationsPath}/{foreignInvitation:D}");
+            using (var invitations = await SendAsync(client, HttpMethod.Get, ownerOne, invitationsPath))
+            {
+                Assert.Equal(HttpStatusCode.OK, invitations.StatusCode);
+                var rows = await invitations.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(1, rows.GetArrayLength());
+                Assert.DoesNotContain(foreignInvitation.ToString("D"), rows.ToString(), StringComparison.OrdinalIgnoreCase);
+            }
+            var ownInvitation = (Guid)(await ScalarAsync(admin,
+                "SELECT id FROM invitations WHERE tenant_id = @tenant", ("tenant", tenantOne)))!;
+            await ExpectAsync(HttpStatusCode.NoContent, client, HttpMethod.Delete, ownerOne,
+                $"{invitationsPath}/{ownInvitation:D}");
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Delete, ownerOne,
+                $"{invitationsPath}/{ownInvitation:D}");
             var groupsPath = $"/v1/tenants/{tenantOne:D}/groups";
             await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, ownerOne,
                 $"/v1/tenants/{tenantTwo:D}/groups");
