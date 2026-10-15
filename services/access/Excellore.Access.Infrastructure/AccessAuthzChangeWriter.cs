@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Npgsql;
 
 namespace Excellore.Access.Infrastructure;
@@ -58,6 +59,33 @@ internal static class AccessAuthzChangeWriter
             actor = new { sub = actorSub.ToString("D"), type = "human" },
             data = new { tenantId, roleId }
         });
+        await using var command = new NpgsqlCommand("""
+            INSERT INTO outbox (id, type, tenant_id, payload)
+            VALUES (@id, @type, @tenant, @payload::jsonb)
+            """, connection, transaction);
+        command.Parameters.AddWithValue("id", id);
+        command.Parameters.AddWithValue("type", type);
+        command.Parameters.AddWithValue("tenant", tenantId);
+        command.Parameters.AddWithValue("payload", payload);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    internal static async Task WriteAssignmentEventAsync(NpgsqlConnection connection,
+        NpgsqlTransaction transaction, Guid tenantId, Guid userId, Guid roleId,
+        DateTimeOffset? expiresAt, Guid actorSub, string verb,
+        CancellationToken cancellationToken)
+    {
+        if (verb is not ("granted" or "revoked"))
+            throw new ArgumentOutOfRangeException(nameof(verb));
+        var id = Guid.NewGuid();
+        var type = $"access.assignment.{verb}.v1";
+        var payload = JsonSerializer.Serialize(new
+        {
+            specversion = "1.0", id, type, source = "excellore/access",
+            time = DateTimeOffset.UtcNow, tenantid = tenantId, correlationid = Guid.NewGuid(),
+            actor = new { sub = actorSub.ToString("D"), type = "human" },
+            data = new { tenantId, userId, roleId, expiresAt }
+        }, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
         await using var command = new NpgsqlCommand("""
             INSERT INTO outbox (id, type, tenant_id, payload)
             VALUES (@id, @type, @tenant, @payload::jsonb)

@@ -5,6 +5,7 @@ using Excellore.Auth;
 using Excellore.Authz;
 using Npgsql;
 using System.Net.Mail;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Access")
@@ -16,6 +17,7 @@ builder.Services.AddScoped<IdentityMirrorService>();
 builder.Services.AddScoped<AccessResolutionService>();
 builder.Services.AddScoped<AccessRoleReader>();
 builder.Services.AddScoped<CustomRoleService>();
+builder.Services.AddScoped<RoleAssignmentService>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
 builder.Services.AddScoped<IPrivilegeClassifier, AccessPrivilegeClassifier>();
 builder.Services.AddExcelloreAuthz();
@@ -164,6 +166,15 @@ tenantRoutes.MapDelete("/roles/{roleId:guid}", async (Guid roleId, CustomRoleSer
     CancellationToken cancellationToken) =>
     CustomRoleResponses.Map(await service.DeleteAsync(roleId, cancellationToken)))
     .RequirePermission("access.role.manage");
+tenantRoutes.MapPost("/role-assignments", async (GrantRoleRequest request,
+    RoleAssignmentService service, CancellationToken cancellationToken) =>
+    RoleAssignmentResponses.Map(await service.GrantAsync(request, cancellationToken)))
+    .RequirePermission("access.assignment.manage");
+tenantRoutes.MapDelete("/role-assignments/{assignmentId:guid}", async (Guid assignmentId,
+    [FromBody] RevokeRoleRequest request, RoleAssignmentService service,
+    CancellationToken cancellationToken) =>
+    RoleAssignmentResponses.Map(await service.RevokeAsync(assignmentId, request, cancellationToken)))
+    .RequirePermission("access.assignment.manage");
 
 app.AssertTenantRoutesProtected();
 
