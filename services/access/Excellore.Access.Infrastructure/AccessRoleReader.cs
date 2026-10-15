@@ -19,6 +19,7 @@ public sealed class AccessRoleReader(NpgsqlDataSource dataSource, ITenantIdAcces
                 SELECT r.id, r.name, r.description, r.is_system, r.privileged, rp.permission_key
                 FROM roles r
                 LEFT JOIN role_permissions rp ON rp.role_id = r.id
+                WHERE r.deleted_at IS NULL
                 ORDER BY r.is_system DESC, r.name, rp.permission_key
                 """, connection, transaction);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);

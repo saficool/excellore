@@ -36,4 +36,10 @@ docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postg
 docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-access \
   sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U access_migrator -d access' \
   < services/access/Excellore.Access.Infrastructure/Migrations/004_outbox_publisher.sql
+docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-access \
+  sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U access_migrator -d access' \
+  < services/access/Excellore.Access.Infrastructure/Migrations/005_audit_append_only.sql
+docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-access \
+  sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U access_migrator -d access' \
+  < services/access/Excellore.Access.Infrastructure/Migrations/006_custom_role_lifecycle.sql
 echo 'Access database migrations applied.'

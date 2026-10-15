@@ -34,7 +34,8 @@ public sealed class AccessResolutionTests
         }.ConnectionString;
         await using var migrator = new NpgsqlConnection(migratorString);
         await migrator.OpenAsync();
-        foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql", "003_membership_index.sql" })
+        foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql", "003_membership_index.sql",
+            "005_audit_append_only.sql", "006_custom_role_lifecycle.sql" })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, migration)));
         await ExecuteAsync(migrator, "INSERT INTO apps (id, name, core) VALUES ('reports', 'Reports', false)");
 

@@ -32,6 +32,8 @@ public sealed class CatalogSyncTests
         await migrator.OpenAsync();
         await ExecuteAsync(migrator, await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "001_initial.sql")));
         await ExecuteAsync(migrator, await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "002_register_apps.sql")));
+        await ExecuteAsync(migrator, await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "005_audit_append_only.sql")));
+        await ExecuteAsync(migrator, await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "006_custom_role_lifecycle.sql")));
 
         var tenantOne = Guid.NewGuid();
         var tenantTwo = Guid.NewGuid();

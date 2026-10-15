@@ -1,4 +1,5 @@
 using Excellore.Access.Application;
+using Excellore.Access.Api;
 using Excellore.Access.Infrastructure;
 using Excellore.Auth;
 using Excellore.Authz;
@@ -14,6 +15,7 @@ builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<IdentityMirrorService>();
 builder.Services.AddScoped<AccessResolutionService>();
 builder.Services.AddScoped<AccessRoleReader>();
+builder.Services.AddScoped<CustomRoleService>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
 builder.Services.AddScoped<IPrivilegeClassifier, AccessPrivilegeClassifier>();
 builder.Services.AddExcelloreAuthz();
@@ -150,6 +152,18 @@ tenantRoutes.MapGet("/roles/{roleId:guid}", async (Guid roleId, AccessRoleReader
 tenantRoutes.MapGet("/permissions", async (AccessRoleReader service, CancellationToken cancellationToken) =>
     Results.Json(await service.ListPermissionsAsync(cancellationToken)))
     .RequirePermission("access.role.read");
+tenantRoutes.MapPost("/roles", async (CustomRoleRequest request, CustomRoleService service,
+    CancellationToken cancellationToken) =>
+    CustomRoleResponses.Map(await service.CreateAsync(request, cancellationToken)))
+    .RequirePermission("access.role.manage");
+tenantRoutes.MapPut("/roles/{roleId:guid}", async (Guid roleId, CustomRoleRequest request,
+    CustomRoleService service, CancellationToken cancellationToken) =>
+    CustomRoleResponses.Map(await service.UpdateAsync(roleId, request, cancellationToken)))
+    .RequirePermission("access.role.manage");
+tenantRoutes.MapDelete("/roles/{roleId:guid}", async (Guid roleId, CustomRoleService service,
+    CancellationToken cancellationToken) =>
+    CustomRoleResponses.Map(await service.DeleteAsync(roleId, cancellationToken)))
+    .RequirePermission("access.role.manage");
 
 app.AssertTenantRoutesProtected();
 

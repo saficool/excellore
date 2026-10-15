@@ -28,6 +28,8 @@
     <None Include="../Excellore.Access.Infrastructure/Migrations/002_register_apps.sql" Link="002_register_apps.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/003_membership_index.sql" Link="003_membership_index.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/004_outbox_publisher.sql" Link="004_outbox_publisher.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Access.Infrastructure/Migrations/005_audit_append_only.sql" Link="005_audit_append_only.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Access.Infrastructure/Migrations/006_custom_role_lifecycle.sql" Link="006_custom_role_lifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../infra/db/rls-exempt.txt" Link="rls-exempt.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

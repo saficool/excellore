@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Excellore.Access.Application;
 using Npgsql;
 
@@ -125,17 +124,8 @@ public sealed class CatalogSyncService(NpgsqlDataSource dataSource)
         var correlationId = Guid.NewGuid();
         foreach (var tenant in tenants)
         {
-            var id = Guid.NewGuid();
-            var payload = JsonSerializer.Serialize(new
-            {
-                specversion = "1.0", id, type = "access.authz.changed.v1", source = "excellore/access",
-                time = DateTimeOffset.UtcNow, tenantid = tenant.Id, correlationid = correlationId,
-                actor = new { sub = actorSub.ToString("D"), type = "machine" },
-                data = new { tenantId = tenant.Id, authzVersion = tenant.Version }
-            });
-            await ExecuteAsync(connection, transaction,
-                "INSERT INTO outbox (id, type, tenant_id, payload) VALUES (@id, 'access.authz.changed.v1', @tenant, @payload::jsonb)",
-                cancellationToken, ("id", id), ("tenant", tenant.Id), ("payload", payload));
+            await AccessAuthzChangeWriter.WriteEventAsync(connection, transaction,
+                tenant.Id, tenant.Version, actorSub, "machine", correlationId, cancellationToken);
         }
     }
 

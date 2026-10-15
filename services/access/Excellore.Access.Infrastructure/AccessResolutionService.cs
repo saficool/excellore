@@ -42,14 +42,14 @@ public sealed class AccessResolutionService(NpgsqlDataSource dataSource)
         await using (var command = Command(connection, transaction, """
             WITH grants AS (
               SELECT r.id AS role_id, r.name, ra.expires_at, ra.revoked_at
-              FROM role_assignments ra JOIN roles r ON r.id = ra.role_id
+              FROM role_assignments ra JOIN roles r ON r.id = ra.role_id AND r.deleted_at IS NULL
               WHERE ra.tenant_id = @tenant AND ra.user_id = @user
                 AND (r.tenant_id IS NULL OR r.tenant_id = @tenant)
               UNION ALL
               SELECT r.id, r.name, gra.expires_at, gra.revoked_at
               FROM group_members gm
               JOIN group_role_assignments gra ON gra.tenant_id = gm.tenant_id AND gra.group_id = gm.group_id
-              JOIN roles r ON r.id = gra.role_id
+              JOIN roles r ON r.id = gra.role_id AND r.deleted_at IS NULL
               WHERE gm.tenant_id = @tenant AND gm.user_id = @user
                 AND (r.tenant_id IS NULL OR r.tenant_id = @tenant)
             )
