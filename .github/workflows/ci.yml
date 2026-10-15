@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
         with:
           version: 10.34.6
@@ -23,6 +25,10 @@ jobs:
       - run: pnpm -w lint
       - run: pnpm -w test
       - run: pnpm -w contracts:check
+      - run: pnpm -w permissions:check
+        env:
+          PERMISSIONS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - run: pnpm -w permissions:test
       - run: pnpm -w format:check
 
   handbook:

@@ -1,0 +1,100 @@
+app: access
+permissions:
+  - {
+      key: access.app.access,
+      description: Open the Access app in a tenant,
+      systemRoles: [owner, admin, member, viewer, auditor],
+    }
+  - {
+      key: access.member.read,
+      description: View members of the tenant,
+      systemRoles: [owner, admin, viewer, auditor],
+    }
+  - {
+      key: access.member.invite,
+      description: Invite people to the tenant,
+      systemRoles: [owner, admin],
+    }
+  - {
+      key: access.member.suspend,
+      description: Suspend or reactivate members,
+      systemRoles: [owner, admin],
+    }
+  - {
+      key: access.member.remove,
+      description: Remove members from the tenant,
+      systemRoles: [owner, admin],
+    }
+  - {
+      key: access.role.read,
+      description: View roles and the permission catalog,
+      systemRoles: [owner, admin, viewer, auditor],
+    }
+  - {
+      key: access.role.manage,
+      description: 'Create, edit, and delete custom roles',
+      privileged: true,
+      systemRoles: [owner, admin],
+    }
+  - {
+      key: access.assignment.manage,
+      description: Assign and revoke roles,
+      systemRoles: [owner, admin],
+    }
+  - {
+      key: access.group.manage,
+      description: Manage groups and group roles,
+      systemRoles: [owner, admin],
+    }
+  - {
+      key: access.apps.read,
+      description: View apps enabled for the tenant,
+      systemRoles: [owner, admin, viewer],
+    }
+  - {
+      key: access.request.create,
+      description: Request roles or app access,
+      systemRoles: [owner, admin, member],
+    }
+  - {
+      key: access.request.approve,
+      description: Approve or reject access requests,
+      systemRoles: [owner, admin],
+    }
+  - {
+      key: access.audit.read,
+      description: Read the tenant audit log,
+      systemRoles: [owner, admin, auditor],
+    }
+  - {
+      key: access.settings.read,
+      description: View tenant settings,
+      systemRoles: [owner, admin],
+    }
+  - {
+      key: access.settings.manage,
+      description: Change tenant settings,
+      privileged: true,
+      systemRoles: [owner],
+    }
+  - {
+      key: access.supportgrant.manage,
+      description: Approve and revoke platform support access,
+      privileged: true,
+      ownerOnly: true,
+      systemRoles: [owner],
+    }
+  - {
+      key: access.tenant.transfer,
+      description: Transfer tenant ownership,
+      privileged: true,
+      ownerOnly: true,
+      systemRoles: [owner],
+    }
+  - {
+      key: access.tenant.delete,
+      description: Request tenant deletion,
+      privileged: true,
+      ownerOnly: true,
+      systemRoles: [owner],
+    }

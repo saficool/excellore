@@ -6,4 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../Excellore.Access.Application/Excellore.Access.Application.csproj" />
+    <ProjectReference Include="../Excellore.Access.Infrastructure/Excellore.Access.Infrastructure.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Auth/Excellore.Auth.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -10,6 +10,8 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "contracts:check": "node scripts/check-event-schemas.mjs",
+    "permissions:check": "node scripts/check-permissions.mjs",
+    "permissions:test": "node --test scripts/check-permissions.test.mjs",
     "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"*.{json,mjs,yaml}\"",
     "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"*.{json,mjs,yaml}\""
   },
@@ -21,6 +23,7 @@
     "prettier": "3.9.10",
     "turbo": "2.11.2",
     "typescript": "5.9.3",
-    "typescript-eslint": "8.70.0"
+    "typescript-eslint": "8.70.0",
+    "yaml": "2.9.1"
   }
 }

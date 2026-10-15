@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+    <ProjectReference Include="../Excellore.Access.Application/Excellore.Access.Application.csproj" />
+  </ItemGroup>
+
 </Project>

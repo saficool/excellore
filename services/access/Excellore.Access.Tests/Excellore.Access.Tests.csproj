@@ -8,6 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Excellore.Access.Application/Excellore.Access.Application.csproj" />
+    <ProjectReference Include="../Excellore.Access.Infrastructure/Excellore.Access.Infrastructure.csproj" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
@@ -19,6 +21,7 @@
     <ProjectReference Include="../../../shared/dotnet/Excellore.Platform.Testing/Excellore.Platform.Testing.csproj" />
     <Using Include="Xunit" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/001_initial.sql" Link="001_initial.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Access.Infrastructure/Migrations/002_register_apps.sql" Link="002_register_apps.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../infra/db/rls-exempt.txt" Link="rls-exempt.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
