@@ -24,6 +24,7 @@ builder.Services.AddScoped<InvitationManagementService>();
 builder.Services.AddScoped<InvitationIssuanceService>();
 builder.Services.AddScoped<InvitationDeliveryCoordinator>();
 builder.Services.AddScoped<OwnerInvitationResendService>();
+builder.Services.AddScoped<MemberLifecycleService>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
 builder.Services.AddScoped<IPrivilegeClassifier, AccessPrivilegeClassifier>();
 builder.Services.AddExcelloreAuthz();
@@ -223,6 +224,18 @@ tenantRoutes.MapDelete("/invitations/{invitationId:guid}", async (Guid invitatio
         _ => Results.StatusCode(500)
     };
 }).RequirePermission("access.member.invite");
+tenantRoutes.MapPost("/members:suspend", async (MemberChangeRequest request,
+    MemberLifecycleService service, CancellationToken cancellationToken) =>
+    MemberLifecycleResponses.Map(await service.SuspendAsync(request, cancellationToken)))
+    .RequirePermission("access.member.suspend");
+tenantRoutes.MapPost("/members:reactivate", async (MemberChangeRequest request,
+    MemberLifecycleService service, CancellationToken cancellationToken) =>
+    MemberLifecycleResponses.Map(await service.ReactivateAsync(request, cancellationToken)))
+    .RequirePermission("access.member.suspend");
+tenantRoutes.MapDelete("/members", async ([FromBody] MemberChangeRequest request,
+    MemberLifecycleService service, CancellationToken cancellationToken) =>
+    MemberLifecycleResponses.Map(await service.RemoveAsync(request, cancellationToken)))
+    .RequirePermission("access.member.remove");
 tenantRoutes.MapGet("/roles", async (AccessRoleReader service, CancellationToken cancellationToken) =>
     Results.Json(await service.ListRolesAsync(cancellationToken)))
     .RequirePermission("access.role.read");

@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.0 |
+| **Document version** | 5.1 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.1 | Member suspend, reactivate, and remove send opaque `userId` in request bodies instead of URLs (owner decision; ADR-0049 proposed). Reactivation rechecks current grants before restoring access. |
 | 5.0 | Owner-approved narrow INV-11 exception for Keycloak's time-limited HTTPS execute-actions link during new-user onboarding. Excellore invitation URLs carry only opaque IDs; invitees enter a separate one-time code (RFC-0006, ADR-0048 proposed). |
 | 4.10 | Shared app catalog resolves public app origins from environment configuration, validates links, and supplies the shared tenant/app header (ADR-0035 proposed). |
 | 4.9 | Access user-scoped internal lookups send opaque user IDs in POST bodies instead of URLs; the BFF may resolve fresh on every request (owner decision; ADR-0034 proposed). |
@@ -3016,8 +3017,8 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `GET /v1/tenants/{tenantId}/me/access` | T `access.app.access` | My roles, permissions, apps in this tenant |
 | `GET /v1/tenants/{tenantId}/members`, `GET …/members/{userId}` | T `access.member.read` | Members |
 | `POST …/invitations`, `GET …/invitations`, `DELETE …/invitations/{id}`, `POST …/invitations/{id}/resend` | T `access.member.invite` | Invitations |
-| `POST …/members/{userId}/suspend`, `POST …/members/{userId}/reactivate` | T `access.member.suspend` | Suspend, reactivate |
-| `DELETE …/members/{userId}` | T `access.member.remove` | Remove |
+| `POST …/members:suspend`, `POST …/members:reactivate` (`userId`, `reason` in body) | T `access.member.suspend` | Suspend, reactivate; no user identifier in the URL (INV-11) |
+| `DELETE …/members` (`userId`, `reason` in body) | T `access.member.remove` | Remove; no user identifier in the URL (INV-11) |
 | `GET …/roles`, `GET …/roles/{roleId}`, `GET …/permissions` | T `access.role.read` | Roles and permission catalog (enabled apps only) |
 | `POST …/roles`, `PUT …/roles/{roleId}`, `DELETE …/roles/{roleId}` | T `access.role.manage` | Custom roles |
 | `POST …/role-assignments` (`userId`, `roleId`, optional `expiresAt`, and `reason` in body), `DELETE …/role-assignments/{id}` (`reason` in body) | T `access.assignment.manage` | Assignments; no user identifier in the URL (INV-11) |
@@ -3091,4 +3092,4 @@ See handbook Appendix E. Permission keys: `<app>.<resource>.<action>`. Events: `
 
 ---
 
-*End of the Excellore Platform Handbook, version 5.0.*
+*End of the Excellore Platform Handbook, version 5.1.*
