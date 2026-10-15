@@ -97,3 +97,16 @@ WP-06 direct assignments use `POST /v1/tenants/{tenantId}/role-assignments` with
 WP-06 groups use `GET/POST /v1/tenants/{tenantId}/groups`, `PUT/DELETE /v1/tenants/{tenantId}/groups/{groupId}/members` with JSON `{ "userId": "...", "reason": "group-change" }`, and `POST /v1/tenants/{tenantId}/groups/{groupId}/role-assignments` with `roleId`, optional `expiresAt`, and `reason`. Revoke a group role through `DELETE /v1/tenants/{tenantId}/groups/{groupId}/role-assignments/{assignmentId}` with a reason body. They require `access.group.manage`. Apply `bash scripts/migrate-access.sh` before starting the updated API; migration 007 adds group-role live-grant uniqueness. The HTTP integration test uses disposable PostgreSQL and needs no manual group setup.
 
 The generated tenant route and API proxy call the Access authority. The Access resolver now serves these contracts, but a newly provisioned tenant remains unavailable until its owner accepts the invitation. Access now sends an ID-only invitation link and a one-time code to local Mailpit (`http://127.0.0.1:8025`). A new Keycloak identity also receives a required-actions email there. The Access acceptance page and code entry arrive in WP-08; until then, backend acceptance is covered by automated tests. This first UI checks the login and server-side session. To verify the route wiring automatically after the app starts, run `node scripts/check-profile-login.mjs`. The script uses the local seed credentials in ignored `.env` and prints no credentials.
+
+## Shell app (WP-07)
+
+Start the migrated Access API on `http://localhost:5002` and the local stack, then prepare Shell's ignored configuration and run it:
+
+```sh
+node scripts/setup-next-local.mjs shell
+pnpm --filter @excellore/shell dev
+```
+
+Open `http://excellore.localhost:3000`. Shell signs in through Keycloak and stores its tokens in Valkey. `/` lists active memberships from Access; one membership redirects to `/t/{slug}`. The launcher shows only enabled apps backed by the member's app-access permission. The Shell's pending invitation banner reads Access's machine-protected internal contract. Its acceptance link opens the Access acceptance page delivered in WP-08; the one-time code is never in the link. Sign out from the shared header invalidates all BFF sessions through the shared Valkey marker and ends the Keycloak SSO session; verified backchannel logout remains active. A browser's last-used tenant preference is checked against the fresh tenant list before redirecting.
+
+For the automated Shell UI smoke test, leave port 5002 free and start both Shell and Profile BFFs. Run `node scripts/check-shell-login.mjs`. The script uses local Keycloak and Valkey, serves a temporary Access contract stub on port 5002, and checks sign-in, tenant and app visibility, single-tenant redirect, unknown tenant handling, and cross-app sign-out. It prints no credentials.

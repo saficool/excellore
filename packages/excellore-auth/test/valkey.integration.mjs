@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { test } from 'node:test';
 import Valkey from 'iovalkey';
 import { ValkeySessionStore } from '../dist/index.js';
@@ -55,6 +55,51 @@ test('Valkey encrypts sessions, enforces expiry and shared refresh locks, and re
   } finally {
     const keys = await redis.keys(`${prefix}*`);
     if (keys.length) await redis.del(...keys);
+    redis.disconnect();
+  }
+});
+
+test('global sign-out revokes other app sessions and permits a later login', async () => {
+  const redis = new Valkey(
+    process.env.EXCELLORE_VALKEY_TEST_URL ?? 'redis://127.0.0.1:6379',
+  );
+  const suffix = randomBytes(6).toString('hex');
+  const shell = new ValkeySessionStore(
+    redis,
+    `shell-${suffix}:sess:`,
+    randomBytes(32).toString('base64url'),
+  );
+  const profile = new ValkeySessionStore(
+    redis,
+    `profile-${suffix}:sess:`,
+    randomBytes(32).toString('base64url'),
+  );
+  const sub = randomBytes(16).toString('hex');
+  const newSession = () => ({
+    kcSid: randomBytes(16).toString('hex'),
+    sub,
+    acr: '2',
+    accessToken: randomBytes(32).toString('base64url'),
+    accessTokenExpiresAt: Math.floor(Date.now() / 1000) + 300,
+    refreshToken: randomBytes(32).toString('base64url'),
+    idToken: randomBytes(32).toString('base64url'),
+  });
+  try {
+    await redis.ping();
+    const shellSession = await shell.create(newSession());
+    const profileSession = await profile.create(newSession());
+    assert.ok(await profile.get(profileSession.sid));
+    await shell.revokeSubjectGlobally(sub);
+    assert.equal(await shell.get(shellSession.sid), null);
+    assert.equal(await profile.get(profileSession.sid), null);
+    const fresh = await profile.create(newSession());
+    assert.ok(await profile.get(fresh.sid));
+  } finally {
+    const keys = await redis.keys(`*${suffix}*`);
+    if (keys.length) await redis.del(...keys);
+    await redis.del(
+      `excellore:logout:${createHash('sha256').update(sub).digest('hex')}`,
+    );
     redis.disconnect();
   }
 });

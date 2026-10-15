@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   agentRules: false,
   transpilePackages: ['@excellore/ui'],
   allowedDevOrigins: ['*.excellore.localhost'],
+  logging: { incomingRequests: false },
 };
 
 export default nextConfig;

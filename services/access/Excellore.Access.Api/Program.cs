@@ -168,6 +168,16 @@ app.MapPost("/internal/v1/users/tenants:list", async (TenantListRequest request,
     return Results.Json(await service.ListTenantsAsync(request.UserId, cancellationToken));
 }).RequireAuthorization("Internal.Authz");
 
+app.MapPost("/internal/v1/users/invitations:list", async (TenantListRequest request,
+    InvitationManagementService service, HttpContext context, CancellationToken cancellationToken) =>
+{
+    if (request.UserId == Guid.Empty)
+        return Results.Problem(statusCode: 400,
+            type: "urn:excellore:problem:invalid-invitation-list-request", title: "Invalid invitation list request");
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Json(await service.ListForUserAsync(request.UserId, cancellationToken));
+}).RequireAuthorization("Internal.Authz");
+
 app.MapPost("/internal/v1/tenants:resolve-slug", async (ResolveSlugRequest request,
     AccessResolutionService service, CancellationToken cancellationToken) =>
 {

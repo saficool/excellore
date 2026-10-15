@@ -18,6 +18,7 @@ export {
 export type {
   AuthzSnapshot,
   ListedTenant,
+  PendingInvitation,
   ResolvedTenant,
 } from './access-client.js';
 export {
@@ -30,3 +31,4 @@ export type { TenantContext } from './tenant.js';
 export { proxyBffApi, validateApiProxyRequest } from './bff-api.js';
 export type { BffApiOptions } from './bff-api.js';
 export { canonicalBffRequest } from './next-request.js';
+export { createBffSecurityHeaders } from './security-headers.js';

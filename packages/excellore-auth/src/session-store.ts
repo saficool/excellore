@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes } from 'node:crypto';
 import { CompactEncrypt, compactDecrypt } from 'jose';
 import type { Redis } from 'iovalkey';
 import { z } from 'zod';
@@ -14,10 +14,14 @@ const recordSchema = z.object({
   idToken: z.string(),
   createdAt: z.number().int(),
   lastSeenAt: z.number().int(),
+  logoutMarker: z.string().default(''),
 });
 
 export type SessionRecord = z.infer<typeof recordSchema>;
-type NewSession = Omit<SessionRecord, 'sid' | 'createdAt' | 'lastSeenAt'>;
+type NewSession = Omit<
+  SessionRecord,
+  'sid' | 'createdAt' | 'lastSeenAt' | 'logoutMarker'
+>;
 export interface LoginFlow {
   state: string;
   nonce: string;
@@ -75,6 +79,17 @@ export class ValkeySessionStore {
       .digest('hex');
     return `${this.prefix}idx:${kind}:${digest}`;
   }
+  private globalLogoutKey(sub: string): string {
+    return `excellore:logout:${createHash('sha256').update(sub).digest('hex')}`;
+  }
+  async revokeSubjectGlobally(sub: string): Promise<void> {
+    await this.redis.set(
+      this.globalLogoutKey(sub),
+      randomOpaqueId(),
+      'EX',
+      ABSOLUTE_SECONDS,
+    );
+  }
   private async encrypt(value: unknown): Promise<string> {
     return new CompactEncrypt(new TextEncoder().encode(JSON.stringify(value)))
       .setProtectedHeader({ alg: 'dir', enc: 'A256GCM' })
@@ -116,6 +131,8 @@ export class ValkeySessionStore {
       sid: randomOpaqueId(),
       createdAt: now,
       lastSeenAt: now,
+      logoutMarker:
+        (await this.redis.get(this.globalLogoutKey(input.sub))) ?? '',
     };
     const value = await this.encrypt(record);
     const kcIndex = this.indexKey('kcSid', record.kcSid);
@@ -153,6 +170,12 @@ export class ValkeySessionStore {
     for (let attempt = 0; attempt < 10; attempt += 1) {
       const stored = await this.stored(sid);
       if (!stored) return null;
+      const logoutMarker =
+        (await this.redis.get(this.globalLogoutKey(stored.record.sub))) ?? '';
+      if (stored.record.logoutMarker !== logoutMarker) {
+        await this.delete(sid);
+        return null;
+      }
       const now = Math.floor(Date.now() / 1000);
       const remaining = stored.record.createdAt + ABSOLUTE_SECONDS - now;
       if (remaining <= 0 || now - stored.record.lastSeenAt > IDLE_SECONDS) {

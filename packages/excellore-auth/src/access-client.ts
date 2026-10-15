@@ -23,6 +23,14 @@ const tenantListSchema = z.array(
     apps: z.array(code),
   }),
 );
+const invitationListSchema = z.array(
+  z.object({
+    id,
+    tenantId: id,
+    tenantName: z.string().min(1),
+    expiresAt: z.iso.datetime({ offset: true }),
+  }),
+);
 const snapshotSchema = z.object({
   tenantId: id,
   decision: z.enum(['allow', 'deny']).optional(),
@@ -37,6 +45,7 @@ const snapshotSchema = z.object({
 
 export type ResolvedTenant = z.infer<typeof tenantSchema>;
 export type ListedTenant = z.infer<typeof tenantListSchema>[number];
+export type PendingInvitation = z.infer<typeof invitationListSchema>[number];
 export type AuthzSnapshot = {
   tenantId: string;
   decision: 'allow' | 'deny';
@@ -145,6 +154,16 @@ export class AccessInternalClient {
     const tenants = tenantListSchema.safeParse(response);
     if (!tenants.success) throw new AccessUnavailableError();
     return tenants.data;
+  }
+
+  async listPendingInvitations(userId: string): Promise<PendingInvitation[]> {
+    id.parse(userId);
+    const response = await this.post('/internal/v1/users/invitations:list', {
+      userId,
+    });
+    const invitations = invitationListSchema.safeParse(response);
+    if (!invitations.success) throw new AccessUnavailableError();
+    return invitations.data;
   }
 
   async resolve(userId: string, tenantId: string): Promise<AuthzSnapshot> {

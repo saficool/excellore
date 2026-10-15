@@ -17,14 +17,19 @@ public sealed class InvitationManagementService(NpgsqlDataSource dataSource,
 {
     public async Task<IReadOnlyList<MyPendingInvitation>> ListMineAsync(
         CancellationToken cancellationToken = default)
+        => await ListForUserAsync(user.UserId, cancellationToken);
+
+    public async Task<IReadOnlyList<MyPendingInvitation>> ListForUserAsync(Guid userId,
+        CancellationToken cancellationToken = default)
     {
+        if (userId == Guid.Empty) return [];
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         string? email = null;
         await using (var identity = new NpgsqlCommand("""
             SELECT email FROM identities WHERE user_id = @user AND email_verified AND status = 'active'
             """, connection))
         {
-            identity.Parameters.AddWithValue("user", user.UserId);
+            identity.Parameters.AddWithValue("user", userId);
             email = await identity.ExecuteScalarAsync(cancellationToken) as string;
         }
         if (email is null) return [];

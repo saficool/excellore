@@ -620,6 +620,10 @@ POST /internal/v1/users/tenants:list
 POST /internal/v1/tenants:resolve-slug
 { "userId": "…", "slug": "acme" }
 → { "tenantId", "slug", "name" } or 404 if not an active member
+
+POST /internal/v1/users/invitations:list
+{ "userId": "…" }
+→ [{ "id", "tenantId", "tenantName", "expiresAt" }]   # pending, unexpired invitations for verified email only
 ```
 
 User IDs are sent in request bodies, never in URLs (INV-11). These endpoints use the same machine-token protection as the authorization resolver.
@@ -981,8 +985,8 @@ Tenant authorization changes (roles, assignments, memberships) never touch Keycl
 
 1. Browser → BFF `POST /auth/logout` (CSRF protected).
 2. BFF sends `id_token_hint` in a server-side form POST to Keycloak's discovered `end_session_endpoint`. The token MUST NOT appear in a browser URL or redirect. The browser receives only a redirect to the app root.
-3. BFF deletes its local session and cookie. Keycloak ends the SSO session and sends **back-channel logout** tokens to every other BFF.
-4. Other BFFs validate the token and delete matching sessions. If the Keycloak POST fails, the BFF still ends its local session and reports the global logout failure without exposing the ID token.
+3. BFF changes the subject's shared Valkey logout marker, then deletes its local session and cookie. Every BFF rejects sessions created before that marker on their next read. Keycloak ends the SSO session and sends **back-channel logout** tokens to every other BFF.
+4. Other BFFs validate the token and delete matching sessions. If the Keycloak POST fails, the BFF still revokes shared sessions and reports the SSO logout failure without exposing the ID token.
 
 The Shell's **Sign out of all Excellore apps** triggers this flow.
 
@@ -3075,6 +3079,7 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `POST /v1/platform/users/{id}/sign-out`, `…/disable` | P security | Emergency actions |
 | `POST /internal/v1/authz/resolve` | I `access.authz.resolve` | Resolve `(user, tenant)` |
 | `POST /internal/v1/users/tenants:list` | I `access.authz.resolve` | User's tenants |
+| `POST /internal/v1/users/invitations:list` | I `access.authz.resolve` | User's pending invitations for verified email |
 | `POST /internal/v1/tenants:resolve-slug` | I `access.authz.resolve` | Slug to ID for a member |
 | `PUT /internal/v1/catalog/{app}` | I `access.catalog.sync` | Publish a permission catalog |
 

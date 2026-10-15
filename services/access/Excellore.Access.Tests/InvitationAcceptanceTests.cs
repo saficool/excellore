@@ -88,6 +88,11 @@ public sealed class InvitationAcceptanceTests
                 .AcceptAsync(new(two.OwnerInvitationId, twoToken.Value))).Status);
         await mirror.UpsertAsync(new VerifiedIdentity(ownerTwo, "two@example.invalid", true, null, null));
         Assert.Equal(two.TenantId, Assert.Single(await mySecondInvitations.ListMineAsync()).TenantId);
+        Assert.Equal(two.TenantId,
+            Assert.Single(await mySecondInvitations.ListForUserAsync(ownerTwo)).TenantId);
+        Assert.Empty(await mySecondInvitations.ListForUserAsync(other));
+        Assert.DoesNotContain(await mySecondInvitations.ListForUserAsync(ownerOne),
+            item => item.TenantId == two.TenantId);
         await ExecuteAsync(admin, "UPDATE invitations SET expires_at = now() - interval '1 second' WHERE id = @id",
             ("id", two.OwnerInvitationId));
         Assert.Empty(await mySecondInvitations.ListMineAsync());

@@ -107,6 +107,19 @@ before(async () => {
       ]);
       return;
     }
+    if (request.url === '/internal/v1/users/invitations:list') {
+      json(response, [
+        {
+          id: '16980308-7e62-4b26-98b2-d4bd4d45f415',
+          tenantId,
+          tenantName: 'Example tenant',
+          expiresAt: new Date(Date.now() + 60_000)
+            .toISOString()
+            .replace('Z', '+00:00'),
+        },
+      ]);
+      return;
+    }
     if (request.url === '/internal/v1/authz/resolve') {
       if (mode === 'denied') {
         json(response, {
@@ -158,21 +171,24 @@ after(async () => {
 });
 
 test('Access client uses one machine token and POST bodies for user-scoped contracts', async () => {
-  const [tenant, tenants, snapshot] = await Promise.all([
+  const [tenant, tenants, snapshot, invitations] = await Promise.all([
     client.resolveSlug(userId, 'example'),
     client.listTenants(userId),
     client.resolve(userId, tenantId),
+    client.listPendingInvitations(userId),
   ]);
   assert.equal(tokenCalls, 1);
   assert.equal(tenant.tenantId, tenantId);
   assert.equal(tenants.length, 1);
   assert.equal(snapshot.decision, 'allow');
+  assert.equal(invitations.length, 1);
   assert.deepEqual(
     calls.map((call) => call.url).sort(),
     [
       '/internal/v1/tenants:resolve-slug',
       '/internal/v1/users/tenants:list',
       '/internal/v1/authz/resolve',
+      '/internal/v1/users/invitations:list',
     ].sort(),
   );
   assert.ok(calls.every((call) => call.method === 'POST'));

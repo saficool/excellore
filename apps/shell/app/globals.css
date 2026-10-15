@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+@import '@excellore/ui/styles.css';
+
+body {
+  margin: 0;
+  background: var(--ex-color-background);
+  color: var(--ex-color-text);
+  font-family: system-ui, sans-serif;
+}
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+a {
+  color: var(--ex-color-accent);
+}
+.ex-card {
+  background: var(--ex-color-surface);
+  border: 1px solid var(--ex-color-border);
+  border-radius: var(--ex-radius-medium);
+  padding: 1.5rem;
+}
+
+.ex-tenant-list,
+.ex-launcher {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  list-style: none;
+  padding: 0;
+}
+.ex-tile {
+  display: block;
+  padding: 1.5rem;
+  border: 1px solid var(--ex-color-border);
+  border-radius: var(--ex-radius-medium);
+  background: var(--ex-color-surface);
+  color: var(--ex-color-text);
+  text-decoration: none;
+  font-weight: 600;
+}
+.ex-tile:hover,
+.ex-tile:focus-visible {
+  border-color: var(--ex-color-accent);
+  outline-offset: 2px;
+}
+.ex-banner {
+  background: var(--ex-color-surface);
+  border-inline-start: 4px solid var(--ex-color-accent);
+  padding: 1rem 1.5rem;
+  margin-block-end: 1.5rem;
+}

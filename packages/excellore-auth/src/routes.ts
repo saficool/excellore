@@ -319,6 +319,7 @@ export function createAuthHandlers(
         } catch {
           remoteSucceeded = false;
         }
+        await store.revokeSubjectGlobally(session.sub);
         await store.delete(session.sid);
       }
       const headers = new Headers({ Location: new URL('/', appOrigin).href });
