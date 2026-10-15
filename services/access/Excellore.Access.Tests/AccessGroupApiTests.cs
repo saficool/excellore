@@ -46,7 +46,8 @@ public sealed class AccessGroupApiTests
             await migrator.OpenAsync();
             foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql",
                 "003_membership_index.sql", "005_audit_append_only.sql",
-                "006_custom_role_lifecycle.sql", "007_group_role_assignment_uniqueness.sql" })
+                "006_custom_role_lifecycle.sql", "007_group_role_assignment_uniqueness.sql",
+                "008_membership_identity.sql", "009_invitation_delivery_state.sql" })
                 await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                     Path.Combine(AppContext.BaseDirectory, migration)));
         }
@@ -67,8 +68,9 @@ public sealed class AccessGroupApiTests
         var ownerTwo = Guid.NewGuid();
         var tenantAdmin = Guid.NewGuid();
         var recipient = Guid.NewGuid();
+        var invitee = Guid.NewGuid();
         var mirror = new IdentityMirrorService(appDb);
-        foreach (var identity in new[] { ownerOne, ownerTwo, tenantAdmin, recipient })
+        foreach (var identity in new[] { ownerOne, ownerTwo, tenantAdmin, recipient, invitee })
             Assert.Equal(IdentityMirrorResult.Created, await mirror.UpsertAsync(
                 new VerifiedIdentity(identity, Email(identity), true, null, null)));
         var provisioner = new TenantProvisioningService(appDb);
@@ -121,13 +123,19 @@ public sealed class AccessGroupApiTests
         Environment.SetEnvironmentVariable("Auth__Authority", "https://issuer.example.invalid/realms/excellore");
         try
         {
+            var invitationDelivery = new CaptureInvitationDelivery();
+            var identityAdmin = new ExistingIdentityAdmin();
             using var factory = new WebApplicationFactory<ApiAssemblyMarker>().WithWebHostBuilder(web =>
-                web.ConfigureTestServices(services => services
-                    .AddAuthentication(options =>
+                web.ConfigureTestServices(services =>
+                {
+                    services.AddSingleton<IInvitationDelivery>(invitationDelivery);
+                    services.AddSingleton<IIdentityAdmin>(identityAdmin);
+                    services.AddAuthentication(options =>
                     {
                         options.DefaultAuthenticateScheme = "Test";
                         options.DefaultChallengeScheme = "Test";
-                    }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { })));
+                    }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { });
+                }));
             using var client = factory.CreateClient();
             var invitationsPath = $"/v1/tenants/{tenantOne:D}/invitations";
             var foreignInvitation = (Guid)(await ScalarAsync(admin,
@@ -155,6 +163,48 @@ public sealed class AccessGroupApiTests
                 $"{invitationsPath}/{ownInvitation:D}");
             await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Delete, ownerOne,
                 $"{invitationsPath}/{ownInvitation:D}");
+            var inviteBody = new { email = Email(invitee), roleIds = new[] { simpleRole },
+                groupIds = Array.Empty<Guid>(), reason = "team-onboarding" };
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, ownerOne,
+                $"/v1/tenants/{tenantTwo:D}/invitations", inviteBody);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, recipient,
+                invitationsPath, inviteBody);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, ownerOne,
+                invitationsPath, new { email = Email(ownerOne), roleIds = new[] { simpleRole },
+                    groupIds = Array.Empty<Guid>(), reason = "self" });
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, ownerOne,
+                invitationsPath, new { email = Email(invitee), roleIds = new[] { foreignRole },
+                    groupIds = Array.Empty<Guid>(), reason = "foreign-role" });
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, ownerOne,
+                invitationsPath, new { email = Email(invitee), roleIds = new[] { elevatedRole },
+                    groupIds = Array.Empty<Guid>(), reason = "privileged-role" }, acr: "1");
+            await ExpectAsync(HttpStatusCode.Accepted, client, HttpMethod.Post, ownerOne,
+                invitationsPath, inviteBody);
+            var firstCode = Assert.Single(invitationDelivery.Sent);
+            Assert.Equal(Email(invitee), firstCode.Email);
+            Assert.Equal(IdentityCreationStatus.Existing, identityAdmin.Result);
+            await ExpectAsync(HttpStatusCode.Accepted, client, HttpMethod.Post, ownerOne,
+                invitationsPath, inviteBody);
+            Assert.Single(invitationDelivery.Sent);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, ownerOne,
+                $"/v1/tenants/{tenantTwo:D}/invitations/{firstCode.InvitationId:D}/resend");
+            await ExpectAsync(HttpStatusCode.Accepted, client, HttpMethod.Post, ownerOne,
+                $"{invitationsPath}/{firstCode.InvitationId:D}/resend");
+            Assert.Equal(2, invitationDelivery.Sent.Count);
+            var rotated = invitationDelivery.Sent[1];
+            Assert.NotEqual(firstCode.OneTimeCode, rotated.OneTimeCode);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, invitee,
+                "/v1/me/invitations/accept",
+                new { invitationId = firstCode.InvitationId, oneTimeCode = firstCode.OneTimeCode });
+            using (var accepted = await SendAsync(client, HttpMethod.Post, invitee,
+                "/v1/me/invitations/accept",
+                new { invitationId = rotated.InvitationId, oneTimeCode = rotated.OneTimeCode }))
+                Assert.Equal(HttpStatusCode.OK, accepted.StatusCode);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, invitee,
+                "/v1/me/invitations/accept",
+                new { invitationId = rotated.InvitationId, oneTimeCode = rotated.OneTimeCode });
+            Assert.Contains("access.app.access",
+                (await new AccessResolutionService(appDb).ResolveAsync(invitee, tenantOne)).Permissions);
             var groupsPath = $"/v1/tenants/{tenantOne:D}/groups";
             await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, ownerOne,
                 $"/v1/tenants/{tenantTwo:D}/groups");
@@ -376,6 +426,35 @@ public sealed class AccessGroupApiTests
             ], "Test");
             return Task.FromResult(AuthenticateResult.Success(
                 new AuthenticationTicket(new ClaimsPrincipal(identity), "Test")));
+        }
+    }
+
+    private sealed class ExistingIdentityAdmin : IIdentityAdmin
+    {
+        public IdentityCreationStatus? Result { get; private set; }
+
+        public Task<IdentityCreationResult> EnsureInvitationIdentityAsync(string email,
+            Guid invitationId, IdentityAdminActor actor,
+            CancellationToken cancellationToken = default)
+        {
+            Result = IdentityCreationStatus.Existing;
+            return Task.FromResult(new IdentityCreationResult(IdentityCreationStatus.Existing));
+        }
+
+        public Task<bool> SendRequiredActionsAsync(Guid userId, Guid invitationId,
+            IdentityAdminActor actor, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
+    }
+
+    private sealed class CaptureInvitationDelivery : IInvitationDelivery
+    {
+        public List<(string Email, Guid InvitationId, string OneTimeCode)> Sent { get; } = [];
+
+        public Task SendAsync(string email, Guid invitationId, string oneTimeCode,
+            CancellationToken cancellationToken = default)
+        {
+            Sent.Add((email, invitationId, oneTimeCode));
+            return Task.CompletedTask;
         }
     }
 }

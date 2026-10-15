@@ -458,7 +458,10 @@
       "defaultClientScopes": ["profile", "email", "acr", "api-access"],
       "optionalClientScopes": [],
       "secret": "${ACCESS_BFF_SECRET}",
-      "redirectUris": ["${ACCESS_ORIGIN}/auth/callback"],
+      "redirectUris": [
+        "${ACCESS_ORIGIN}/auth/callback",
+        "${ACCESS_ORIGIN}/invitations/accept"
+      ],
       "webOrigins": [],
       "protocolMappers": [
         {

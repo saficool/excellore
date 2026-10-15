@@ -30,7 +30,8 @@ public sealed class TenantProvisioningTests
         await using var migrator = new NpgsqlConnection(migratorString);
         await migrator.OpenAsync();
         foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql", "003_membership_index.sql",
-            "005_audit_append_only.sql", "006_custom_role_lifecycle.sql" })
+            "005_audit_append_only.sql", "006_custom_role_lifecycle.sql",
+            "008_membership_identity.sql", "009_invitation_delivery_state.sql" })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, migration)));
 
         var appString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
@@ -59,7 +60,10 @@ public sealed class TenantProvisioningTests
         Assert.Equal(0L, await CountAsync(admin,
             "outbox WHERE type LIKE 'identity.%' AND payload::text LIKE '%example.invalid%'"));
 
-        var service = new TenantProvisioningService(dataSource);
+        var identityAdmin = new CreatedIdentityAdmin();
+        var mailer = new CaptureInvitationDelivery();
+        var service = new TenantProvisioningService(dataSource,
+            new InvitationDeliveryCoordinator(dataSource, identityAdmin, mailer));
         Assert.Equal(CreateTenantStatus.Invalid,
             (await service.CreateAsync(new("Name", "admin", "starter", "owner@example.invalid", []), actor)).Status);
         Assert.Equal(CreateTenantStatus.Invalid,
@@ -80,8 +84,40 @@ public sealed class TenantProvisioningTests
         Assert.Equal(4L, await CountAsync(admin, "tenant_apps WHERE status = 'enabled'"));
         Assert.Equal(2L, await CountAsync(admin, "tenant_settings"));
         Assert.Equal(2L, await CountAsync(admin, "invitations WHERE status = 'pending'"));
+        Assert.Equal(2, mailer.Sent.Count);
+        Assert.Equal(2, identityAdmin.ActionEmails);
+        Assert.Equal(2L, await CountAsync(admin, "invitations WHERE keycloak_user_id IS NOT NULL"));
+        Assert.Equal(2L, await CountAsync(admin,
+            "audit_events WHERE action = 'access.identity.invited'"));
+        Assert.Equal(2L, await CountAsync(admin,
+            "audit_events WHERE action = 'access.identity.actions-emailed'"));
+        Assert.Equal(2L, await CountAsync(admin,
+            "audit_events WHERE action = 'access.invitation.delivered'"));
         Assert.Equal(1L, await CountAsync(admin,
             $"invitations WHERE id = '{one.Tenant.OwnerInvitationId:D}' AND octet_length(token_hash) = 32 AND expires_at > now()"));
+        var originalCode = mailer.Sent.Single(sent => sent.InvitationId == one.Tenant.OwnerInvitationId).Code;
+        var ownerResend = new OwnerInvitationResendService(dataSource,
+            new InvitationDeliveryCoordinator(dataSource, identityAdmin, mailer));
+        Assert.Equal(OwnerInvitationResendStatus.NotFound,
+            await ownerResend.ResendAsync(Guid.NewGuid(), new IdentityAdminActor(actor, "2")));
+        Assert.Equal(OwnerInvitationResendStatus.Accepted,
+            await ownerResend.ResendAsync(tenantOne, new IdentityAdminActor(actor, "2")));
+        var replacementCode = mailer.Sent.Last().Code;
+        Assert.NotEqual(originalCode, replacementCode);
+        Assert.Equal(one.Tenant.OwnerInvitationId, mailer.Sent.Last().InvitationId);
+        Assert.Equal(3, identityAdmin.ActionEmails);
+        Assert.True(InvitationToken.TryRead(originalCode, out _, out var originalHash));
+        Assert.True(InvitationToken.TryRead(replacementCode, out _, out var replacementHash));
+        Assert.Equal(0L, await CountAsync(admin,
+            "invitations WHERE id = @id AND token_hash = @hash",
+            ("id", one.Tenant.OwnerInvitationId), ("hash", originalHash)));
+        Assert.Equal(1L, await CountAsync(admin,
+            "invitations WHERE id = @id AND token_hash = @hash",
+            ("id", one.Tenant.OwnerInvitationId), ("hash", replacementHash)));
+        Assert.Equal(1L, await CountAsync(admin,
+            "audit_events WHERE action = 'access.owner-invitation.resent'"));
+        Assert.Equal(3L, await CountAsync(admin,
+            "audit_events WHERE action = 'access.identity.actions-emailed'"));
         Assert.Equal(0L, await CountAsync(admin,
             "audit_events WHERE action = 'access.tenant.provisioned' AND (target_id LIKE '%example%' OR reason LIKE '%example%')"));
 
@@ -145,9 +181,11 @@ public sealed class TenantProvisioningTests
         await ExecuteAsync(connection, "SELECT set_config('app.tenant_id', @tenant, true)",
             transaction, ("tenant", tenant.ToString("D")));
 
-    private static async Task<long> CountAsync(NpgsqlConnection connection, string where)
+    private static async Task<long> CountAsync(NpgsqlConnection connection, string where,
+        params (string Name, object Value)[] parameters)
     {
         await using var command = new NpgsqlCommand($"SELECT count(*) FROM {where}", connection);
+        foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
         return (long)(await command.ExecuteScalarAsync() ?? 0L);
     }
 
@@ -157,5 +195,34 @@ public sealed class TenantProvisioningTests
         await using var command = new NpgsqlCommand(sql, connection, transaction);
         foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
         await command.ExecuteNonQueryAsync();
+    }
+
+    private sealed class CreatedIdentityAdmin : IIdentityAdmin
+    {
+        public int ActionEmails { get; private set; }
+
+        public Task<IdentityCreationResult> EnsureInvitationIdentityAsync(string email,
+            Guid invitationId, IdentityAdminActor actor,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new IdentityCreationResult(IdentityCreationStatus.Created, Guid.NewGuid()));
+
+        public Task<bool> SendRequiredActionsAsync(Guid userId, Guid invitationId,
+            IdentityAdminActor actor, CancellationToken cancellationToken = default)
+        {
+            ActionEmails++;
+            return Task.FromResult(true);
+        }
+    }
+
+    private sealed class CaptureInvitationDelivery : IInvitationDelivery
+    {
+        public List<(string Email, Guid InvitationId, string Code)> Sent { get; } = [];
+
+        public Task SendAsync(string email, Guid invitationId, string oneTimeCode,
+            CancellationToken cancellationToken = default)
+        {
+            Sent.Add((email, invitationId, oneTimeCode));
+            return Task.CompletedTask;
+        }
     }
 }

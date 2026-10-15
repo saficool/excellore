@@ -32,7 +32,7 @@ You are working on **Excellore**, a multi-tenant SaaS platform made of three app
 | INV-08 | Only Access changes tenant authorization data; permission catalog is code-first |
 | INV-09 | Apps do not call each other's APIs or databases (events only, plus Access internal contracts) |
 | INV-10 | Fail closed. Non-members get `404`, not `403` |
-| INV-11 | No secrets, tokens, or personal data in logs, events, URLs, or errors |
+| INV-11 | No secrets, tokens, or personal data in logs, events, URLs, or errors. The sole URL exception is Keycloak's time-limited HTTPS execute-actions link for new-user onboarding (RFC-0006); never put an Excellore invitation code in a URL or log the Keycloak action link |
 | INV-12 | Audit every security-relevant change with `tenant_id`, actor, reason |
 | INV-13 | Identity is global; membership is per tenant |
 | INV-14 | Everything is code (realm, infra, schema, pipelines); no manual production changes |
