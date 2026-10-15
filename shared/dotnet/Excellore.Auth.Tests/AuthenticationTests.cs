@@ -107,9 +107,9 @@ public class AuthenticationTests
     }
 
     [Theory]
-    [InlineData("Internal.Authz", "roles", "access.authz.resolve", true)]
+    [InlineData("Internal.Authz", "roles", "access.authz.resolve", false)]
     [InlineData("Internal.Authz", "platform_roles", "platform-admin", false)]
-    [InlineData("Internal.Catalog", "roles", "access.catalog.sync", true)]
+    [InlineData("Internal.Catalog", "roles", "access.catalog.sync", false)]
     [InlineData("Platform.Operator", "platform_roles", "platform-operator", true)]
     [InlineData("Platform.Operator", "roles", "platform-operator", false)]
     [InlineData("Platform.Security", "platform_roles", "platform-admin", true)]
@@ -121,6 +121,24 @@ public class AuthenticationTests
         var result = await authorization.AuthorizeAsync(Principal(new Claim(claimType, claimValue)), policyName);
 
         Assert.Equal(expected, result.Succeeded);
+    }
+
+    [Theory]
+    [InlineData("Internal.Authz", "access.authz.resolve", "svc-shell-authz", true)]
+    [InlineData("Internal.Authz", "access.authz.resolve", "svc-profile-authz", true)]
+    [InlineData("Internal.Authz", "access.authz.resolve", "excellore-access", false)]
+    [InlineData("Internal.Authz", "access.catalog.sync", "svc-shell-authz", false)]
+    [InlineData("Internal.Catalog", "access.catalog.sync", "svc-catalog-sync", true)]
+    [InlineData("Internal.Catalog", "access.catalog.sync", "excellore-access", false)]
+    [InlineData("Internal.Catalog", "access.catalog.sync", "svc-shell-authz", false)]
+    public async Task Internal_policies_require_the_expected_machine_client_and_role(
+        string policyName, string role, string client, bool expected)
+    {
+        using var provider = BuildServices("api-access");
+        var authorization = provider.GetRequiredService<IAuthorizationService>();
+        var principal = Principal(new Claim("roles", role), new Claim("azp", client));
+
+        Assert.Equal(expected, (await authorization.AuthorizeAsync(principal, policyName)).Succeeded);
     }
 
     private static ServiceProvider BuildServices(string audience)

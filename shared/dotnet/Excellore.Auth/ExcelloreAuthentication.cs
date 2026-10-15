@@ -52,8 +52,14 @@ public static class ExcelloreAuthentication
 
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("Internal.Authz", policy => policy.RequireAuthenticatedUser().RequireRole("access.authz.resolve"));
-            options.AddPolicy("Internal.Catalog", policy => policy.RequireAuthenticatedUser().RequireRole("access.catalog.sync"));
+            options.AddPolicy("Internal.Authz", policy => policy.RequireAuthenticatedUser()
+                .RequireRole("access.authz.resolve")
+                .RequireAssertion(context => context.User.FindFirst("azp")?.Value is { } client &&
+                    client.StartsWith("svc-", StringComparison.Ordinal) &&
+                    client.EndsWith("-authz", StringComparison.Ordinal)));
+            options.AddPolicy("Internal.Catalog", policy => policy.RequireAuthenticatedUser()
+                .RequireRole("access.catalog.sync")
+                .RequireClaim("azp", "svc-catalog-sync"));
             options.AddPolicy("Platform.Operator", policy => policy.RequireAuthenticatedUser().RequireClaim("platform_roles", "platform-operator", "platform-admin"));
             options.AddPolicy("Platform.Support", policy => policy.RequireAuthenticatedUser().RequireClaim("platform_roles", "platform-support", "platform-admin"));
             options.AddPolicy("Platform.Auditor", policy => policy.RequireAuthenticatedUser().RequireClaim("platform_roles", "platform-auditor", "platform-admin"));

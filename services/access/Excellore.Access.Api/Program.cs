@@ -11,6 +11,7 @@ builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddScoped<CatalogSyncService>();
 builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<IdentityMirrorService>();
+builder.Services.AddScoped<AccessResolutionService>();
 builder.Services.AddProblemDetails();
 var allowLocalHttp = builder.Environment.IsDevelopment() &&
     string.Equals(builder.Configuration["EXCELLORE_INSECURE_LOCAL_DEV"], "true", StringComparison.OrdinalIgnoreCase);
@@ -87,5 +88,38 @@ app.MapPut("/internal/v1/catalog/{app}", async (
         _ => Results.Problem(statusCode: 500)
     };
 }).RequireAuthorization("Internal.Catalog");
+
+app.MapPost("/internal/v1/authz/resolve", async (ResolveRequest request, HttpContext context,
+    AccessResolutionService service, CancellationToken cancellationToken) =>
+{
+    if (request.UserId == Guid.Empty || request.TenantId == Guid.Empty)
+        return Results.Problem(statusCode: 400,
+            type: "urn:excellore:problem:invalid-resolve-request", title: "Invalid resolve request");
+    var result = await service.ResolveAsync(request.UserId, request.TenantId, cancellationToken);
+    if (!result.Allowed)
+        return Results.Json(new { result.TenantId, decision = "deny", permissions = Array.Empty<string>() });
+    context.Response.Headers.ETag = $"\"{result.Version}\"";
+    return Results.Json(new
+    {
+        result.TenantId, decision = "allow", tenantStatus = "active", membershipStatus = "active",
+        result.Roles, result.Permissions, result.Apps, result.Version, result.ResolvedAt
+    });
+}).RequireAuthorization("Internal.Authz");
+
+app.MapPost("/internal/v1/users/tenants:list", async (TenantListRequest request,
+    AccessResolutionService service, CancellationToken cancellationToken) =>
+{
+    if (request.UserId == Guid.Empty)
+        return Results.Problem(statusCode: 400,
+            type: "urn:excellore:problem:invalid-tenant-list-request", title: "Invalid tenant list request");
+    return Results.Json(await service.ListTenantsAsync(request.UserId, cancellationToken));
+}).RequireAuthorization("Internal.Authz");
+
+app.MapPost("/internal/v1/tenants:resolve-slug", async (ResolveSlugRequest request,
+    AccessResolutionService service, CancellationToken cancellationToken) =>
+{
+    var tenant = await service.ResolveSlugAsync(request.UserId, request.Slug, cancellationToken);
+    return tenant is null ? Results.NotFound() : Results.Json(tenant);
+}).RequireAuthorization("Internal.Authz");
 
 app.Run();
