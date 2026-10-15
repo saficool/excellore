@@ -4,6 +4,9 @@ namespace Excellore.Authz;
 public interface IPrivilegeClassifier
 {
     bool IsPrivileged(string permission);
+
+    ValueTask<bool> IsPrivilegedAsync(string permission, CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult(IsPrivileged(permission));
 }
 
 public sealed class ConservativePrivilegeClassifier : IPrivilegeClassifier

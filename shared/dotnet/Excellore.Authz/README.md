@@ -14,7 +14,7 @@ The gate reads the user from the validated JWT and the tenant ID from the route.
 
 After a successful gate decision, the gate tags the HTTP request activity and opens a structured log scope with the validated opaque `tenant.id` for handler logs. Denied requests are never attributed to a tenant from their untrusted route. The log scope and tenant context close when the handler returns or throws. Hosts must collect ASP.NET Core request activities and enable logging scopes for these attributes to appear in exported telemetry.
 
-The default privilege classifier requires step-up for every permission until replaced by an app catalog. See proposed ADR-0006.
+The default privilege classifier requires step-up for every permission until replaced by an app catalog. A service with a live catalog may implement `IsPrivilegedAsync` to read the current privilege flag; unknown permissions still require step-up and a failed lookup must fail closed. See proposed ADR-0006 and ADR-0043.
 
 `AddCachedAuthzResolver()` registers a singleton `IAuthzResolver` and `IAuthzCacheInvalidator`. Register a singleton-safe `IAuthzSnapshotSource` to fetch a fresh Access decision. The in-memory cache keeps an immutable snapshot for at most 10 seconds per `(tenantId, userId)`. Call `InvalidateAsync(tenantId, userIds)` for an authorization-change event; omit `userIds` to clear the tenant. An empty or malformed user list also clears the tenant. The resolver discards a fetch if invalidation arrives before it completes. It never serves an expired snapshot when the source is unavailable.
 

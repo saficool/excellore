@@ -67,9 +67,20 @@ public sealed class TenantGateFilter(
             return ExcelloreProblems.Forbidden(http);
         }
 
-        if (requirements.Any(privilegeClassifier.IsPrivileged) && !user.HasRecentMfa)
+        try
         {
-            return ExcelloreProblems.StepUpRequired(http);
+            foreach (var permission in requirements)
+            {
+                if (await privilegeClassifier.IsPrivilegedAsync(permission, http.RequestAborted) &&
+                    !user.HasRecentMfa)
+                {
+                    return ExcelloreProblems.StepUpRequired(http);
+                }
+            }
+        }
+        catch (AuthzUnavailableException)
+        {
+            return ExcelloreProblems.AuthzUnavailable(http);
         }
 
         tenantContext.Set(tenantId, snapshot);

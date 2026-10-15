@@ -1,6 +1,7 @@
 using Excellore.Access.Application;
 using Excellore.Access.Infrastructure;
 using Excellore.Auth;
+using Excellore.Authz;
 using Npgsql;
 using System.Net.Mail;
 
@@ -12,6 +13,10 @@ builder.Services.AddScoped<CatalogSyncService>();
 builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<IdentityMirrorService>();
 builder.Services.AddScoped<AccessResolutionService>();
+builder.Services.AddScoped<AccessRoleReader>();
+builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
+builder.Services.AddScoped<IPrivilegeClassifier, AccessPrivilegeClassifier>();
+builder.Services.AddExcelloreAuthz();
 builder.Services.AddProblemDetails();
 var allowLocalHttp = builder.Environment.IsDevelopment() &&
     string.Equals(builder.Configuration["EXCELLORE_INSECURE_LOCAL_DEV"], "true", StringComparison.OrdinalIgnoreCase);
@@ -121,5 +126,31 @@ app.MapPost("/internal/v1/tenants:resolve-slug", async (ResolveSlugRequest reque
     var tenant = await service.ResolveSlugAsync(request.UserId, request.Slug, cancellationToken);
     return tenant is null ? Results.NotFound() : Results.Json(tenant);
 }).RequireAuthorization("Internal.Authz");
+
+var tenantRoutes = app.MapGroup("/v1/tenants/{tenantId:guid}").AddTenantGate();
+tenantRoutes.MapGet("/me/access", async (ICurrentUser user, ITenantContextAccessor tenant,
+    AccessResolutionService service, CancellationToken cancellationToken) =>
+{
+    var result = await service.ResolveAsync(user.UserId, tenant.TenantId, cancellationToken);
+    return result.Allowed ? Results.Json(new
+    {
+        result.TenantId, result.Roles, result.Permissions, result.Apps,
+        result.Version, result.ResolvedAt
+    }) : Results.NotFound();
+}).RequirePermission("access.app.access");
+tenantRoutes.MapGet("/roles", async (AccessRoleReader service, CancellationToken cancellationToken) =>
+    Results.Json(await service.ListRolesAsync(cancellationToken)))
+    .RequirePermission("access.role.read");
+tenantRoutes.MapGet("/roles/{roleId:guid}", async (Guid roleId, AccessRoleReader service,
+    CancellationToken cancellationToken) =>
+{
+    var role = await service.GetRoleAsync(roleId, cancellationToken);
+    return role is null ? Results.NotFound() : Results.Json(role);
+}).RequirePermission("access.role.read");
+tenantRoutes.MapGet("/permissions", async (AccessRoleReader service, CancellationToken cancellationToken) =>
+    Results.Json(await service.ListPermissionsAsync(cancellationToken)))
+    .RequirePermission("access.role.read");
+
+app.AssertTenantRoutesProtected();
 
 app.Run();
