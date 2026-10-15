@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using Excellore.Access.Application;
 using Npgsql;
@@ -10,8 +8,6 @@ public enum CatalogSyncResult { Updated, Unchanged, Invalid, Conflict, UnknownAp
 
 public sealed class CatalogSyncService(NpgsqlDataSource dataSource)
 {
-    private const long CatalogLock = 0x4558434154414C4F;
-
     public async Task<CatalogSyncResult> SyncAsync(string app, PermissionCatalog? catalog,
         Guid actorSub, CancellationToken cancellationToken = default)
     {
@@ -20,7 +16,7 @@ public sealed class CatalogSyncService(NpgsqlDataSource dataSource)
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         await ExecuteAsync(connection, transaction,
-            "SELECT pg_advisory_xact_lock(@key)", cancellationToken, ("key", CatalogLock));
+            "SELECT pg_advisory_xact_lock(@key)", cancellationToken, ("key", AccessAuditWriter.AuditLock));
         await ExecuteAsync(connection, transaction,
             "SELECT set_config('app.scope', 'platform', true)", cancellationToken);
 
@@ -109,35 +105,12 @@ public sealed class CatalogSyncService(NpgsqlDataSource dataSource)
 
         if (changed)
         {
-            await WriteAuditAsync(connection, transaction, actorSub, app, cancellationToken);
+            await AccessAuditWriter.WriteAsync(connection, transaction, null, actorSub,
+                "service", "access.catalog.synced", "app", app, "permission catalog deployment", cancellationToken);
             await BumpTenantVersionsAsync(connection, transaction, actorSub, cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
         return changed ? CatalogSyncResult.Updated : CatalogSyncResult.Unchanged;
-    }
-
-    private static async Task WriteAuditAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
-        Guid actorSub, string app, CancellationToken cancellationToken)
-    {
-        byte[]? previous;
-        await using (var command = Command(connection, transaction,
-            "SELECT hash FROM audit_events WHERE tenant_id IS NULL ORDER BY occurred_at DESC, id DESC LIMIT 1"))
-            previous = await command.ExecuteScalarAsync(cancellationToken) as byte[];
-        var id = Guid.NewGuid();
-        var occurredAt = DateTimeOffset.UtcNow;
-        const string reason = "permission catalog deployment";
-        var record = Encoding.UTF8.GetBytes($"{id:D}|{occurredAt:O}|{actorSub:D}|access.catalog.synced|app|{app}|{reason}");
-        var input = new byte[(previous?.Length ?? 0) + record.Length];
-        previous?.CopyTo(input, 0);
-        record.CopyTo(input, previous?.Length ?? 0);
-        var hash = SHA256.HashData(input);
-        await ExecuteAsync(connection, transaction, """
-            INSERT INTO audit_events
-              (id, tenant_id, occurred_at, actor_sub, actor_type, action, target_type, target_id, reason, prev_hash, hash)
-            VALUES (@id, NULL, @occurred, @actor, 'service', 'access.catalog.synced', 'app', @app, @reason, @previous, @hash)
-            """, cancellationToken, ("id", id), ("occurred", occurredAt),
-            ("actor", actorSub), ("app", app), ("reason", reason),
-            ("previous", (object?)previous ?? DBNull.Value), ("hash", hash));
     }
 
     private static async Task BumpTenantVersionsAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,

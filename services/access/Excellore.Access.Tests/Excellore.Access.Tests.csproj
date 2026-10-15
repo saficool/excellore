@@ -22,6 +22,7 @@
     <Using Include="Xunit" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/001_initial.sql" Link="001_initial.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/002_register_apps.sql" Link="002_register_apps.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Access.Infrastructure/Migrations/003_membership_index.sql" Link="003_membership_index.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../infra/db/rls-exempt.txt" Link="rls-exempt.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
