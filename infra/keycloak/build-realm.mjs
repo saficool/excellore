@@ -109,7 +109,10 @@ const bff = (app, origin, apiScope) =>
     scope: undefined,
     secret: `\${${app.toUpperCase()}_BFF_SECRET}`,
     standardFlowEnabled: true,
-    redirectUris: [`\${${origin}}/auth/callback`],
+    redirectUris: [
+      `\${${origin}}/auth/callback`,
+      ...(app === 'access' ? [`\${${origin}}/invitations/accept`] : []),
+    ],
     webOrigins: [],
     defaultClientScopes: [
       'profile',

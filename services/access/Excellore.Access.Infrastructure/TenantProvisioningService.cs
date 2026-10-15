@@ -1,5 +1,4 @@
 using System.Net.Mail;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Npgsql;
@@ -15,7 +14,8 @@ public enum CreateTenantStatus { Created, Invalid, SlugTaken, CatalogUnavailable
 
 public sealed record CreateTenantResult(CreateTenantStatus Status, CreatedTenant? Tenant = null);
 
-public sealed class TenantProvisioningService(NpgsqlDataSource dataSource)
+public sealed class TenantProvisioningService(NpgsqlDataSource dataSource,
+    InvitationDeliveryCoordinator? deliveryCoordinator = null)
 {
     private static readonly Regex SlugPattern = new("^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$", RegexOptions.CultureInvariant);
     private static readonly Regex PlanPattern = new("^[a-z][a-z0-9-]{0,39}$", RegexOptions.CultureInvariant);
@@ -24,7 +24,7 @@ public sealed class TenantProvisioningService(NpgsqlDataSource dataSource)
             .Split(' ').ToHashSet(StringComparer.Ordinal);
 
     public async Task<CreateTenantResult> CreateAsync(CreateTenantRequest? request, Guid actorSub,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? actorAcr = null)
     {
         if (request is null || !Valid(request)) return new(CreateTenantStatus.Invalid);
         var name = request.Name!.Trim();
@@ -90,18 +90,21 @@ public sealed class TenantProvisioningService(NpgsqlDataSource dataSource)
             "INSERT INTO tenant_settings (tenant_id) VALUES (@tenant)", cancellationToken,
             ("tenant", tenantId));
 
-        // WP-05 reserves the invitation. WP-06 must rotate and deliver a new
-        // token before this row can be accepted; the secret is never retained.
-        var tokenHash = SHA256.HashData(RandomNumberGenerator.GetBytes(32));
+        var invitationCode = InvitationToken.Issue(tenantId);
         await ExecuteAsync(connection, transaction, """
             INSERT INTO invitations (id, tenant_id, email, role_ids, token_hash, status, invited_by, expires_at)
             VALUES (@id, @tenant, @email, @roles::jsonb, @hash, 'pending', @actor, now() + interval '7 days')
             """, cancellationToken, ("id", invitationId), ("tenant", tenantId), ("email", email),
-            ("roles", JsonSerializer.Serialize(new[] { ownerRole })), ("hash", tokenHash), ("actor", actorSub));
+            ("roles", JsonSerializer.Serialize(new[] { ownerRole })),
+            ("hash", invitationCode.SecretHash), ("actor", actorSub));
         await AccessAuditWriter.WriteAsync(connection, transaction, tenantId, actorSub, "human",
             "access.tenant.provisioned", "tenant", tenantId.ToString("D"),
             "platform operator requested tenant provisioning", cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+        if (deliveryCoordinator is not null)
+            await deliveryCoordinator.DeliverAsync(invitationId, tenantId, email,
+                invitationCode.Value, null, new IdentityAdminActor(actorSub, actorAcr),
+                cancellationToken);
         return new(CreateTenantStatus.Created, new CreatedTenant(tenantId, "provisioning", invitationId));
     }
 

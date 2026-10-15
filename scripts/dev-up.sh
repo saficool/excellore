@@ -107,3 +107,4 @@ for service in access profile; do
 done
 
 bash scripts/check-dev-stack.sh
+node scripts/sync-dev-access-redirect.mjs

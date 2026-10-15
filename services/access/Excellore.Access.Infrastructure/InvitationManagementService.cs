@@ -98,6 +98,12 @@ public sealed class InvitationManagementService(NpgsqlDataSource dataSource,
         var tenantId = tenantContext.TenantId;
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await using (var guard = new NpgsqlCommand("SELECT pg_advisory_xact_lock(@key)",
+            connection, transaction))
+        {
+            guard.Parameters.AddWithValue("key", AccessAuditWriter.AuditLock);
+            await guard.ExecuteNonQueryAsync(cancellationToken);
+        }
         await using (var context = new NpgsqlCommand(
             "SELECT set_config('app.tenant_id', @tenant, true)", connection, transaction))
         {

@@ -122,6 +122,9 @@ for (const clientId of expected) {
     const app = clientId.slice('excellore-'.length).toUpperCase();
     assert.deepEqual(client.redirectUris, [
       `${env[`${app}_ORIGIN`]}/auth/callback`,
+      ...(clientId === 'excellore-access'
+        ? [`${env.ACCESS_ORIGIN}/invitations/accept`]
+        : []),
     ]);
     assert.equal(client.attributes['pkce.code.challenge.method'], 'S256');
     assert.equal(client.attributes['default.acr.values'], '2');

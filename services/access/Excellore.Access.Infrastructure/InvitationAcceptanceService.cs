@@ -4,7 +4,7 @@ using Npgsql;
 
 namespace Excellore.Access.Infrastructure;
 
-public sealed record AcceptInvitationRequest(string? Token);
+public sealed record AcceptInvitationRequest(Guid InvitationId, string? OneTimeCode);
 
 public enum InvitationAcceptanceStatus { Accepted, Invalid, Unavailable, Conflict }
 
@@ -16,7 +16,8 @@ public sealed class InvitationAcceptanceService(NpgsqlDataSource dataSource, ICu
     public async Task<InvitationAcceptanceResult> AcceptAsync(AcceptInvitationRequest? request,
         CancellationToken cancellationToken = default)
     {
-        if (!InvitationToken.TryRead(request?.Token, out var tenantId, out var suppliedHash))
+        if (request is null || request.InvitationId == Guid.Empty ||
+            !InvitationToken.TryRead(request.OneTimeCode, out var tenantId, out var suppliedHash))
             return new(InvitationAcceptanceStatus.Invalid);
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -29,32 +30,37 @@ public sealed class InvitationAcceptanceService(NpgsqlDataSource dataSource, ICu
             if (await exists.ExecuteScalarAsync(cancellationToken) is not true)
                 return new(InvitationAcceptanceStatus.Unavailable);
 
-        Guid invitationId;
-        Guid invitedBy;
-        string invitedEmail;
-        string roleJson;
-        string groupJson;
-        string status;
-        DateTimeOffset expiresAt;
-        byte[] storedHash;
+        Guid invitationId = Guid.Empty;
+        Guid invitedBy = Guid.Empty;
+        string invitedEmail = "";
+        string roleJson = "[]";
+        string groupJson = "[]";
+        string status = "";
+        DateTimeOffset expiresAt = default;
+        byte[] storedHash = [];
         await using (var command = Command("""
             SELECT id, invited_by, email, role_ids::text, group_ids::text, status,
                    expires_at, token_hash
-            FROM invitations WHERE tenant_id = @tenant AND token_hash = @hash FOR UPDATE
-            """, ("tenant", tenantId), ("hash", suppliedHash)))
+            FROM invitations WHERE id = @invitation AND tenant_id = @tenant
+              AND token_hash = @hash FOR UPDATE
+            """, ("invitation", request.InvitationId), ("tenant", tenantId),
+            ("hash", suppliedHash)))
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
-            if (!await reader.ReadAsync(cancellationToken))
-                return await DenyAsync(InvitationAcceptanceStatus.Unavailable, "invitation-unavailable");
-            invitationId = reader.GetGuid(0);
-            invitedBy = reader.GetGuid(1);
-            invitedEmail = reader.GetString(2);
-            roleJson = reader.GetString(3);
-            groupJson = reader.GetString(4);
-            status = reader.GetString(5);
-            expiresAt = reader.GetFieldValue<DateTimeOffset>(6);
-            storedHash = reader.GetFieldValue<byte[]>(7);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                invitationId = reader.GetGuid(0);
+                invitedBy = reader.GetGuid(1);
+                invitedEmail = reader.GetString(2);
+                roleJson = reader.GetString(3);
+                groupJson = reader.GetString(4);
+                status = reader.GetString(5);
+                expiresAt = reader.GetFieldValue<DateTimeOffset>(6);
+                storedHash = reader.GetFieldValue<byte[]>(7);
+            }
         }
+        if (invitationId == Guid.Empty)
+            return await DenyAsync(InvitationAcceptanceStatus.Unavailable, "invitation-unavailable");
         if (!InvitationToken.Matches(storedHash, suppliedHash) || status != "pending" ||
             expiresAt <= DateTimeOffset.UtcNow)
             return await DenyAsync(InvitationAcceptanceStatus.Unavailable, "invitation-unavailable", invitationId);

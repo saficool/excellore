@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 4.10 |
+| **Document version** | 5.0 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.0 | Owner-approved narrow INV-11 exception for Keycloak's time-limited HTTPS execute-actions link during new-user onboarding. Excellore invitation URLs carry only opaque IDs; invitees enter a separate one-time code (RFC-0006, ADR-0048 proposed). |
 | 4.10 | Shared app catalog resolves public app origins from environment configuration, validates links, and supplies the shared tenant/app header (ADR-0035 proposed). |
 | 4.9 | Access user-scoped internal lookups send opaque user IDs in POST bodies instead of URLs; the BFF may resolve fresh on every request (owner decision; ADR-0034 proposed). |
 | 4.8 | RP-initiated logout sends the ID token by server-side POST to Keycloak, never in a browser URL (owner decision; ADR-0033 proposed). |
@@ -106,7 +107,7 @@ These hold for every change. A change that violates one is rejected, whatever th
 | **INV-08** | **Only the Access service changes tenant authorization data** (memberships, roles, assignments, app enablement). The permission catalog is **code-first**: apps declare permissions in their repository. |
 | **INV-09** | **Apps talk through events.** The only synchronous cross-app calls are the documented internal contracts of the Access service ([7.8](#78-resolve-contract-pdp-and-pep)). |
 | **INV-10** | **Fail closed.** Unknown tenant, non-member, suspended tenant, missing permission, or unavailable authorization data means **deny**. A non-member gets `404`, not `403` (no tenant enumeration). |
-| **INV-11** | **No secrets, tokens, or personal data in logs, events, URLs, or error messages.** |
+| **INV-11** | **No secrets, tokens, or personal data in logs, events, URLs, or error messages.** The sole URL exception is Keycloak's time-limited HTTPS execute-actions link for new-user onboarding. Never put an Excellore invitation code in a URL, log or forward the Keycloak action URL, or extend this exception to other flows (RFC-0006). |
 | **INV-12** | **Every security-relevant change is audited** with `tenant_id` (or platform scope), actor, target, before and after, and reason where required. |
 | **INV-13** | **Identity is global; membership is per tenant.** A person has one Keycloak identity and may be a member of many tenants. No tenant-specific copies of users or passwords. |
 | **INV-14** | **Everything is code.** Realm configuration, infrastructure, migrations, pipelines. No manual production changes. |
@@ -409,7 +410,7 @@ Rules:
 - A tenant MUST always have at least one **active member holding the `owner` system role** (last-owner protection).
 - A person can be a member of **many tenants**. Their identity, password, and MFA are shared; their roles are not.
 - Removing a member removes their access to that tenant only. The global identity is untouched.
-- **Invitation security:** the invitation token is random (256 bits), stored only as a hash, single-use, and expires (default 7 days). Acceptance requires the signed-in identity to have a **verified email equal to the invited email**. Responses to invitation requests are uniform so nobody can learn whether an email already has an account.
+- **Invitation security:** the one-time code contains an opaque tenant ID and a random 256-bit secret, stored only as a hash, single-use, and expires (default 7 days). The invitation link contains only an opaque invitation ID; the invitee enters the code separately. Acceptance requires the signed-in identity to have a **verified email equal to the invited email**. Responses to invitation requests are uniform so nobody can learn whether an email already has an account.
 
 ### 6.6 Tenant app enablement
 
@@ -874,7 +875,7 @@ No tenant or business attributes in Keycloak.
 ### 10.8 Invitations and onboarding
 
 - Self-registration off. People enter through **Access invitations** ([15.4](#154-core-flows)).
-- For an email with no identity, Access creates the Keycloak user (required actions set) and triggers Keycloak's execute-actions email with a redirect to the invitation acceptance URL. For an existing identity, Access sends its own invitation email and creates no user.
+- Access sends an invitation email containing an ID-only link and a separate one-time code for manual entry. For an email with no identity, Access also creates the Keycloak user (required actions set) and triggers Keycloak's time-limited HTTPS execute-actions email with a fixed redirect to the invitation acceptance page. The Keycloak link carries its own action token under the narrow INV-11 exception; it never carries the Excellore invitation code. For an existing identity, Access creates no user and sends no Keycloak action email.
 
 ### 10.9 Theming, email, configuration as code
 
@@ -1234,8 +1235,8 @@ Full DDL in [Appendix F](#appendix-f-access-database-ddl). Tables by class:
 **Invite and accept**
 
 1. A member with `access.member.invite` submits email, role(s), optional groups.
-2. Access creates an `invitations` row (token stored as a hash, 7-day expiry). Identity handling: unknown email → Keycloak user created with required actions and an execute-actions email redirecting to the accept URL; known email → Access sends its own email.
-3. The invitee opens `https://access.excellore.com/invitations/accept#token=…` (the token is in the URL fragment so it never reaches server logs; the BFF page posts it in the body), signs in, and Access verifies `email_verified` and **email equality** (S11).
+2. Access creates an `invitations` row (one-time code secret stored as a hash, 7-day expiry), and sends an ID-only invitation link and the code by email. For an unknown identity, Access creates a Keycloak user with required actions and sends a time-limited Keycloak execute-actions email. For an existing identity, no Keycloak user or action email is created.
+3. The invitee opens `https://access.excellore.com/invitations/accept?id=<opaque invitation ID>`, completes Keycloak's required actions if new, signs in, and enters the code. The BFF posts `{ invitationId, oneTimeCode }` in the body. Access verifies `email_verified` and **email equality** (S11).
 4. Access creates the membership and assignments in one transaction, writes an audit event, publishes `tenant.member.added.v1` and `access.authz.changed.v1`.
 
 **Create and assign a custom role**
@@ -2052,7 +2053,7 @@ Failed-login spikes; refresh failures; elevated `401`/`403`/`404` rates per API;
 | **Stale permissions** | Removed member keeps access | Event invalidation, 60 s TTL, hard 5-min stale limit for reads only |
 | **Tenant enumeration** | Probing slugs or IDs | `404` for non-members, uniform invitation responses, rate limits, probing alerts |
 | **Custom role escalation** | Admin crafts a role with powers they lack | S1, S2, S8, step-up, audit |
-| **Invitation hijack** | Token theft or wrong person accepts | Hashed single-use token in URL fragment, email equality, expiry |
+| **Invitation hijack** | Code theft or wrong person accepts | ID-only link, separately entered hashed single-use code, verified-email equality, expiry; Keycloak action link is HTTPS and time-limited |
 | **Support access abuse** | Staff browse tenant data | No standing access, time-boxed grants, owner visibility, audit with grant ID |
 | **Catalog tampering** | Malicious `permissions.yaml` grants broad rights | Recorded owner security review, CI validation, default-deny, `systemRoles` review |
 | **Noisy neighbor** | One tenant degrades others | Per-tenant rate limits, quotas, concurrency caps |
@@ -2289,7 +2290,7 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 
 - **Goal:** The tenant administration UI.
 - **Depends on:** WP-06, WP-04.
-- **Deliverables:** `apps/access` tenant console modules in [15.2](#152-modules) (My access, Members, Invitations, Roles with permission picker, Assignments, Apps, Audit, Settings, ownership and deletion); invitation acceptance page (token from URL fragment); step-up UX.
+- **Deliverables:** `apps/access` tenant console modules in [15.2](#152-modules) (My access, Members, Invitations, Roles with permission picker, Assignments, Apps, Audit, Settings, ownership and deletion); invitation acceptance page (opaque ID from URL query, one-time code entered by invitee); step-up UX.
 - **AC:** E2E: owner invites a member, member accepts, owner creates a custom role and assigns it, permissions take effect without re-login, UI hides unavailable actions but API still rejects direct calls; privileged action triggers step-up and succeeds after. **WP-08b (later):** groups UI, access requests.
 
 ### WP-09: Profile service and app
@@ -2588,6 +2589,12 @@ ObjectStorage__Endpoint=https://…
 Keycloak__AdminBaseUrl=https://auth.excellore.com/admin/realms/excellore
 Keycloak__AdminClientId=svc-profile-identity                  # svc-access-admin in Access
 Keycloak__AdminClientSecret=***
+IdentityAdmin__ClientSecret=***                             # Access: svc-access-admin secret
+Invitation__AcceptanceOrigin=https://access.excellore.com    # Access: ID-only invitation link and fixed Keycloak redirect
+Invitation__SmtpHost=smtp.internal                            # Access invitation delivery
+Invitation__SmtpPort=587
+Invitation__From=invites@excellore.com
+Invitation__SmtpTls=true
 Otel__Endpoint=http://otel-collector:4317
 ```
 
@@ -2911,7 +2918,7 @@ Notes for the agent:
 
 - **`app.scope = 'platform'`** is set only by handlers behind `Platform.*` policies and by the catalog sync, never by tenant-scoped paths. It exists solely to touch `tenant_id IS NULL` rows.
 - **Resolve** sets `app.tenant_id` to the requested tenant before reading `tenant_members`, `role_assignments`, `tenant_apps`, groups, and roles.
-- **Invitation acceptance** parses the tenant ID out of the token, sets that tenant's context, then looks up `token_hash`.
+- **Invitation acceptance** parses the tenant ID out of the one-time code in the request body, sets that tenant's context, then looks up the opaque invitation ID and `token_hash`.
 - `infra/db/rls-exempt.txt` initially lists: `user_tenant_index`, `support_grants`, `outbox`. The RLS meta-test ([25.2](#252-tenant-isolation-test-harness)) skips exactly these. Adding to the list requires security-owner review.
 - Maintain `user_tenant_index` in the same transaction as every membership change.
 - Bump `tenants.authz_version` and write an outbox row (`access.authz.changed.v1`) in the same transaction as any change that affects permissions.
@@ -3005,7 +3012,7 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 |---|---|---|
 | `GET /v1/me/tenants` | A | My active tenants |
 | `GET /v1/me/invitations` | A | Pending invitations for my verified email |
-| `POST /v1/me/invitations/accept` | A | Accept an invitation (token in body) |
+| `POST /v1/me/invitations/accept` | A | Accept an invitation (`invitationId`, `oneTimeCode` in body) |
 | `GET /v1/tenants/{tenantId}/me/access` | T `access.app.access` | My roles, permissions, apps in this tenant |
 | `GET /v1/tenants/{tenantId}/members`, `GET …/members/{userId}` | T `access.member.read` | Members |
 | `POST …/invitations`, `GET …/invitations`, `DELETE …/invitations/{id}`, `POST …/invitations/{id}/resend` | T `access.member.invite` | Invitations |
@@ -3024,6 +3031,7 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `POST …/ownership-transfers`, `POST …/ownership-transfers/{id}/accept` | T `access.tenant.transfer` / target member | Ownership transfer |
 | `POST …/deletion-requests` | T `access.tenant.delete` | Tenant deletion |
 | `POST /v1/platform/tenants`, `GET /v1/platform/tenants`, `GET/PATCH /v1/platform/tenants/{id}` | P operator | Tenant management |
+| `POST /v1/platform/tenants/{id}/owner-invitation:resend` | P operator | Rotate and resend a pending provisioning owner invitation |
 | `POST /v1/platform/tenants/{id}/suspend`, `…/reactivate`, `…/deletion-requests` | P operator (suspend also security) | Lifecycle |
 | `PUT /v1/platform/tenants/{id}/apps/{appId}` | P operator | Enable or disable an app |
 | `GET /v1/platform/permissions` | P any platform role | Catalog |
@@ -3083,4 +3091,4 @@ See handbook Appendix E. Permission keys: `<app>.<resource>.<action>`. Events: `
 
 ---
 
-*End of the Excellore Platform Handbook, version 3.1.*
+*End of the Excellore Platform Handbook, version 5.0.*

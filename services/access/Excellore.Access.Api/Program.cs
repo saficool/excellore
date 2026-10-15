@@ -21,12 +21,28 @@ builder.Services.AddScoped<RoleAssignmentService>();
 builder.Services.AddScoped<AccessGroupService>();
 builder.Services.AddScoped<InvitationAcceptanceService>();
 builder.Services.AddScoped<InvitationManagementService>();
+builder.Services.AddScoped<InvitationIssuanceService>();
+builder.Services.AddScoped<InvitationDeliveryCoordinator>();
+builder.Services.AddScoped<OwnerInvitationResendService>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
 builder.Services.AddScoped<IPrivilegeClassifier, AccessPrivilegeClassifier>();
 builder.Services.AddExcelloreAuthz();
 builder.Services.AddProblemDetails();
 var allowLocalHttp = builder.Environment.IsDevelopment() &&
     string.Equals(builder.Configuration["EXCELLORE_INSECURE_LOCAL_DEV"], "true", StringComparison.OrdinalIgnoreCase);
+builder.Services.AddSingleton(new IdentityAdminOptions(builder.Configuration["Auth:Authority"],
+    builder.Configuration["IdentityAdmin:ClientSecret"] ?? builder.Configuration["SVC_ACCESS_ADMIN_SECRET"],
+    builder.Configuration["Invitation:AcceptanceOrigin"], allowLocalHttp));
+builder.Services.AddSingleton<IdentityAdminCircuit>();
+builder.Services.AddHttpClient<IIdentityAdmin, KeycloakIdentityAdmin>(client =>
+    client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddScoped<IInvitationDelivery>(_ => new SmtpInvitationDelivery(
+    builder.Configuration["Invitation:SmtpHost"],
+    int.TryParse(builder.Configuration["Invitation:SmtpPort"], out var port) ? port : 0,
+    builder.Configuration["Invitation:From"],
+    builder.Configuration["Invitation:AcceptanceOrigin"],
+    bool.TryParse(builder.Configuration["Invitation:SmtpTls"], out var tls) && tls,
+    allowLocalHttp));
 builder.Services.AddExcelloreAuthentication(builder.Configuration, "api-access", !allowLocalHttp);
 
 var app = builder.Build();
@@ -67,7 +83,8 @@ app.MapPost("/v1/platform/tenants", async (CreateTenantRequest request, HttpCont
 {
     if (!Guid.TryParse(context.User.FindFirst("sub")?.Value, out var actorSub))
         return Results.Unauthorized();
-    var result = await service.CreateAsync(request, actorSub, cancellationToken);
+    var result = await service.CreateAsync(request, actorSub, cancellationToken,
+        context.User.FindFirst("acr")?.Value);
     return result.Status switch
     {
         CreateTenantStatus.Created => Results.Json(result.Tenant, statusCode: StatusCodes.Status201Created),
@@ -80,6 +97,17 @@ app.MapPost("/v1/platform/tenants", async (CreateTenantRequest request, HttpCont
         _ => Results.Problem(statusCode: 500)
     };
 }).RequireAuthorization("Platform.Operator");
+app.MapPost("/v1/platform/tenants/{id:guid}/owner-invitation:resend",
+    async (Guid id, HttpContext context, OwnerInvitationResendService service,
+        CancellationToken cancellationToken) =>
+    {
+        if (!Guid.TryParse(context.User.FindFirst("sub")?.Value, out var actorSub))
+            return Results.Unauthorized();
+        var result = await service.ResendAsync(id,
+            new IdentityAdminActor(actorSub, context.User.FindFirst("acr")?.Value), cancellationToken);
+        return result == OwnerInvitationResendStatus.Accepted
+            ? Results.Accepted() : Results.NotFound();
+    }).RequireAuthorization("Platform.Operator");
 
 app.MapPut("/internal/v1/catalog/{app}", async (
     string app, PermissionCatalog catalog, HttpContext context,
@@ -174,6 +202,14 @@ tenantRoutes.MapGet("/invitations", async (HttpContext context, InvitationManage
     context.Response.Headers.CacheControl = "no-store";
     return Results.Json(await service.ListAsync(cancellationToken));
 })
+    .RequirePermission("access.member.invite");
+tenantRoutes.MapPost("/invitations", async (CreateInvitationRequest request,
+    InvitationIssuanceService service, CancellationToken cancellationToken) =>
+    InvitationIssuanceResponses.Map(await service.CreateAsync(request, cancellationToken)))
+    .RequirePermission("access.member.invite");
+tenantRoutes.MapPost("/invitations/{invitationId:guid}/resend", async (Guid invitationId,
+    InvitationIssuanceService service, CancellationToken cancellationToken) =>
+    InvitationIssuanceResponses.Map(await service.ResendAsync(invitationId, cancellationToken)))
     .RequirePermission("access.member.invite");
 tenantRoutes.MapDelete("/invitations/{invitationId:guid}", async (Guid invitationId,
     InvitationManagementService service, CancellationToken cancellationToken) =>

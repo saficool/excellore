@@ -34,7 +34,8 @@ public sealed class InvitationAcceptanceTests
             await migrator.OpenAsync();
             foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql",
                 "003_membership_index.sql", "005_audit_append_only.sql",
-                "006_custom_role_lifecycle.sql", "008_membership_identity.sql" })
+                "006_custom_role_lifecycle.sql", "008_membership_identity.sql",
+                "009_invitation_delivery_state.sql" })
                 await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                     Path.Combine(AppContext.BaseDirectory, migration)));
         }
@@ -76,15 +77,15 @@ public sealed class InvitationAcceptanceTests
             new TestUser(other), new AccessResolutionService(appDb)).ListMineAsync());
         Assert.Equal(InvitationAcceptanceStatus.Unavailable,
             (await new InvitationAcceptanceService(appDb, new TestUser(other), new AccessResolutionService(appDb))
-                .AcceptAsync(new(InvitationToken.Issue(Guid.NewGuid()).Value))).Status);
+                .AcceptAsync(new(Guid.NewGuid(), InvitationToken.Issue(Guid.NewGuid()).Value))).Status);
 
         Assert.Equal(InvitationAcceptanceStatus.Unavailable,
             (await new InvitationAcceptanceService(appDb, new TestUser(other), new AccessResolutionService(appDb))
-                .AcceptAsync(new(oneToken.Value))).Status);
+                .AcceptAsync(new(one.OwnerInvitationId, oneToken.Value))).Status);
         Assert.Equal(0L, await CountAsync(admin, "tenant_members"));
         Assert.Equal(InvitationAcceptanceStatus.Unavailable,
             (await new InvitationAcceptanceService(appDb, new TestUser(ownerTwo), new AccessResolutionService(appDb))
-                .AcceptAsync(new(twoToken.Value))).Status);
+                .AcceptAsync(new(two.OwnerInvitationId, twoToken.Value))).Status);
         await mirror.UpsertAsync(new VerifiedIdentity(ownerTwo, "two@example.invalid", true, null, null));
         Assert.Equal(two.TenantId, Assert.Single(await mySecondInvitations.ListMineAsync()).TenantId);
         await ExecuteAsync(admin, "UPDATE invitations SET expires_at = now() - interval '1 second' WHERE id = @id",
@@ -92,15 +93,15 @@ public sealed class InvitationAcceptanceTests
         Assert.Empty(await mySecondInvitations.ListMineAsync());
         Assert.Equal(InvitationAcceptanceStatus.Unavailable,
             (await new InvitationAcceptanceService(appDb, new TestUser(ownerTwo), new AccessResolutionService(appDb))
-                .AcceptAsync(new(twoToken.Value))).Status);
+                .AcceptAsync(new(two.OwnerInvitationId, twoToken.Value))).Status);
 
         var accepted = await new InvitationAcceptanceService(appDb, new TestUser(ownerOne), new AccessResolutionService(appDb))
-            .AcceptAsync(new(oneToken.Value));
+            .AcceptAsync(new(one.OwnerInvitationId, oneToken.Value));
         Assert.Equal(InvitationAcceptanceStatus.Accepted, accepted.Status);
         Assert.Equal(one.TenantId, accepted.TenantId);
         Assert.Equal(InvitationAcceptanceStatus.Unavailable,
             (await new InvitationAcceptanceService(appDb, new TestUser(ownerOne), new AccessResolutionService(appDb))
-                .AcceptAsync(new(oneToken.Value))).Status);
+                .AcceptAsync(new(one.OwnerInvitationId, oneToken.Value))).Status);
         Assert.Equal(1L, await CountAsync(admin,
             "tenant_members WHERE tenant_id = '" + one.TenantId.ToString("D") + "' AND status = 'active'"));
         Assert.Equal(0L, await CountAsync(admin,

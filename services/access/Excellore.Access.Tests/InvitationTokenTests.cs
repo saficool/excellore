@@ -29,4 +29,15 @@ public sealed class InvitationTokenTests
         Assert.True(InvitationToken.TryRead(changed, out _, out var changedHash));
         Assert.False(InvitationToken.Matches(token.SecretHash, changedHash));
     }
+
+    [Fact]
+    public void Invitation_link_contains_only_the_public_id()
+    {
+        var invitationId = Guid.NewGuid();
+        var oneTimeCode = InvitationToken.Issue(Guid.NewGuid()).Value;
+        var link = SmtpInvitationDelivery.BuildAcceptanceLink(
+            new Uri("https://access.example.invalid/"), invitationId);
+        Assert.Equal($"?id={invitationId:D}", link.Query);
+        Assert.DoesNotContain(oneTimeCode, link.ToString(), StringComparison.Ordinal);
+    }
 }
