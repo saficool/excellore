@@ -76,6 +76,7 @@ services:
       DB_SERVICE: profile
       DB_MIGRATOR_PASSWORD: ${PROFILE_MIGRATOR_PASSWORD:?Run scripts/dev-up.sh first}
       DB_APP_PASSWORD: ${PROFILE_APP_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_PUBLISHER_PASSWORD: ${PROFILE_PUBLISHER_PASSWORD:?Run scripts/dev-up.sh first}
     ports:
       - 127.0.0.1:5433:5432
     volumes:
@@ -96,6 +97,7 @@ services:
       DB_SERVICE: access
       DB_MIGRATOR_PASSWORD: ${ACCESS_MIGRATOR_PASSWORD:?Run scripts/dev-up.sh first}
       DB_APP_PASSWORD: ${ACCESS_APP_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_PUBLISHER_PASSWORD: ${ACCESS_PUBLISHER_PASSWORD:?Run scripts/dev-up.sh first}
     ports:
       - 127.0.0.1:5434:5432
     volumes:

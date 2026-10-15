@@ -7,6 +7,10 @@ using Testcontainers.PostgreSql;
 
 namespace Excellore.Access.Tests;
 
+[CollectionDefinition("Access resolution latency", DisableParallelization = true)]
+public sealed class AccessResolutionLatencyCollection;
+
+[Collection("Access resolution latency")]
 public sealed class AccessResolutionTests
 {
     [Fact]

@@ -65,6 +65,19 @@ for service in access profile; do
     echo "${service}_migrator is missing or privileged." >&2
     exit 1
   fi
+  publisher_check="$("${compose[@]}" exec -T "postgres-$service" psql -X -A -t -U postgres -d "$service" -c "
+    SELECT CASE WHEN r.rolcanlogin AND NOT r.rolinherit
+      AND NOT r.rolsuper AND NOT r.rolcreatedb AND NOT r.rolcreaterole
+      AND NOT r.rolreplication AND NOT r.rolbypassrls
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_class c
+        WHERE c.relowner = r.oid AND c.relkind IN ('r', 'p', 'v', 'm', 'S', 'f')
+      ) THEN 'ok' ELSE 'invalid' END
+    FROM pg_roles r WHERE r.rolname = '${service}_publisher';")"
+  if [ "$publisher_check" != ok ]; then
+    echo "${service}_publisher is missing, privileged, or owns database objects." >&2
+    exit 1
+  fi
 done
 
-echo 'Local stack healthy; service runtime roles have no bypass or ownership.'
+echo 'Local stack healthy; service app and publisher roles have no bypass or ownership.'
