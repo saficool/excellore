@@ -18,6 +18,7 @@ builder.Services.AddScoped<AccessResolutionService>();
 builder.Services.AddScoped<AccessRoleReader>();
 builder.Services.AddScoped<CustomRoleService>();
 builder.Services.AddScoped<RoleAssignmentService>();
+builder.Services.AddScoped<AccessGroupService>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
 builder.Services.AddScoped<IPrivilegeClassifier, AccessPrivilegeClassifier>();
 builder.Services.AddExcelloreAuthz();
@@ -175,6 +176,34 @@ tenantRoutes.MapDelete("/role-assignments/{assignmentId:guid}", async (Guid assi
     CancellationToken cancellationToken) =>
     RoleAssignmentResponses.Map(await service.RevokeAsync(assignmentId, request, cancellationToken)))
     .RequirePermission("access.assignment.manage");
+tenantRoutes.MapGet("/groups", async (AccessGroupService service,
+    CancellationToken cancellationToken) => Results.Json(await service.ListAsync(cancellationToken)))
+    .RequirePermission("access.group.manage");
+tenantRoutes.MapPost("/groups", async (CreateGroupRequest request, AccessGroupService service,
+    CancellationToken cancellationToken) =>
+    GroupResponses.Create(await service.CreateAsync(request, cancellationToken)))
+    .RequirePermission("access.group.manage");
+tenantRoutes.MapPut("/groups/{groupId:guid}/members", async (Guid groupId,
+    [FromBody] ChangeGroupMemberRequest request, AccessGroupService service,
+    CancellationToken cancellationToken) =>
+    GroupResponses.Map(await service.AddMemberAsync(groupId, request, cancellationToken)))
+    .RequirePermission("access.group.manage");
+tenantRoutes.MapDelete("/groups/{groupId:guid}/members", async (Guid groupId,
+    [FromBody] ChangeGroupMemberRequest request, AccessGroupService service,
+    CancellationToken cancellationToken) =>
+    GroupResponses.Map(await service.RemoveMemberAsync(groupId, request, cancellationToken)))
+    .RequirePermission("access.group.manage");
+tenantRoutes.MapPost("/groups/{groupId:guid}/role-assignments", async (Guid groupId,
+    GrantGroupRoleRequest request, AccessGroupService service,
+    CancellationToken cancellationToken) =>
+    GroupResponses.GrantRole(await service.GrantRoleAsync(groupId, request, cancellationToken)))
+    .RequirePermission("access.group.manage");
+tenantRoutes.MapDelete("/groups/{groupId:guid}/role-assignments/{assignmentId:guid}",
+    async (Guid groupId, Guid assignmentId, [FromBody] RevokeGroupRoleRequest request,
+    AccessGroupService service, CancellationToken cancellationToken) =>
+    GroupResponses.Map(await service.RevokeRoleAsync(groupId, assignmentId,
+        request, cancellationToken)))
+    .RequirePermission("access.group.manage");
 
 app.AssertTenantRoutesProtected();
 

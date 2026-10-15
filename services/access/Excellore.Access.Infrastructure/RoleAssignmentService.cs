@@ -51,7 +51,7 @@ public sealed class RoleAssignmentService(NpgsqlDataSource dataSource,
             return await DenyAsync(RoleAssignmentStatus.Forbidden, "permission-missing");
 
         var reason = action == "grant" ? grant?.Reason?.Trim() : revoke?.Reason?.Trim();
-        if (!ValidReasonCode(reason))
+        if (!AccessRoleGrantPolicy.ValidReasonCode(reason))
             return await DenyAsync(RoleAssignmentStatus.Invalid, "invalid-reason");
         var validatedReason = reason!;
 
@@ -90,19 +90,18 @@ public sealed class RoleAssignmentService(NpgsqlDataSource dataSource,
             """, ("tenant", tenantId), ("user", targetUserId)) is not true)
             return await DenyAsync(RoleAssignmentStatus.NotFound, "member-unavailable");
 
-        var role = await ReadRoleAsync(roleId);
+        var role = await AccessRoleGrantPolicy.ReadAsync(connection, transaction,
+            tenantId, roleId, cancellationToken);
         if (role is null)
             return await DenyAsync(RoleAssignmentStatus.NotFound, "role-unavailable");
-        // Ownership moves only through the accepted, audited transfer flow (S4/S9).
-        if (role.Name == "owner")
-            return await DenyAsync(RoleAssignmentStatus.Conflict, "ownership-transfer-required");
-        if (role.Permissions.Any(permission => !permission.Enabled || permission.Deprecated))
-            return await DenyAsync(RoleAssignmentStatus.Conflict, "role-unavailable");
-        if (role.Permissions.Any(permission => !actorPermissions.Contains(permission.Key)))
-            return await DenyAsync(RoleAssignmentStatus.Forbidden, "role-permission-escalation");
-        if ((role.Privileged || role.Permissions.Any(permission => permission.Privileged)) &&
-            !user.HasRecentMfa)
-            return await DenyAsync(RoleAssignmentStatus.StepUpRequired, "step-up-required");
+        if (AccessRoleGrantPolicy.Check(role, actorPermissions, user.HasRecentMfa) is { } decision)
+            return await DenyAsync(decision, decision switch
+            {
+                RoleAssignmentStatus.Conflict when role.Name == "owner" => "ownership-transfer-required",
+                RoleAssignmentStatus.Conflict => "role-unavailable",
+                RoleAssignmentStatus.Forbidden => "role-permission-escalation",
+                _ => "step-up-required"
+            });
 
         if (action == "grant")
         {
@@ -197,35 +196,6 @@ public sealed class RoleAssignmentService(NpgsqlDataSource dataSource,
                 reader.IsDBNull(4) ? null : reader.GetString(4)) : null;
         }
 
-        async Task<RoleState?> ReadRoleAsync(Guid id)
-        {
-            await using var command = Command("""
-                SELECT r.name, r.privileged, p.key, p.privileged, p.deprecated,
-                  COALESCE(a.core OR ta.status = 'enabled', false)
-                FROM roles r
-                LEFT JOIN role_permissions rp ON rp.role_id = r.id
-                LEFT JOIN permissions p ON p.key = rp.permission_key
-                LEFT JOIN apps a ON a.id = p.app_id
-                LEFT JOIN tenant_apps ta ON ta.tenant_id = @tenant AND ta.app_id = a.id
-                WHERE r.id = @role AND (r.tenant_id IS NULL OR r.tenant_id = @tenant)
-                  AND r.deleted_at IS NULL
-                ORDER BY p.key
-                """, ("role", id), ("tenant", tenantId));
-            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-            string? name = null;
-            var privileged = false;
-            var permissions = new List<PermissionState>();
-            while (await reader.ReadAsync(cancellationToken))
-            {
-                name ??= reader.GetString(0);
-                privileged = reader.GetBoolean(1);
-                if (!reader.IsDBNull(2))
-                    permissions.Add(new PermissionState(reader.GetString(2), reader.GetBoolean(3),
-                        reader.GetBoolean(4), reader.GetBoolean(5)));
-            }
-            return name is null ? null : new RoleState(name, privileged, permissions);
-        }
-
         async Task<object?> ScalarAsync(string sql, params (string Name, object Value)[] parameters)
         {
             await using var command = Command(sql, parameters);
@@ -249,12 +219,4 @@ public sealed class RoleAssignmentService(NpgsqlDataSource dataSource,
     private sealed record AssignmentState(Guid Id, Guid UserId, Guid RoleId,
         DateTimeOffset? ExpiresAt, string? Reason);
 
-    private static bool ValidReasonCode(string? reason) =>
-        reason is { Length: >= 1 and <= 64 } && reason[0] is >= 'a' and <= 'z' &&
-        reason.Skip(1).All(character => character is >= 'a' and <= 'z' or >= '0' and <= '9'
-            or '.' or '_' or '-');
-
-    private sealed record PermissionState(string Key, bool Privileged, bool Deprecated, bool Enabled);
-    private sealed record RoleState(string Name, bool Privileged,
-        IReadOnlyList<PermissionState> Permissions);
 }

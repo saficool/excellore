@@ -524,6 +524,7 @@ Custom role rules:
 - A **role assignment** grants one role to one member in one tenant, with optional `expires_at` (time-bound access) and a `reason`.
 - Grant and revoke requests require a bounded machine-safe reason code. The ordinary assignment endpoints do not change the `owner` role; ownership moves through the accepted transfer flow. An expired direct grant may be replaced atomically with a new grant.
 - A **group** is a tenant-scoped set of members. A **group role assignment** gives a role to every member of the group.
+- Group member changes use a user ID in the request body, never the URL. Adding a member rechecks every effective group role for escalation and step-up. Group role changes cannot alter the actor's own roles, and the ordinary group API does not grant or revoke the `owner` role. Group member and group role changes require machine-safe reason codes.
 - A member's roles = direct assignments ∪ roles via groups, ignoring expired entries.
 - Groups are part of the data model from the start. Their UI MAY ship later (WP-08b).
 
@@ -3013,7 +3014,7 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `GET …/roles`, `GET …/roles/{roleId}`, `GET …/permissions` | T `access.role.read` | Roles and permission catalog (enabled apps only) |
 | `POST …/roles`, `PUT …/roles/{roleId}`, `DELETE …/roles/{roleId}` | T `access.role.manage` | Custom roles |
 | `POST …/role-assignments` (`userId`, `roleId`, optional `expiresAt`, and `reason` in body), `DELETE …/role-assignments/{id}` (`reason` in body) | T `access.assignment.manage` | Assignments; no user identifier in the URL (INV-11) |
-| `GET/POST …/groups`, `PUT/DELETE …/groups/{id}/members/{userId}`, `POST/DELETE …/groups/{id}/role-assignments` | T `access.group.manage` | Groups |
+| `GET/POST …/groups`, `PUT/DELETE …/groups/{id}/members` (`userId`, `reason` in body), `POST …/groups/{id}/role-assignments` (`roleId`, optional `expiresAt`, `reason` in body), `DELETE …/groups/{id}/role-assignments/{assignmentId}` (`reason` in body) | T `access.group.manage` | Groups; no user identifier in the URL (INV-11) |
 | `GET …/apps` | T `access.apps.read` | Enabled apps |
 | `POST …/access-requests` | T `access.request.create` | Request access |
 | `GET …/access-requests`, `POST …/access-requests/{id}/approve`, `…/reject` | T `access.request.approve` | Review requests |
