@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.1 |
+| **Document version** | 5.4 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,9 @@
 
 | Version | Summary |
 |---|---|
+| 5.4 | Support grants become class T with forced RLS by owner decision. Support requests are limited to read-only system roles and tenant owner approval. Audit exports use private storage and authenticated BFF streaming, never signed URLs. |
+| 5.3 | Tenant settings write name and slug only; tenant-defined security policies remain deferred (Q-18). App access requests are recorded for platform review, while tenant approvers can approve role requests only (owner decision; ADR-0052 and ADR-0053 proposed). |
+| 5.2 | Member detail lookup uses `POST /members:lookup` with `userId` in the body, by owner decision (INV-11). Ownership nomination is stored under tenant RLS and requires nominee acceptance (ADR-0051 proposed). |
 | 5.1 | Member suspend, reactivate, and remove send opaque `userId` in request bodies instead of URLs (owner decision; ADR-0049 proposed). Reactivation rechecks current grants before restoring access. |
 | 5.0 | Owner-approved narrow INV-11 exception for Keycloak's time-limited HTTPS execute-actions link during new-user onboarding. Excellore invitation URLs carry only opaque IDs; invitees enter a separate one-time code (RFC-0006, ADR-0048 proposed). |
 | 4.10 | Shared app catalog resolves public app origins from environment configuration, validates links, and supplies the shared tenant/app header (ADR-0035 proposed). |
@@ -665,7 +668,7 @@ Workers are machine identities. They do **not** run the user's permission check;
 
 Every new table MUST be classified in its migration (comment) and in the migration review.
 
-**Exemptions.** A small number of platform tables carry a `tenant_id` column as a key or routing field but are not tenant-isolated by RLS (for example `user_tenant_index`, `support_grants`, `outbox`). They MUST be listed in `infra/db/rls-exempt.txt`, which is owned by the security owner (`CODEOWNERS`), and are protected by API policy and database grants instead. The RLS meta-test ([25.2](#252-tenant-isolation-test-harness)) skips exactly the listed tables. Adding to the list requires security review.
+**Exemptions.** A small number of platform tables carry a `tenant_id` column as a key or routing field but are not tenant-isolated by RLS (`user_tenant_index`, `outbox`). They MUST be listed in `infra/db/rls-exempt.txt`, which is owned by the security owner (`CODEOWNERS`), and are protected by API policy and database grants instead. `support_grants` is class T with forced RLS. The RLS meta-test ([25.2](#252-tenant-isolation-test-harness)) skips exactly the listed tables. Adding to the list requires security review.
 
 ### 8.3 RLS pattern
 
@@ -1218,9 +1221,9 @@ Full DDL in [Appendix F](#appendix-f-access-database-ddl). Tables by class:
 | Class | Tables |
 |---|---|
 | P | `tenants` (includes `authz_version`), `apps`, `permissions`, `identities`, `inbox` |
-| P, RLS-exempt (tenant-keyed, see [8.2](#82-table-classes)) | `user_tenant_index`, `support_grants`, `outbox` |
+| P, RLS-exempt (tenant-keyed, see [8.2](#82-table-classes)) | `user_tenant_index`, `outbox` |
 | H | `roles`, `role_permissions`, `audit_events` |
-| T | `tenant_members`, `role_assignments`, `groups`, `group_members`, `group_role_assignments`, `tenant_apps`, `tenant_settings`, `invitations`, `access_requests` |
+| T | `tenant_members`, `role_assignments`, `groups`, `group_members`, `group_role_assignments`, `tenant_apps`, `tenant_settings`, `invitations`, `access_requests`, `ownership_transfers`, `support_grants`, `audit_exports` |
 
 `identities` is a mirror of Keycloak identities (user ID, email, names, status), populated on login and invitation and refreshed by events. It is **never listed directly**. Tenant queries reach it only through `tenant_members` joins; only platform-security endpoints may search it.
 
@@ -1255,7 +1258,7 @@ Full DDL in [Appendix F](#appendix-f-access-database-ddl). Tables by class:
 **Request and approve access**
 
 1. A member requests a role (or app access) with reason and optional end date.
-2. Approvers (`access.request.approve`) are notified. On approval, Access validates S1 and applies a (time-bound) assignment.
+2. Approvers (`access.request.approve`) are notified. Tenant approval of a role request validates S1 and S2 and applies a (time-bound) assignment. App requests remain pending for platform review; tenant approval cannot enable an app or grant a role by inference.
 
 **Transfer ownership**
 
@@ -1263,9 +1266,9 @@ Current owner (step-up) nominates a member; the nominee accepts; Access swaps ow
 
 **Support grant**
 
-1. Staff with `platform-support` requests a grant for a tenant (reason, role, duration ≤ 8 h).
-2. The tenant owner approves (or break-glass: two `platform-security`/`platform-admin` approvals with alert).
-3. Access creates a **temporary membership flagged as support** with the granted role, expiring automatically. All actions carry the grant ID in audit. The tenant owner sees and can revoke it.
+1. Staff with `platform-support` requests a grant for a tenant (safe reason code, read-only system `viewer` or `auditor` role, duration ≤ 8 h, recent MFA). The staff member cannot already be a regular member of the tenant.
+2. A different tenant owner approves with recent MFA. Break-glass approval remains deferred until dual approval and alerting are implemented.
+3. Access creates a temporary membership flagged as support, bound to the grant and its expiry. Resolution denies the support membership as soon as the grant expires or is revoked, ignores unrelated assignments, and currently exposes Access read permissions only. Cross-app support awaits shared grant usage auditing. The tenant owner sees and can revoke grants; the grant lifecycle is audited and invalidates authorization caches. Audit writes for actions under the grant include its ID.
 
 **Delete a tenant**
 
@@ -1288,7 +1291,7 @@ Tenant-scoped (`/v1/tenants/{tenantId}/…`, tenant gate + permission), user-lev
 | Bulk assignment | Admin job | Asynchronous with progress and audit, per-tenant concurrency limit |
 | Drift detection | Nightly | Identity mirror vs Keycloak |
 | Tenant deletion orchestration | Grace period elapsed | Publish `tenant.deleted.v1`, await confirmations, tombstone |
-| Audit export | Request | Signed export to object storage with expiry |
+| Audit export | Request | Private object storage; authenticated, tenant-gated BFF download stream. No signed URL. The WP-06 endpoint records a pending job; WP-10 delivers the worker and stream. |
 | Access reviews | Quarterly (later phase) | Open reviews and reminders |
 | Outbox publisher | Continuous | Publishes pending events |
 
@@ -2717,18 +2720,6 @@ CREATE TABLE user_tenant_index (             -- [P, exempt] lookup "which tenant
   PRIMARY KEY (user_id, tenant_id)
 );
 
-CREATE TABLE support_grants (                -- [P, exempt] platform staff access metadata only
-  id uuid PRIMARY KEY,
-  tenant_id uuid NOT NULL REFERENCES tenants(id),
-  staff_user_id uuid NOT NULL REFERENCES identities(user_id),
-  role_id uuid NOT NULL,
-  reason text NOT NULL,
-  status text NOT NULL CHECK (status IN ('requested','approved','active','expired','revoked','rejected')),
-  approved_by uuid,
-  starts_at timestamptz, expires_at timestamptz NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
 CREATE TABLE outbox (                        -- [P, exempt] publisher reads without tenant context
   id uuid PRIMARY KEY,
   type text NOT NULL,
@@ -2868,6 +2859,47 @@ CREATE TABLE access_requests (               -- [T]
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE support_grants (                -- [T] forced RLS via migration 011
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  staff_user_id uuid NOT NULL REFERENCES identities(user_id),
+  role_id uuid NOT NULL,
+  reason text NOT NULL,
+  status text NOT NULL CHECK (status IN ('requested','approved','active','expired','revoked','rejected')),
+  approved_by uuid,
+  starts_at timestamptz, expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX support_grants_one_open_staff_tenant_uq
+  ON support_grants (tenant_id, staff_user_id)
+  WHERE status IN ('requested','approved','active');
+
+CREATE TABLE audit_exports (                 -- [T] private export jobs, migration 012
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  requested_by uuid NOT NULL,
+  status text NOT NULL CHECK (status IN ('pending','ready','failed')),
+  object_key text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  ready_at timestamptz,
+  CHECK ((status = 'ready') = (object_key IS NOT NULL))
+);
+CREATE INDEX audit_exports_tenant_time ON audit_exports (tenant_id, created_at DESC);
+
+CREATE TABLE ownership_transfers (           -- [T]
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenants(id),
+  from_user_id uuid NOT NULL, to_user_id uuid NOT NULL,
+  reason text NOT NULL,
+  status text NOT NULL CHECK (status IN ('pending','accepted','expired')),
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(), accepted_at timestamptz,
+  FOREIGN KEY (tenant_id, from_user_id) REFERENCES tenant_members(tenant_id, user_id),
+  FOREIGN KEY (tenant_id, to_user_id) REFERENCES tenant_members(tenant_id, user_id),
+  CHECK (from_user_id <> to_user_id)
+);
+CREATE UNIQUE INDEX ownership_transfers_one_pending_uq
+  ON ownership_transfers (tenant_id, from_user_id) WHERE status = 'pending';
+
 -- ===== RLS: apply to every [T] and [H] table =====
 -- Helper expressions:
 --   ctx   : NULLIF(current_setting('app.tenant_id', true), '')::uuid
@@ -2877,7 +2909,8 @@ DECLARE t text;
 BEGIN
   FOREACH t IN ARRAY ARRAY['tenant_members','role_assignments','groups','group_members',
                            'group_role_assignments','tenant_apps','tenant_settings',
-                           'invitations','access_requests'] LOOP
+                           'invitations','access_requests','ownership_transfers',
+                           'support_grants','audit_exports'] LOOP
     EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
     EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
     EXECUTE format($p$CREATE POLICY tenant_isolation ON %I
@@ -2920,7 +2953,7 @@ Notes for the agent:
 - **`app.scope = 'platform'`** is set only by handlers behind `Platform.*` policies and by the catalog sync, never by tenant-scoped paths. It exists solely to touch `tenant_id IS NULL` rows.
 - **Resolve** sets `app.tenant_id` to the requested tenant before reading `tenant_members`, `role_assignments`, `tenant_apps`, groups, and roles.
 - **Invitation acceptance** parses the tenant ID out of the one-time code in the request body, sets that tenant's context, then looks up the opaque invitation ID and `token_hash`.
-- `infra/db/rls-exempt.txt` initially lists: `user_tenant_index`, `support_grants`, `outbox`. The RLS meta-test ([25.2](#252-tenant-isolation-test-harness)) skips exactly these. Adding to the list requires security-owner review.
+- `infra/db/rls-exempt.txt` lists: `user_tenant_index`, `outbox`. `support_grants` is class T with forced RLS. The RLS meta-test ([25.2](#252-tenant-isolation-test-harness)) skips exactly the listed tables. Adding to the list requires security-owner review.
 - Maintain `user_tenant_index` in the same transaction as every membership change.
 - Bump `tenants.authz_version` and write an outbox row (`access.authz.changed.v1`) in the same transaction as any change that affects permissions.
 
@@ -3015,7 +3048,7 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `GET /v1/me/invitations` | A | Pending invitations for my verified email |
 | `POST /v1/me/invitations/accept` | A | Accept an invitation (`invitationId`, `oneTimeCode` in body) |
 | `GET /v1/tenants/{tenantId}/me/access` | T `access.app.access` | My roles, permissions, apps in this tenant |
-| `GET /v1/tenants/{tenantId}/members`, `GET …/members/{userId}` | T `access.member.read` | Members |
+| `GET /v1/tenants/{tenantId}/members`, `POST …/members:lookup` (`userId` in body) | T `access.member.read` | Members; no user identifier in the URL (INV-11) |
 | `POST …/invitations`, `GET …/invitations`, `DELETE …/invitations/{id}`, `POST …/invitations/{id}/resend` | T `access.member.invite` | Invitations |
 | `POST …/members:suspend`, `POST …/members:reactivate` (`userId`, `reason` in body) | T `access.member.suspend` | Suspend, reactivate; no user identifier in the URL (INV-11) |
 | `DELETE …/members` (`userId`, `reason` in body) | T `access.member.remove` | Remove; no user identifier in the URL (INV-11) |
@@ -3024,12 +3057,13 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `POST …/role-assignments` (`userId`, `roleId`, optional `expiresAt`, and `reason` in body), `DELETE …/role-assignments/{id}` (`reason` in body) | T `access.assignment.manage` | Assignments; no user identifier in the URL (INV-11) |
 | `GET/POST …/groups`, `PUT/DELETE …/groups/{id}/members` (`userId`, `reason` in body), `POST …/groups/{id}/role-assignments` (`roleId`, optional `expiresAt`, `reason` in body), `DELETE …/groups/{id}/role-assignments/{assignmentId}` (`reason` in body) | T `access.group.manage` | Groups; no user identifier in the URL (INV-11) |
 | `GET …/apps` | T `access.apps.read` | Enabled apps |
-| `POST …/access-requests` | T `access.request.create` | Request access |
-| `GET …/access-requests`, `POST …/access-requests/{id}/approve`, `…/reject` | T `access.request.approve` | Review requests |
-| `GET …/audit-events`, `POST …/audit-events/exports` | T `access.audit.read` | Audit |
+| `POST …/access-requests` | T `access.request.create` | Request role access or record an app request for platform review |
+| `GET …/access-requests`, `POST …/access-requests/{id}/approve`, `…/reject` | T `access.request.approve` | Review requests; tenant approval grants roles only |
+| `GET …/audit-events`, `POST …/audit-events/exports`, `GET …/audit-events/exports/{exportId}` | T `access.audit.read` | Audit export status; private download stream in WP-10 |
 | `GET …/settings` / `PATCH …/settings` | T `access.settings.read` / `access.settings.manage` | Settings |
 | `GET …/support-grants`, `POST …/support-grants/{id}/approve`, `…/revoke` | T `access.supportgrant.manage` | Support grants |
-| `POST …/ownership-transfers`, `POST …/ownership-transfers/{id}/accept` | T `access.tenant.transfer` / target member | Ownership transfer |
+| `POST /v1/platform/support-grants` | P `Platform.Support` | Staff request for own temporary support access; recent MFA |
+| `POST …/ownership-transfers`, `POST …/ownership-transfers/{id}/accept` | T `access.tenant.transfer` / T `access.app.access` plus target-member check | Ownership transfer |
 | `POST …/deletion-requests` | T `access.tenant.delete` | Tenant deletion |
 | `POST /v1/platform/tenants`, `GET /v1/platform/tenants`, `GET/PATCH /v1/platform/tenants/{id}` | P operator | Tenant management |
 | `POST /v1/platform/tenants/{id}/owner-invitation:resend` | P operator | Rotate and resend a pending provisioning owner invitation |
@@ -3092,4 +3126,4 @@ See handbook Appendix E. Permission keys: `<app>.<resource>.<action>`. Events: `
 
 ---
 
-*End of the Excellore Platform Handbook, version 5.1.*
+*End of the Excellore Platform Handbook, version 5.3.*

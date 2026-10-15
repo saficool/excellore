@@ -45,4 +45,30 @@ docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postg
 docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-access \
   sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U access_migrator -d access' \
   < services/access/Excellore.Access.Infrastructure/Migrations/007_group_role_assignment_uniqueness.sql
+
+for migration in 008_membership_identity.sql 009_invitation_delivery_state.sql; do
+  docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-access \
+    sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U access_migrator -d access' \
+    < "services/access/Excellore.Access.Infrastructure/Migrations/$migration"
+done
+
+# These migrations have non-idempotent CREATE statements. Detect their durable schema
+# effect so local dev-up can be safely rerun after an interrupted setup.
+apply_once() {
+  local migration="$1" condition="$2" applied
+  applied="$(docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-access \
+    sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -A -t -v ON_ERROR_STOP=1 -U access_migrator -d access -c "$1"' \
+    sh "$condition" | tr -d '\r\n')"
+  if [ "$applied" = f ]; then
+    docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-access \
+      sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U access_migrator -d access' \
+      < "services/access/Excellore.Access.Infrastructure/Migrations/$migration"
+  elif [ "$applied" != t ]; then
+    echo "Could not determine Access migration state for $migration." >&2
+    exit 1
+  fi
+}
+apply_once 010_ownership_transfers.sql "SELECT to_regclass('public.ownership_transfers') IS NOT NULL"
+apply_once 011_support_grants_rls.sql "SELECT relforcerowsecurity FROM pg_class WHERE oid = 'public.support_grants'::regclass"
+apply_once 012_audit_export_requests.sql "SELECT to_regclass('public.audit_exports') IS NOT NULL"
 echo 'Access database migrations applied.'

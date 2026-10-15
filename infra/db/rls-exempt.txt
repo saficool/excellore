@@ -1,7 +1,6 @@
 # Class P service outbox (tenant_id is a routing key, not tenant-owned data).
 # Approved by ADR-0018; the publisher needs to select pending rows across tenants.
 outbox
-# Access platform indexes and support-grant metadata are keyed by tenant for routing.
-# Access API policy and restricted grants protect these class P tables (ADR-0038).
+# Access membership lookup index is keyed by tenant for routing (ADR-0038).
+# Support grants moved to forced RLS in migration 011 (ADR-0056).
 user_tenant_index
-support_grants

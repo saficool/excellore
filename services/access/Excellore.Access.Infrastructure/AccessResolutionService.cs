@@ -38,6 +38,11 @@ public sealed class AccessResolutionService(NpgsqlDataSource dataSource)
         string? tenantStatus = null;
         string? membershipStatus = null;
         string? identityStatus = null;
+        bool isSupport = false;
+        DateTimeOffset? membershipExpiresAt = null;
+        string? supportStatus = null;
+        DateTimeOffset? grantExpiresAt = null;
+        Guid? supportGrantRoleId = null;
         long version = 0;
         await using (var command = Command(connection, transaction, """
             WITH grants AS (
@@ -57,10 +62,13 @@ public sealed class AccessResolutionService(NpgsqlDataSource dataSource)
               gr.role_id, gr.name, gr.expires_at, gr.revoked_at, p.key, p.app_id,
               ARRAY(SELECT a.id FROM apps a LEFT JOIN tenant_apps ta
                 ON ta.app_id = a.id AND ta.tenant_id = @tenant
-                WHERE a.core OR ta.status = 'enabled') AS enabled_apps
+                WHERE a.core OR ta.status = 'enabled') AS enabled_apps,
+              m.is_support, m.expires_at, sg.status, sg.expires_at, sg.role_id
             FROM tenants t
             LEFT JOIN tenant_members m ON m.tenant_id = t.id AND m.user_id = @user
             LEFT JOIN identities i ON i.user_id = m.user_id
+            LEFT JOIN support_grants sg ON sg.id = m.support_grant_id
+              AND sg.tenant_id = t.id AND sg.staff_user_id = m.user_id
             LEFT JOIN grants gr ON true
             LEFT JOIN role_permissions rp ON rp.role_id = gr.role_id
             LEFT JOIN permissions p ON p.key = rp.permission_key
@@ -75,6 +83,11 @@ public sealed class AccessResolutionService(NpgsqlDataSource dataSource)
                 membershipStatus ??= reader.IsDBNull(2) ? null : reader.GetString(2);
                 identityStatus ??= reader.IsDBNull(3) ? null : reader.GetString(3);
                 enabledApps = reader.GetFieldValue<string[]>(10);
+                isSupport = !reader.IsDBNull(11) && reader.GetBoolean(11);
+                membershipExpiresAt = reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12);
+                supportStatus = reader.IsDBNull(13) ? null : reader.GetString(13);
+                grantExpiresAt = reader.IsDBNull(14) ? null : reader.GetFieldValue<DateTimeOffset>(14);
+                supportGrantRoleId = reader.IsDBNull(15) ? null : reader.GetGuid(15);
                 if (reader.IsDBNull(4)) continue;
                 var roleId = reader.GetGuid(4);
                 grants.Add(new RoleGrant(roleId, reader.GetString(5),
@@ -87,7 +100,31 @@ public sealed class AccessResolutionService(NpgsqlDataSource dataSource)
         if (tenantStatus != "active" || membershipStatus != "active" || identityStatus != "active")
             return AccessResolution.Denied(tenantId);
         var now = DateTimeOffset.UtcNow;
+        if (isSupport && (supportStatus != "active" || membershipExpiresAt is null ||
+            grantExpiresAt is null || supportGrantRoleId is null ||
+            membershipExpiresAt <= now || grantExpiresAt <= now))
+            return AccessResolution.Denied(tenantId);
+        if (isSupport)
+        {
+            grants.RemoveWhere(grant => grant.RoleId != supportGrantRoleId ||
+                grant.Name is not ("viewer" or "auditor"));
+            rolePermissions.RemoveWhere(permission => permission.RoleId != supportGrantRoleId);
+        }
         var effective = EffectivePermissionCalculator.Resolve(true, true, grants, rolePermissions, enabledApps, now);
+        if (isSupport)
+        {
+            var readPermissions = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "access.app.access", "access.member.read", "access.role.read",
+                "access.apps.read", "access.audit.read", "access.settings.read"
+            };
+            var permitted = effective.Permissions.Where(readPermissions.Contains).ToArray();
+            if (!permitted.Contains("access.app.access", StringComparer.Ordinal))
+                return AccessResolution.Denied(tenantId);
+            await transaction.CommitAsync(cancellationToken);
+            return new AccessResolution(tenantId, true, effective.Roles,
+                permitted, ["access", "shell"], version, now);
+        }
         await transaction.CommitAsync(cancellationToken);
         return new AccessResolution(tenantId, effective.Allowed, effective.Roles,
             effective.Permissions, effective.Apps, version, now);

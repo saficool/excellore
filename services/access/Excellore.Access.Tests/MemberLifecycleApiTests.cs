@@ -46,7 +46,9 @@ public sealed class MemberLifecycleApiTests
         {
             await migrator.OpenAsync();
             foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql",
-                "003_membership_index.sql", "005_audit_append_only.sql", "006_custom_role_lifecycle.sql" })
+                "003_membership_index.sql", "005_audit_append_only.sql", "006_custom_role_lifecycle.sql",
+                "010_ownership_transfers.sql", "011_support_grants_rls.sql",
+                "012_audit_export_requests.sql" })
                 await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                     Path.Combine(AppContext.BaseDirectory, migration)));
         }
@@ -58,11 +60,18 @@ public sealed class MemberLifecycleApiTests
         var platformActor = Guid.NewGuid();
         Assert.Equal(CatalogSyncResult.Updated,
             await new CatalogSyncService(appDb).SyncAsync("access", new PermissionCatalog("access", [
-                new CatalogPermission("access.app.access", "Open Access", false, false, false, ["owner", "admin"]),
+                new CatalogPermission("access.app.access", "Open Access", false, false, false, ["owner", "admin", "member", "viewer"]),
                 new CatalogPermission("access.member.suspend", "Suspend members", false, false, false, ["owner", "admin"]),
                 new CatalogPermission("access.member.remove", "Remove members", false, false, false, ["owner", "admin"]),
                 new CatalogPermission("access.role.manage", "Manage roles", true, false, false, ["owner"]),
-                new CatalogPermission("access.tenant.transfer", "Transfer owner", true, true, false, ["owner"])
+                new CatalogPermission("access.tenant.transfer", "Transfer owner", true, true, false, ["owner"]),
+                new CatalogPermission("access.settings.read", "Read settings", false, false, false, ["owner"]),
+                new CatalogPermission("access.settings.manage", "Manage settings", true, false, false, ["owner"]),
+                new CatalogPermission("access.request.create", "Request access", false, false, false, ["owner", "admin", "member"]),
+                new CatalogPermission("access.request.approve", "Approve requests", false, false, false, ["owner", "admin"]),
+                new CatalogPermission("access.tenant.delete", "Delete tenant", true, true, false, ["owner"]),
+                new CatalogPermission("access.audit.read", "Read audit", false, false, false, ["owner"]),
+                new CatalogPermission("access.supportgrant.manage", "Manage support", true, true, false, ["owner"])
             ]), platformActor));
 
         var owner = Guid.NewGuid();
@@ -70,10 +79,11 @@ public sealed class MemberLifecycleApiTests
         var tenantAdmin = Guid.NewGuid();
         var target = Guid.NewGuid();
         var supportMember = Guid.NewGuid();
+        var staff = Guid.NewGuid();
         var foreignOwner = Guid.NewGuid();
         var mirror = new IdentityMirrorService(appDb);
         foreach (var identity in new[] { owner, secondOwner, tenantAdmin, target,
-            supportMember, foreignOwner })
+            supportMember, foreignOwner, staff })
             Assert.Equal(IdentityMirrorResult.Created, await mirror.UpsertAsync(
                 new VerifiedIdentity(identity, Email(identity), true, null, null)));
         var provisioner = new TenantProvisioningService(appDb);
@@ -87,6 +97,10 @@ public sealed class MemberLifecycleApiTests
             "SELECT id FROM roles WHERE tenant_id IS NULL AND name = 'owner'"))!;
         var adminRole = (Guid)(await ScalarAsync(admin,
             "SELECT id FROM roles WHERE tenant_id IS NULL AND name = 'admin'"))!;
+        var memberRole = (Guid)(await ScalarAsync(admin,
+            "SELECT id FROM roles WHERE tenant_id IS NULL AND name = 'member'"))!;
+        var viewerRole = (Guid)(await ScalarAsync(admin,
+            "SELECT id FROM roles WHERE tenant_id IS NULL AND name = 'viewer'"))!;
         foreach (var (tenant, member, role) in new[]
         {
             (tenantOne, owner, ownerRole), (tenantOne, secondOwner, ownerRole),
@@ -131,6 +145,41 @@ public sealed class MemberLifecycleApiTests
                         options.DefaultChallengeScheme = "Test";
                     }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { })));
             using var client = factory.CreateClient();
+            var requests = $"/v1/tenants/{tenantOne:D}/access-requests";
+            var memberRequest = new { targetType = "role", targetKey = memberRole.ToString("D"),
+                reason = "role-request" };
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/access-requests", memberRequest);
+            using var requested = await SendAsync(client, HttpMethod.Post, tenantAdmin,
+                requests, memberRequest);
+            Assert.Equal(HttpStatusCode.Created, requested.StatusCode);
+            var memberRequestId = (await requested.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("requestId").GetGuid();
+            await ExpectAsync(HttpStatusCode.Conflict, client, HttpMethod.Post, tenantAdmin,
+                requests, memberRequest);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, tenantAdmin,
+                $"{requests}/{memberRequestId:D}/approve", new { reason = "self-approve" });
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, owner,
+                $"/v1/tenants/{tenantTwo:D}/access-requests/{memberRequestId:D}/approve",
+                new { reason = "foreign-tenant" });
+            await ExpectAsync(HttpStatusCode.NoContent, client, HttpMethod.Post, owner,
+                $"{requests}/{memberRequestId:D}/approve", new { reason = "approved-role" });
+            await ExpectAsync(HttpStatusCode.Conflict, client, HttpMethod.Post, owner,
+                $"{requests}/{memberRequestId:D}/approve", new { reason = "repeat-approval" });
+            Assert.Contains("member", (await new AccessResolutionService(appDb)
+                .ResolveAsync(tenantAdmin, tenantOne)).Roles);
+            using var appRequested = await SendAsync(client, HttpMethod.Post, tenantAdmin,
+                requests, new { targetType = "app", targetKey = "profile", reason = "app-request" });
+            Assert.Equal(HttpStatusCode.Created, appRequested.StatusCode);
+            var appRequestId = (await appRequested.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("requestId").GetGuid();
+            await ExpectAsync(HttpStatusCode.Conflict, client, HttpMethod.Post, owner,
+                $"{requests}/{appRequestId:D}/approve", new { reason = "platform-review" });
+            await ExpectAsync(HttpStatusCode.NoContent, client, HttpMethod.Post, owner,
+                $"{requests}/{appRequestId:D}/reject", new { reason = "platform-review" });
+            await ExpectAsync(HttpStatusCode.OK, client, HttpMethod.Get, owner, requests);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, owner,
+                $"/v1/tenants/{tenantTwo:D}/access-requests");
             var basePath = $"/v1/tenants/{tenantOne:D}/members";
             var suspend = $"{basePath}:suspend";
             var reactivate = $"{basePath}:reactivate";
@@ -210,6 +259,161 @@ public sealed class MemberLifecycleApiTests
             Assert.Equal("active", await ScalarAsync(admin,
                 "SELECT status FROM tenant_members WHERE tenant_id = @tenant AND user_id = @user",
                 ("tenant", tenantOne), ("user", owner)));
+            var nomination = $"/v1/tenants/{tenantOne:D}/ownership-transfers";
+            var nominate = new { userId = tenantAdmin, reason = "owner-transition" };
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, owner,
+                $"/v1/tenants/{tenantTwo:D}/ownership-transfers", nominate);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, tenantAdmin,
+                nomination, new { userId = owner, reason = "takeover" });
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, owner,
+                nomination, nominate, "1");
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, owner,
+                nomination, new { userId = foreignOwner, reason = "foreign-member" });
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, owner,
+                nomination, new { userId = owner, reason = "self-nomination" });
+            using var created = await SendAsync(client, HttpMethod.Post, owner, nomination, nominate);
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+            var transferId = (await created.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("transferId").GetGuid();
+            Assert.Equal(1L, await CountAsync(admin,
+                "role_assignments WHERE tenant_id = @tenant AND user_id = @user AND role_id = @role AND revoked_at IS NULL",
+                ("tenant", tenantOne), ("user", owner), ("role", ownerRole)));
+            var accept = $"{nomination}/{transferId:D}/accept";
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, foreignOwner,
+                accept);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, owner,
+                accept);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/ownership-transfers/{transferId:D}/accept");
+            await ExpectAsync(HttpStatusCode.NoContent, client, HttpMethod.Post, tenantAdmin,
+                accept);
+            await ExpectAsync(HttpStatusCode.Conflict, client, HttpMethod.Post, tenantAdmin,
+                accept);
+            Assert.DoesNotContain("owner", (await new AccessResolutionService(appDb)
+                .ResolveAsync(owner, tenantOne)).Roles);
+            Assert.Contains("owner", (await new AccessResolutionService(appDb)
+                .ResolveAsync(tenantAdmin, tenantOne)).Roles);
+            Assert.Equal(1L, await CountAsync(admin,
+                "audit_events WHERE tenant_id = @tenant AND action = 'access.ownership.accepted'",
+                ("tenant", tenantOne)));
+            var settings = $"/v1/tenants/{tenantOne:D}/settings";
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Patch, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/settings",
+                new { name = "Updated", reason = "tenant-review" });
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Patch, owner,
+                settings, new { name = "Updated", reason = "tenant-review" });
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Patch, tenantAdmin,
+                settings, new { name = "Updated", reason = "tenant-review" }, "1");
+            await ExpectAsync(HttpStatusCode.BadRequest, client, HttpMethod.Patch, tenantAdmin,
+                settings, new { name = "Updated", reason = "person@example.invalid" });
+            await ExpectAsync(HttpStatusCode.Conflict, client, HttpMethod.Patch, tenantAdmin,
+                settings, new { slug = "second-tenant", reason = "tenant-review" });
+            await ExpectAsync(HttpStatusCode.OK, client, HttpMethod.Patch, tenantAdmin,
+                settings, new { name = "Updated", slug = "first-renamed", reason = "tenant-review" });
+            Assert.Equal("first-renamed", await ScalarAsync(admin,
+                "SELECT slug FROM tenants WHERE id = @tenant", ("tenant", tenantOne)));
+            Assert.Equal(1L, await CountAsync(admin,
+                "outbox WHERE tenant_id = @tenant AND type = 'tenant.updated.v1'",
+                ("tenant", tenantOne)));
+            var exports = $"/v1/tenants/{tenantOne:D}/audit-events/exports";
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/audit-events/exports");
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, owner,
+                exports);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, tenantAdmin,
+                exports, null, "1");
+            using var exportRequested = await SendAsync(client, HttpMethod.Post,
+                tenantAdmin, exports);
+            Assert.Equal(HttpStatusCode.Accepted, exportRequested.StatusCode);
+            var exportId = (await exportRequested.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("exportId").GetGuid();
+            await ExpectAsync(HttpStatusCode.Conflict, client, HttpMethod.Post, tenantAdmin,
+                exports);
+            await ExpectAsync(HttpStatusCode.OK, client, HttpMethod.Get, tenantAdmin,
+                $"{exports}/{exportId:D}");
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/audit-events/exports/{exportId:D}");
+            Assert.Equal(1L, await CountAsync(admin,
+                "audit_exports WHERE tenant_id = @tenant AND id = @id AND status = 'pending'",
+                ("tenant", tenantOne), ("id", exportId)));
+            var platformSupport = "/v1/platform/support-grants";
+            var support = $"/v1/tenants/{tenantOne:D}/support-grants";
+            var grantRequest = new { tenantId = tenantOne, roleId = viewerRole,
+                durationMinutes = 60, reason = "case-review" };
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, staff,
+                platformSupport, grantRequest);
+            using var lowAcr = await SendAsync(client, HttpMethod.Post, staff,
+                platformSupport, grantRequest, "1", platformRole: true);
+            Assert.Equal(HttpStatusCode.Forbidden, lowAcr.StatusCode);
+            using var supportRequested = await SendAsync(client, HttpMethod.Post, staff,
+                platformSupport, grantRequest, platformRole: true);
+            Assert.Equal(HttpStatusCode.Created, supportRequested.StatusCode);
+            var grantId = (await supportRequested.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("grantId").GetGuid();
+            using var visibleGrants = await SendAsync(client, HttpMethod.Get,
+                tenantAdmin, support);
+            Assert.Equal(HttpStatusCode.OK, visibleGrants.StatusCode);
+            var grants = await visibleGrants.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(Email(staff), grants[0].GetProperty("staffEmail").GetString());
+            Assert.Equal("viewer", grants[0].GetProperty("roleName").GetString());
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/support-grants");
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, owner,
+                $"{support}/{grantId:D}/approve", new { reason = "case-review" });
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/support-grants/{grantId:D}/approve",
+                new { reason = "case-review" });
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, tenantAdmin,
+                $"{support}/{grantId:D}/approve", new { reason = "case-review" }, "1");
+            Assert.False((await new AccessResolutionService(appDb).ResolveAsync(staff, tenantOne)).Allowed);
+            await ExpectAsync(HttpStatusCode.NoContent, client, HttpMethod.Post, tenantAdmin,
+                $"{support}/{grantId:D}/approve", new { reason = "case-review" });
+            Assert.Contains("viewer", (await new AccessResolutionService(appDb)
+                .ResolveAsync(staff, tenantOne)).Roles);
+            await ExpectAsync(HttpStatusCode.OK, client, HttpMethod.Get, staff,
+                $"/v1/tenants/{tenantOne:D}/me/access");
+            Assert.Equal(1L, await CountAsync(admin,
+                "audit_events WHERE tenant_id = @tenant AND action = 'access.supportgrant.used' AND target_id = @grant",
+                ("tenant", tenantOne), ("grant", grantId.ToString("D"))));
+            await ExpectAsync(HttpStatusCode.NoContent, client, HttpMethod.Post, tenantAdmin,
+                $"{support}/{grantId:D}/revoke", new { reason = "case-closed" });
+            Assert.False((await new AccessResolutionService(appDb).ResolveAsync(staff, tenantOne)).Allowed);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, staff,
+                $"/v1/tenants/{tenantOne:D}/me/access");
+            Assert.Equal(1L, await CountAsync(admin,
+                "audit_events WHERE tenant_id = @tenant AND action = 'access.supportgrant.approved'",
+                ("tenant", tenantOne)));
+            Assert.Equal(1L, await CountAsync(admin,
+                "outbox WHERE tenant_id = @tenant AND type = 'access.supportgrant.created.v1'",
+                ("tenant", tenantOne)));
+            var createdPayload = (string)(await ScalarAsync(admin,
+                "SELECT payload::text FROM outbox WHERE tenant_id = @tenant AND type = 'access.supportgrant.created.v1'",
+                ("tenant", tenantOne)))!;
+            var revokedPayload = (string)(await ScalarAsync(admin,
+                "SELECT payload::text FROM outbox WHERE tenant_id = @tenant AND type = 'access.supportgrant.revoked.v1'",
+                ("tenant", tenantOne)))!;
+            Assert.Equal(grantId, AccessSupportGrantCreatedV1.Parse(
+                System.Text.Encoding.UTF8.GetBytes(createdPayload)).Data!.GrantId);
+            Assert.Equal(grantId, AccessSupportGrantRevokedV1.Parse(
+                System.Text.Encoding.UTF8.GetBytes(revokedPayload)).Data!.GrantId);
+            var deletion = $"/v1/tenants/{tenantOne:D}/deletion-requests";
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/deletion-requests", new { reason = "closure" });
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, owner,
+                deletion, new { reason = "closure" });
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, tenantAdmin,
+                deletion, new { reason = "closure" }, "1");
+            await ExpectAsync(HttpStatusCode.BadRequest, client, HttpMethod.Post, tenantAdmin,
+                deletion, new { reason = "person@example.invalid" });
+            await ExpectAsync(HttpStatusCode.Accepted, client, HttpMethod.Post, tenantAdmin,
+                deletion, new { reason = "closure" });
+            Assert.False((await new AccessResolutionService(appDb)
+                .ResolveAsync(tenantAdmin, tenantOne)).Allowed);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, tenantAdmin,
+                deletion, new { reason = "closure" });
+            Assert.Equal(1L, await CountAsync(admin,
+                "outbox WHERE tenant_id = @tenant AND type = 'tenant.deletion.requested.v1'",
+                ("tenant", tenantOne)));
         }
         finally
         {
@@ -219,7 +423,7 @@ public sealed class MemberLifecycleApiTests
         Assert.Equal(6L, await CountAsync(admin,
             "outbox WHERE tenant_id = @tenant AND type LIKE 'tenant.member.%.v1'",
             ("tenant", tenantOne)));
-        Assert.Equal(6L, await CountAsync(admin,
+        Assert.Equal(11L, await CountAsync(admin,
             "outbox WHERE tenant_id = @tenant AND type = 'access.authz.changed.v1'",
             ("tenant", tenantOne)));
         Assert.True(await CountAsync(admin,
@@ -268,11 +472,13 @@ public sealed class MemberLifecycleApiTests
     }
 
     private static Task<HttpResponseMessage> SendAsync(HttpClient client, HttpMethod method,
-        Guid user, string path, object? body = null, string acr = "2")
+        Guid user, string path, object? body = null, string acr = "2",
+        bool platformRole = false)
     {
         var request = new HttpRequestMessage(method, path);
         request.Headers.Add("X-Test-User", user.ToString("D"));
         request.Headers.Add("X-Test-Acr", acr);
+        if (platformRole) request.Headers.Add("X-Test-Platform-Role", "platform-support");
         if (body is not null) request.Content = JsonContent.Create(body);
         return client.SendAsync(request);
     }
@@ -306,12 +512,15 @@ public sealed class MemberLifecycleApiTests
             if (!Guid.TryParse(Request.Headers["X-Test-User"], out var user))
                 return Task.FromResult(AuthenticateResult.NoResult());
             var acr = Request.Headers["X-Test-Acr"].ToString();
-            var identity = new ClaimsIdentity([
+            var claims = new List<Claim> {
                 new Claim("sub", user.ToString("D")),
                 new Claim("email", Email(user)),
                 new Claim("email_verified", "true"),
                 new Claim("acr", acr.Length == 0 ? "1" : acr)
-            ], "Test");
+            };
+            if (Request.Headers["X-Test-Platform-Role"] == "platform-support")
+                claims.Add(new Claim("platform_roles", "platform-support"));
+            var identity = new ClaimsIdentity(claims, "Test");
             return Task.FromResult(AuthenticateResult.Success(
                 new AuthenticationTicket(new ClaimsPrincipal(identity), "Test")));
         }

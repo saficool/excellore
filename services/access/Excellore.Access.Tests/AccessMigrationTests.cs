@@ -33,6 +33,12 @@ public sealed class AccessMigrationTests
         await migrator.OpenAsync();
         await ExecuteAsync(migrator, await File.ReadAllTextAsync(
             Path.Combine(AppContext.BaseDirectory, "001_initial.sql")));
+        await ExecuteAsync(migrator, await File.ReadAllTextAsync(
+            Path.Combine(AppContext.BaseDirectory, "010_ownership_transfers.sql")));
+        await ExecuteAsync(migrator, await File.ReadAllTextAsync(
+            Path.Combine(AppContext.BaseDirectory, "011_support_grants_rls.sql")));
+        await ExecuteAsync(migrator, await File.ReadAllTextAsync(
+            Path.Combine(AppContext.BaseDirectory, "012_audit_export_requests.sql")));
 
         var appConnectionString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
         {
@@ -44,17 +50,18 @@ public sealed class AccessMigrationTests
         Assert.True((await RlsDatabaseChecks.GetRuntimeRoleStatusAsync(app)).IsSafe);
         var exemptions = RlsDatabaseChecks.ParseExemptions(await File.ReadAllTextAsync(
             Path.Combine(AppContext.BaseDirectory, "rls-exempt.txt")));
-        Assert.Equal(["outbox", "user_tenant_index", "support_grants"], exemptions);
+        Assert.Equal(["outbox", "user_tenant_index"], exemptions);
         Assert.Empty(await RlsDatabaseChecks.FindUnprotectedTenantTablesAsync(app, exemptions));
 
         var classes = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["tenants"] = "P", ["apps"] = "P", ["permissions"] = "P", ["identities"] = "P",
-            ["user_tenant_index"] = "P", ["support_grants"] = "P", ["outbox"] = "P", ["inbox"] = "P",
+            ["user_tenant_index"] = "P", ["support_grants"] = "T", ["outbox"] = "P", ["inbox"] = "P",
             ["roles"] = "H", ["role_permissions"] = "H", ["audit_events"] = "H",
             ["tenant_members"] = "T", ["role_assignments"] = "T", ["groups"] = "T",
             ["group_members"] = "T", ["group_role_assignments"] = "T", ["tenant_apps"] = "T",
-            ["tenant_settings"] = "T", ["invitations"] = "T", ["access_requests"] = "T"
+            ["tenant_settings"] = "T", ["invitations"] = "T", ["access_requests"] = "T",
+            ["ownership_transfers"] = "T", ["audit_exports"] = "T"
         };
         await using (var command = new NpgsqlCommand("""
             SELECT c.relname, obj_description(c.oid), c.relrowsecurity, c.relforcerowsecurity
@@ -80,13 +87,29 @@ public sealed class AccessMigrationTests
         Assert.True(await HasTablePrivilegeAsync(app, "outbox", "INSERT"));
         Assert.False(await HasTablePrivilegeAsync(app, "audit_events", "UPDATE"));
         Assert.False(await HasTablePrivilegeAsync(app, "audit_events", "DELETE"));
-        Assert.False(await HasTablePrivilegeAsync(app, "support_grants", "INSERT"));
+        Assert.True(await HasTablePrivilegeAsync(app, "support_grants", "INSERT"));
+        Assert.True(await HasTablePrivilegeAsync(app, "ownership_transfers", "INSERT"));
+        Assert.True(await HasTablePrivilegeAsync(app, "audit_exports", "INSERT"));
 
         var tenantOne = Guid.NewGuid();
         var tenantTwo = Guid.NewGuid();
         var ids = await SeedTenantRowsAsync(admin, tenantOne, tenantTwo);
         await VerifyTenantRowsAsync(app, tenantOne, tenantTwo);
         await VerifyTenantWriteBoundariesAsync(app, tenantOne, tenantTwo, ids);
+        Assert.Equal(0L, await CountAsync(app, "ownership_transfers"));
+        Assert.Equal(0L, await CountAsync(app, "audit_exports"));
+        Assert.Equal(0L, await CountAsync(app, "support_grants"));
+        await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
+            "INSERT INTO ownership_transfers (id, tenant_id, from_user_id, to_user_id, reason, status, expires_at) VALUES (@id, @tenant, @user, @other, 'fixture', 'pending', now() + interval '1 day')",
+            ("id", Guid.NewGuid()), ("tenant", tenantTwo),
+            ("user", ids["u2"]), ("other", ids["u1"]));
+        await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
+            "INSERT INTO audit_exports (id, tenant_id, requested_by, status) VALUES (@id, @tenant, @user, 'pending')",
+            ("id", Guid.NewGuid()), ("tenant", tenantTwo), ("user", ids["u2"]));
+        await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
+            "INSERT INTO support_grants (id, tenant_id, staff_user_id, role_id, reason, status, expires_at) VALUES (@id, @tenant, @user, @role, 'fixture', 'requested', now() + interval '1 hour')",
+            ("id", Guid.NewGuid()), ("tenant", tenantTwo),
+            ("user", ids["u2"]), ("role", ids["system_role"]));
 
         await ExecuteAsync(migrator, "CREATE TABLE default_grant_probe (id integer);");
         Assert.False(await HasTablePrivilegeAsync(app, "default_grant_probe", "SELECT"));

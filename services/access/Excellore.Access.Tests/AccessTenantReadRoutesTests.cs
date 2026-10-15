@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
@@ -46,7 +47,8 @@ public sealed class AccessTenantReadRoutesTests
         {
             await migrator.OpenAsync();
             foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql", "003_membership_index.sql",
-                "005_audit_append_only.sql", "006_custom_role_lifecycle.sql" })
+                "005_audit_append_only.sql", "006_custom_role_lifecycle.sql",
+                "008_membership_identity.sql" })
                 await ExecuteAsync(migrator, await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, migration)));
         }
 
@@ -60,7 +62,11 @@ public sealed class AccessTenantReadRoutesTests
             await new CatalogSyncService(appDb).SyncAsync("access", new PermissionCatalog("access", [
                 new CatalogPermission("access.app.access", "Open Access", false, false, false, ["owner", "member"]),
                 new CatalogPermission("access.role.read", "Read roles", false, false, false, ["owner"]),
-                new CatalogPermission("access.role.manage", "Manage roles", true, false, false, ["owner"])
+                new CatalogPermission("access.role.manage", "Manage roles", true, false, false, ["owner"]),
+                new CatalogPermission("access.member.read", "Read members", false, false, false, ["owner"]),
+                new CatalogPermission("access.apps.read", "Read apps", false, false, false, ["owner"]),
+                new CatalogPermission("access.audit.read", "Read audit", false, false, false, ["owner"]),
+                new CatalogPermission("access.settings.read", "Read settings", false, false, false, ["owner"])
             ]), actor));
         await ExecuteAsync(admin, "INSERT INTO apps (id, name, core) VALUES ('reports', 'Reports', false)");
         Assert.Equal(CatalogSyncResult.Updated,
@@ -125,7 +131,8 @@ public sealed class AccessTenantReadRoutesTests
                     }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { })));
             using var client = factory.CreateClient();
 
-            foreach (var path in new[] { "me/access", "roles", $"roles/{firstRole:D}", "permissions" })
+            foreach (var path in new[] { "me/access", "roles", $"roles/{firstRole:D}",
+                "permissions", "members", "apps", "audit-events", "settings" })
             {
                 using var response = await GetAsync(client, userOne, tenantOne, path);
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -136,7 +143,8 @@ public sealed class AccessTenantReadRoutesTests
             }
             using (var basicAccess = await GetAsync(client, userThree, tenantOne, "me/access"))
                 Assert.Equal(HttpStatusCode.OK, basicAccess.StatusCode);
-            foreach (var path in new[] { "roles", $"roles/{firstRole:D}", "permissions" })
+            foreach (var path in new[] { "roles", $"roles/{firstRole:D}",
+                "permissions", "members", "apps", "audit-events", "settings" })
             {
                 using var lackingPermission = await GetAsync(client, userThree, tenantOne, path);
                 Assert.Equal(HttpStatusCode.Forbidden, lackingPermission.StatusCode);
@@ -155,6 +163,50 @@ public sealed class AccessTenantReadRoutesTests
                 Assert.Contains("access.role.read", body, StringComparison.Ordinal);
                 Assert.DoesNotContain("reports.app.access", body, StringComparison.Ordinal);
             }
+            using (var members = await GetAsync(client, userOne, tenantOne, "members"))
+            {
+                var body = await members.Content.ReadAsStringAsync();
+                Assert.Contains(userThree.ToString("D"), body, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain(userTwo.ToString("D"), body, StringComparison.OrdinalIgnoreCase);
+            }
+            using (var apps = await GetAsync(client, userOne, tenantOne, "apps"))
+            {
+                var body = await apps.Content.ReadAsStringAsync();
+                Assert.DoesNotContain("reports", body, StringComparison.Ordinal);
+            }
+            using (var apps = await GetAsync(client, userTwo, tenantTwo, "apps"))
+            {
+                var body = await apps.Content.ReadAsStringAsync();
+                Assert.Contains("reports", body, StringComparison.Ordinal);
+            }
+            using (var own = await LookupAsync(client, userOne, tenantOne, userThree))
+                Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+            using (var foreign = await LookupAsync(client, userOne, tenantOne, userTwo))
+                Assert.Equal(HttpStatusCode.NotFound, foreign.StatusCode);
+            using (var nonMember = await LookupAsync(client, userTwo, tenantOne, userThree))
+                Assert.Equal(HttpStatusCode.NotFound, nonMember.StatusCode);
+            using (var wrongTenant = await LookupAsync(client, userOne, tenantTwo, userThree))
+                Assert.Equal(HttpStatusCode.NotFound, wrongTenant.StatusCode);
+            using (var tenants = await GetMeTenantsAsync(client, userOne))
+            {
+                var body = await tenants.Content.ReadAsStringAsync();
+                Assert.Contains(tenantOne.ToString("D"), body, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain(tenantTwo.ToString("D"), body, StringComparison.OrdinalIgnoreCase);
+            }
+            var limited = false;
+            for (var attempt = 0; attempt < 70; attempt++)
+            {
+                using var response = await GetAsync(client, userOne, tenantOne, "me/access");
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    limited = true;
+                    break;
+                }
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            }
+            Assert.True(limited, "The tenant route must enforce its per-user rate limit.");
+            using (var independent = await GetAsync(client, userTwo, tenantTwo, "me/access"))
+                Assert.Equal(HttpStatusCode.OK, independent.StatusCode);
         }
         finally
         {
@@ -172,6 +224,23 @@ public sealed class AccessTenantReadRoutesTests
     private static Task<HttpResponseMessage> GetAsync(HttpClient client, Guid user, Guid tenant, string path)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"/v1/tenants/{tenant:D}/{path}");
+        request.Headers.Add("X-Test-User", user.ToString("D"));
+        return client.SendAsync(request);
+    }
+
+    private static Task<HttpResponseMessage> LookupAsync(HttpClient client, Guid user,
+        Guid tenant, Guid target)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post,
+            $"/v1/tenants/{tenant:D}/members:lookup");
+        request.Headers.Add("X-Test-User", user.ToString("D"));
+        request.Content = JsonContent.Create(new { userId = target });
+        return client.SendAsync(request);
+    }
+
+    private static Task<HttpResponseMessage> GetMeTenantsAsync(HttpClient client, Guid user)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/v1/me/tenants");
         request.Headers.Add("X-Test-User", user.ToString("D"));
         return client.SendAsync(request);
     }

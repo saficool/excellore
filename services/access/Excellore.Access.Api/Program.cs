@@ -25,6 +25,14 @@ builder.Services.AddScoped<InvitationIssuanceService>();
 builder.Services.AddScoped<InvitationDeliveryCoordinator>();
 builder.Services.AddScoped<OwnerInvitationResendService>();
 builder.Services.AddScoped<MemberLifecycleService>();
+builder.Services.AddScoped<AccessTenantReadService>();
+builder.Services.AddScoped<OwnershipTransferService>();
+builder.Services.AddScoped<TenantSettingsService>();
+builder.Services.AddScoped<AccessRequestService>();
+builder.Services.AddScoped<TenantDeletionRequestService>();
+builder.Services.AddScoped<AuditExportRequestService>();
+builder.Services.AddScoped<SupportGrantService>();
+builder.Services.AddScoped<ISupportGrantUsageRecorder, SupportGrantUsageRecorder>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
 builder.Services.AddScoped<IPrivilegeClassifier, AccessPrivilegeClassifier>();
 builder.Services.AddExcelloreAuthz();
@@ -109,6 +117,10 @@ app.MapPost("/v1/platform/tenants/{id:guid}/owner-invitation:resend",
         return result == OwnerInvitationResendStatus.Accepted
             ? Results.Accepted() : Results.NotFound();
     }).RequireAuthorization("Platform.Operator");
+app.MapPost("/v1/platform/support-grants", async (CreateSupportGrantRequest request,
+    SupportGrantService service, CancellationToken cancellationToken) =>
+    SupportGrantResponses.Map(await service.RequestAsync(request, cancellationToken)))
+    .RequireAuthorization("Platform.Support");
 
 app.MapPut("/internal/v1/catalog/{app}", async (
     string app, PermissionCatalog catalog, HttpContext context,
@@ -185,8 +197,15 @@ app.MapGet("/v1/me/invitations", async (HttpContext context, InvitationManagemen
     return Results.Json(await service.ListMineAsync(cancellationToken));
 })
     .RequireAuthorization();
+app.MapGet("/v1/me/tenants", async (HttpContext context, ICurrentUser user,
+    AccessResolutionService service, CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Json(await service.ListTenantsAsync(user.UserId, cancellationToken));
+}).RequireAuthorization();
 
-var tenantRoutes = app.MapGroup("/v1/tenants/{tenantId:guid}").AddTenantGate();
+var tenantRoutes = app.MapGroup("/v1/tenants/{tenantId:guid}")
+    .AddTenantGate().AddTenantRateLimit().AddSupportGrantUsageAudit();
 tenantRoutes.MapGet("/me/access", async (ICurrentUser user, ITenantContextAccessor tenant,
     AccessResolutionService service, CancellationToken cancellationToken) =>
 {
@@ -197,6 +216,85 @@ tenantRoutes.MapGet("/me/access", async (ICurrentUser user, ITenantContextAccess
         result.Version, result.ResolvedAt
     }) : Results.NotFound();
 }).RequirePermission("access.app.access");
+tenantRoutes.MapGet("/members", async (HttpContext context, AccessTenantReadService service,
+    CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Json(await service.ListMembersAsync(cancellationToken));
+}).RequirePermission("access.member.read");
+tenantRoutes.MapPost("/members:lookup", async (MemberLookupRequest request,
+    HttpContext context, AccessTenantReadService service, CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    var member = await service.GetMemberAsync(request.UserId, cancellationToken);
+    return member is null ? Results.NotFound() : Results.Json(member);
+}).RequirePermission("access.member.read");
+tenantRoutes.MapGet("/apps", async (AccessTenantReadService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.ListAppsAsync(cancellationToken)))
+    .RequirePermission("access.apps.read");
+tenantRoutes.MapGet("/audit-events", async (AccessTenantReadService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.ListAuditAsync(cancellationToken)))
+    .RequirePermission("access.audit.read");
+tenantRoutes.MapPost("/audit-events/exports", async (AuditExportRequestService service,
+    CancellationToken cancellationToken) =>
+    AuditExportRequestResponses.Map(await service.RequestAsync(cancellationToken)))
+    .RequirePermission("access.audit.read");
+tenantRoutes.MapGet("/audit-events/exports/{exportId:guid}", async (
+    Guid exportId, AuditExportRequestService service, CancellationToken cancellationToken) =>
+{
+    var export = await service.GetAsync(exportId, cancellationToken);
+    return export is null ? Results.NotFound() : Results.Json(export);
+}).RequirePermission("access.audit.read");
+tenantRoutes.MapGet("/settings", async (TenantSettingsService service,
+    CancellationToken cancellationToken) =>
+{
+    var settings = await service.GetAsync(cancellationToken);
+    return settings is null ? Results.NotFound() : Results.Json(settings);
+}).RequirePermission("access.settings.read");
+tenantRoutes.MapPatch("/settings", async (ChangeTenantSettingsRequest request,
+    TenantSettingsService service, CancellationToken cancellationToken) =>
+    TenantSettingsResponses.Map(await service.ChangeAsync(request, cancellationToken)))
+    .RequirePermission("access.settings.manage");
+tenantRoutes.MapPost("/access-requests", async (CreateAccessRequest request,
+    AccessRequestService service, CancellationToken cancellationToken) =>
+    AccessRequestResponses.Map(await service.CreateAsync(request, cancellationToken)))
+    .RequirePermission("access.request.create");
+tenantRoutes.MapGet("/access-requests", async (AccessRequestService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.ListAsync(cancellationToken)))
+    .RequirePermission("access.request.approve");
+tenantRoutes.MapPost("/access-requests/{requestId:guid}/approve", async (
+    Guid requestId, DecideAccessRequest request, AccessRequestService service,
+    CancellationToken cancellationToken) =>
+    AccessRequestResponses.Map(await service.ApproveAsync(requestId, request, cancellationToken)))
+    .RequirePermission("access.request.approve");
+tenantRoutes.MapPost("/access-requests/{requestId:guid}/reject", async (
+    Guid requestId, DecideAccessRequest request, AccessRequestService service,
+    CancellationToken cancellationToken) =>
+    AccessRequestResponses.Map(await service.RejectAsync(requestId, request, cancellationToken)))
+    .RequirePermission("access.request.approve");
+tenantRoutes.MapPost("/deletion-requests", async (RequestTenantDeletion request,
+    TenantDeletionRequestService service, CancellationToken cancellationToken) =>
+    TenantDeletionRequestResponses.Map(await service.RequestAsync(request, cancellationToken)))
+    .RequirePermission("access.tenant.delete");
+tenantRoutes.MapGet("/support-grants", async (HttpContext context,
+    SupportGrantService service, CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Json(await service.ListAsync(cancellationToken));
+}).RequirePermission("access.supportgrant.manage");
+tenantRoutes.MapPost("/support-grants/{grantId:guid}/approve", async (Guid grantId,
+    DecideSupportGrantRequest request, SupportGrantService service,
+    CancellationToken cancellationToken) =>
+    SupportGrantResponses.Map(await service.ApproveAsync(grantId, request, cancellationToken)))
+    .RequirePermission("access.supportgrant.manage");
+tenantRoutes.MapPost("/support-grants/{grantId:guid}/revoke", async (Guid grantId,
+    DecideSupportGrantRequest request, SupportGrantService service,
+    CancellationToken cancellationToken) =>
+    SupportGrantResponses.Map(await service.RevokeAsync(grantId, request, cancellationToken)))
+    .RequirePermission("access.supportgrant.manage");
 tenantRoutes.MapGet("/invitations", async (HttpContext context, InvitationManagementService service,
     CancellationToken cancellationToken) =>
 {
@@ -236,6 +334,14 @@ tenantRoutes.MapDelete("/members", async ([FromBody] MemberChangeRequest request
     MemberLifecycleService service, CancellationToken cancellationToken) =>
     MemberLifecycleResponses.Map(await service.RemoveAsync(request, cancellationToken)))
     .RequirePermission("access.member.remove");
+tenantRoutes.MapPost("/ownership-transfers", async (NominateOwnerRequest request,
+    OwnershipTransferService service, CancellationToken cancellationToken) =>
+    OwnershipTransferResponses.Map(await service.NominateAsync(request, cancellationToken)))
+    .RequirePermission("access.tenant.transfer");
+tenantRoutes.MapPost("/ownership-transfers/{transferId:guid}/accept", async (
+    Guid transferId, OwnershipTransferService service, CancellationToken cancellationToken) =>
+    OwnershipTransferResponses.Map(await service.AcceptAsync(transferId, cancellationToken)))
+    .RequirePermission("access.app.access");
 tenantRoutes.MapGet("/roles", async (AccessRoleReader service, CancellationToken cancellationToken) =>
     Results.Json(await service.ListRolesAsync(cancellationToken)))
     .RequirePermission("access.role.read");

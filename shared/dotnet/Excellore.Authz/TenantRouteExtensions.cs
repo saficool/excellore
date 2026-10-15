@@ -31,6 +31,8 @@ public static class TenantRouteExtensions
         services.AddScoped<ITenantContextAccessor>(provider => provider.GetRequiredService<TenantContextAccessor>());
         services.AddScoped<ITenantIdAccessor>(provider => provider.GetRequiredService<TenantContextAccessor>());
         services.TryAddSingleton<IPrivilegeClassifier, ConservativePrivilegeClassifier>();
+        services.TryAddSingleton(new TenantRateLimitOptions());
+        services.TryAddSingleton<TenantRateLimitPolicy>();
         return services;
     }
 
@@ -39,6 +41,18 @@ public static class TenantRouteExtensions
         group.RequireAuthorization();
         group.AddEndpointFilter<TenantGateFilter>();
         group.WithMetadata(TenantGateMetadata.Instance);
+        return group;
+    }
+
+    public static RouteGroupBuilder AddTenantRateLimit(this RouteGroupBuilder group)
+    {
+        group.AddEndpointFilter<TenantRateLimitFilter>();
+        return group;
+    }
+
+    public static RouteGroupBuilder AddSupportGrantUsageAudit(this RouteGroupBuilder group)
+    {
+        group.AddEndpointFilter<SupportGrantUsageFilter>();
         return group;
     }
 

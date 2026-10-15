@@ -35,7 +35,8 @@ public sealed class AccessResolutionTests
         await using var migrator = new NpgsqlConnection(migratorString);
         await migrator.OpenAsync();
         foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql", "003_membership_index.sql",
-            "005_audit_append_only.sql", "006_custom_role_lifecycle.sql" })
+            "005_audit_append_only.sql", "006_custom_role_lifecycle.sql",
+            "011_support_grants_rls.sql" })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, migration)));
         await ExecuteAsync(migrator, "INSERT INTO apps (id, name, core) VALUES ('reports', 'Reports', false)");
 
@@ -47,8 +48,8 @@ public sealed class AccessResolutionTests
         var actor = Guid.NewGuid();
         var catalog = new CatalogSyncService(dataSource);
         Assert.Equal(CatalogSyncResult.Updated, await catalog.SyncAsync("access", new("access", [
-            new("access.app.access", "Open Access", false, false, false, ["owner"]),
-            new("access.member.read", "Read members", false, false, false, ["owner"])
+            new("access.app.access", "Open Access", false, false, false, ["owner", "viewer"]),
+            new("access.member.read", "Read members", false, false, false, ["owner", "viewer"])
         ]), actor));
         Assert.Equal(CatalogSyncResult.Updated, await catalog.SyncAsync("reports", new("reports", [
             new("reports.app.access", "Open Reports", false, false, false, ["owner"]),
@@ -69,6 +70,8 @@ public sealed class AccessResolutionTests
             null, ("one", first.TenantId), ("two", second.TenantId));
         var ownerRole = (Guid)(await ScalarAsync(admin,
             "SELECT id FROM roles WHERE tenant_id IS NULL AND name = 'owner'"))!;
+        var viewerRole = (Guid)(await ScalarAsync(admin,
+            "SELECT id FROM roles WHERE tenant_id IS NULL AND name = 'viewer'"))!;
 
         await using var app = new NpgsqlConnection(appString);
         await app.OpenAsync();
@@ -174,6 +177,40 @@ public sealed class AccessResolutionTests
         var viaGroup = await service.ResolveAsync(person, first.TenantId);
         Assert.Equal(["owner"], viaGroup.Roles);
         Assert.Contains("access.app.access", viaGroup.Permissions);
+
+        var staff = Guid.NewGuid();
+        var grantId = Guid.NewGuid();
+        await mirror.UpsertAsync(new VerifiedIdentity(staff, "staff@example.invalid", true, null, null));
+        await ExecuteAsync(admin, """
+            INSERT INTO support_grants
+              (id, tenant_id, staff_user_id, role_id, reason, status, expires_at)
+            VALUES (@grant, @tenant, @staff, @role, 'support-review', 'requested', now() + interval '1 hour')
+            """, null, ("grant", grantId), ("tenant", first.TenantId),
+            ("staff", staff), ("role", viewerRole));
+        await ExecuteAsync(admin, """
+            INSERT INTO tenant_members
+              (tenant_id, user_id, status, is_support, support_grant_id, expires_at)
+            VALUES (@tenant, @staff, 'active', true, @grant, now() + interval '1 hour')
+            """, null, ("tenant", first.TenantId), ("staff", staff), ("grant", grantId));
+        Assert.False((await service.ResolveAsync(staff, first.TenantId)).Allowed);
+        await ExecuteAsync(admin, "UPDATE support_grants SET status = 'active' WHERE id = @grant",
+            null, ("grant", grantId));
+        await ExecuteAsync(admin, """
+            INSERT INTO role_assignments (id, tenant_id, user_id, role_id, granted_by)
+            VALUES (@id, @tenant, @staff, @viewer, @actor),
+                   (@other, @tenant, @staff, @owner, @actor)
+            """, null, ("id", Guid.NewGuid()), ("other", Guid.NewGuid()),
+            ("tenant", first.TenantId), ("staff", staff), ("viewer", viewerRole),
+            ("owner", ownerRole), ("actor", actor));
+        var supportAccess = await service.ResolveAsync(staff, first.TenantId);
+        Assert.True(supportAccess.Allowed);
+        Assert.Equal(["viewer"], supportAccess.Roles);
+        Assert.Equal(["access.app.access", "access.member.read"], supportAccess.Permissions);
+        Assert.Equal(["access", "shell"], supportAccess.Apps);
+        await ExecuteAsync(admin,
+            "UPDATE support_grants SET expires_at = now() - interval '1 second' WHERE id = @grant",
+            null, ("grant", grantId));
+        Assert.False((await service.ResolveAsync(staff, first.TenantId)).Allowed);
 
         await ExecuteAsync(admin, "UPDATE tenants SET status = 'suspended' WHERE id = @tenant",
             null, ("tenant", first.TenantId));
