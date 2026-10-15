@@ -16,5 +16,12 @@ SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'service') \gexec
 SELECT format('GRANT CONNECT ON DATABASE %I TO %I, %I', :'service', :'service' || '_migrator', :'service' || '_app') \gexec
 SELECT format('GRANT USAGE, CREATE ON SCHEMA public TO %I', :'service' || '_migrator') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'service' || '_app') \gexec
+-- Access uses table-specific grants from its migration. Re-running dev-up must
+-- not restore broad default grants for later Access migrations.
+SELECT :'service' = 'access' AS access_service \gset
+\if :access_service
+SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM %I', :'service' || '_migrator', :'service' || '_app') \gexec
+\else
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I', :'service' || '_migrator', :'service' || '_app') \gexec
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %I', :'service' || '_migrator', :'service' || '_app') \gexec
+\endif
