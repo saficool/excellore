@@ -350,6 +350,20 @@ public sealed class MemberLifecycleApiTests
             Assert.Equal(HttpStatusCode.Created, supportRequested.StatusCode);
             var grantId = (await supportRequested.Content.ReadFromJsonAsync<JsonElement>())
                 .GetProperty("grantId").GetGuid();
+            using (var own = await SendAsync(client, HttpMethod.Get, staff,
+                $"/v1/platform/tenants/{tenantOne:D}/support-requests", platformRole: true))
+            {
+                Assert.Equal(HttpStatusCode.OK, own.StatusCode);
+                var mine = await own.Content.ReadFromJsonAsync<JsonElement>();
+                Assert.Equal(grantId, mine[0].GetProperty("id").GetGuid());
+                Assert.Equal("requested", mine[0].GetProperty("status").GetString());
+            }
+            using (var other = await SendAsync(client, HttpMethod.Get, staff,
+                $"/v1/platform/tenants/{tenantTwo:D}/support-requests", platformRole: true))
+            {
+                Assert.Equal(HttpStatusCode.OK, other.StatusCode);
+                Assert.Empty((await other.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray());
+            }
             using var visibleGrants = await SendAsync(client, HttpMethod.Get,
                 tenantAdmin, support);
             Assert.Equal(HttpStatusCode.OK, visibleGrants.StatusCode);

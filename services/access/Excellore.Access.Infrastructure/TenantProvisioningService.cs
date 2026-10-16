@@ -100,6 +100,10 @@ public sealed class TenantProvisioningService(NpgsqlDataSource dataSource,
         await AccessAuditWriter.WriteAsync(connection, transaction, tenantId, actorSub, "human",
             "access.tenant.provisioned", "tenant", tenantId.ToString("D"),
             "platform operator requested tenant provisioning", cancellationToken);
+        await AccessAuditWriter.WriteAsync(connection, transaction, null, actorSub, "human",
+            "access.tenant.provisioned", "tenant", tenantId.ToString("D"),
+            "platform operator requested tenant provisioning", cancellationToken,
+            acr: actorAcr);
         await transaction.CommitAsync(cancellationToken);
         if (deliveryCoordinator is not null)
             await deliveryCoordinator.DeliverAsync(invitationId, tenantId, email,

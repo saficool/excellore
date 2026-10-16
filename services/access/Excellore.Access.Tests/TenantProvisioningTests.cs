@@ -80,7 +80,10 @@ public sealed class TenantProvisioningTests
         Assert.Equal(2L, await CountAsync(admin, "tenants WHERE status = 'provisioning'"));
         Assert.Equal(0L, await CountAsync(admin, "tenant_members"));
         Assert.Equal(0L, await CountAsync(admin, "outbox WHERE type = 'tenant.created.v1'"));
-        Assert.Equal(2L, await CountAsync(admin, "audit_events WHERE action = 'access.tenant.provisioned'"));
+        Assert.Equal(2L, await CountAsync(admin,
+            "audit_events WHERE tenant_id IS NOT NULL AND action = 'access.tenant.provisioned'"));
+        Assert.Equal(2L, await CountAsync(admin,
+            "audit_events WHERE tenant_id IS NULL AND action = 'access.tenant.provisioned'"));
         Assert.Equal(4L, await CountAsync(admin, "tenant_apps WHERE status = 'enabled'"));
         Assert.Equal(2L, await CountAsync(admin, "tenant_settings"));
         Assert.Equal(2L, await CountAsync(admin, "invitations WHERE status = 'pending'"));

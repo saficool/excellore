@@ -112,6 +112,12 @@ public class AuthenticationTests
     [InlineData("Internal.Catalog", "roles", "access.catalog.sync", false)]
     [InlineData("Platform.Operator", "platform_roles", "platform-operator", true)]
     [InlineData("Platform.Operator", "roles", "platform-operator", false)]
+    [InlineData("Platform.Staff", "platform_roles", "platform-support", true)]
+    [InlineData("Platform.Staff", "roles", "platform-support", false)]
+    [InlineData("Platform.Suspend", "platform_roles", "platform-security", true)]
+    [InlineData("Platform.Suspend", "platform_roles", "platform-support", false)]
+    [InlineData("Platform.Auditor", "platform_roles", "platform-auditor", true)]
+    [InlineData("Platform.Auditor", "platform_roles", "platform-operator", false)]
     [InlineData("Platform.Security", "platform_roles", "platform-admin", true)]
     public async Task Machine_and_platform_policies_use_separate_claims(
         string policyName, string claimType, string claimValue, bool expected)

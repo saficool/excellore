@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.6 |
+| **Document version** | 5.7 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.7 | WP-11 app enablement uses a transaction-local tenant context for only the app metadata row, with forced RLS and dual-scope audit (ADR-0066 proposed). Keycloak emergency user actions are deferred under INV-11. |
 | 5.6 | WP-10 adds bounded, owner-approved bulk role assignment jobs with per-target worker rechecks, tenant RLS, and aggregate progress (ADR-0065 proposed). |
 | 5.5 | WP-10 keeps one-time invitation-code delivery synchronous under INV-11 and builds private Access audit exports. Complete cross-service personal-data export and erasure, including Profile export job processing, belong to WP-12; requests remain pending until then. |
 | 5.4 | Support grants become class T with forced RLS by owner decision. Support requests are limited to read-only system roles and tenant owner approval. Audit exports use private storage and authenticated BFF streaming, never signed URLs. |
@@ -558,7 +559,7 @@ Rules:
 
 ### 7.6 Platform roles
 
-Realm roles in Keycloak, assigned **only through code** (`infra/keycloak/platform-staff.yaml`, applied by pipeline; the pull request is the four-eyes approval).
+Realm roles in Keycloak are assigned **only through code**. Local fixture assignments come from `infra/keycloak/platform-staff.yaml` into the generated development realm, with CI checking the generated file. Production staff assignments need an independently approved PR and a deployment pipeline before production use.
 
 | Role | May |
 |---|---|
@@ -566,7 +567,7 @@ Realm roles in Keycloak, assigned **only through code** (`infra/keycloak/platfor
 | `platform-operator` | Create, suspend, reactivate, delete tenants; enable or disable apps; set plans |
 | `platform-support` | Request and use support grants; read tenant metadata (not tenant data) |
 | `platform-auditor` | Read platform-level audit; read tenant audit only under a support grant |
-| `platform-security` | Read security events, force-end sessions, suspend tenants during incidents |
+| `platform-security` | Read security events and suspend tenants during incidents; force-end sessions is deferred under INV-11 |
 
 Platform roles appear in the `platform_roles` claim of tokens issued for the Access API audience only ([10.5](#105-client-scopes-and-mappers)).
 
@@ -711,7 +712,7 @@ Facts the agent MUST respect:
 - An EF Core **global query filter** (`entity.TenantId == tenantContext.TenantId`) is applied to every class T entity as a second line of defense.
 - `SaveChanges` stamps `TenantId` from the context and **throws** if an entity's `TenantId` differs from the context.
 - Code that needs a table of class P uses a dedicated `PlatformDbContext`, kept separate so tenant code cannot casually query platform tables.
-- **Cross-tenant queries are forbidden** in tenant code. Platform console features operate on class P tables only. Any per-tenant data access by staff happens through a support grant, in that tenant's context.
+- **Cross-tenant queries are forbidden** in tenant code. Platform console features ordinarily operate on class P tables. The platform operator app-enable handler may enter one tenant context in a transaction solely to read or update that tenant's `tenant_apps` metadata row; it audits both scopes and invalidates authorization (ADR-0066). Any tenant content access by staff requires a support grant in that tenant's context.
 - Background jobs that must visit every tenant iterate the tenant list (class P) and process each tenant in its own context and transaction.
 
 ### 8.5 Other data stores
@@ -849,7 +850,7 @@ Roles in Keycloak are deliberately few. **Tenant roles are not here** (D14).
 | `access.worker` | Client role on `api-access` | Machine role for Access worker | `worker-access` |
 | `profile.worker` | Client role on `api-profile` | Machine role for Profile worker | `worker-profile` |
 
-Platform staff assignment is managed in `infra/keycloak/platform-staff.yaml` and applied by the pipeline (INV-18). Humans never receive `access.*` or `profile.*` client roles; their capabilities come from tenant permissions.
+Local platform staff fixtures are managed in `infra/keycloak/platform-staff.yaml`, included in the generated development realm, and checked by CI (INV-18). Production assignments require an independently approved code change and deployment pipeline. Humans never receive `access.*` or `profile.*` client roles; their capabilities come from tenant permissions.
 
 ### 10.5 Client scopes and mappers
 
@@ -1220,8 +1221,8 @@ Two faces and one authority:
 | **Support grants** | `platform-support` | Request, view, and use grants |
 | **Permission catalog** | all platform roles (read) | Browse synced permissions and system roles |
 | **Platform audit** | `platform-auditor` | Platform-scope audit |
-| **Security** | `platform-security` | Force sign-out, emergency tenant suspension |
-| **Platform staff** | read-only | Shows staff and roles (managed as code) |
+| **Security** | `platform-security` | Emergency tenant suspension. Force sign-out and user disable are deferred until a Keycloak Admin API design satisfies INV-11. |
+| **Platform staff** | code-owned | Local fixture roles come from `platform-staff.yaml` and are checked by CI; production assignments require an independently approved PR. |
 
 ### 15.3 Database overview
 
@@ -2324,7 +2325,7 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 
 - **Goal:** Operator tooling and controlled staff access.
 - **Depends on:** WP-08.
-- **Deliverables:** `/platform/…` route group in the Access app; tenant create, edit, suspend, reactivate, delete, plan and app enablement; support grant request, approval, expiry, owner visibility; platform audit; `platform-staff.yaml` pipeline.
+- **Deliverables:** `/platform/…` route group in the Access app; tenant create, edit, suspend, reactivate, deletion request, plan and app enablement; support grant request, approval, expiry, owner visibility; platform audit; `platform-staff.yaml` local realm and CI validation pipeline. Actual deletion is WP-12. Keycloak emergency user actions remain deferred under INV-11.
 - **AC:** only users with the right `platform_roles` reach platform endpoints; platform roles cannot read tenant data without a grant; a grant is time-boxed and appears in the tenant's audit and to its owner; suspending a tenant denies all its members within the SLO; app enablement immediately hides tiles and neutralizes permissions of the app.
 
 ### WP-12: Lifecycle: deletion, export, erasure
@@ -3077,14 +3078,14 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `POST /v1/platform/support-grants` | P `Platform.Support` | Staff request for own temporary support access; recent MFA |
 | `POST …/ownership-transfers`, `POST …/ownership-transfers/{id}/accept` | T `access.tenant.transfer` / T `access.app.access` plus target-member check | Ownership transfer |
 | `POST …/deletion-requests` | T `access.tenant.delete` | Tenant deletion |
-| `POST /v1/platform/tenants`, `GET /v1/platform/tenants`, `GET/PATCH /v1/platform/tenants/{id}` | P operator | Tenant management |
+| `POST /v1/platform/tenants`, `GET /v1/platform/tenants`, `GET/PATCH /v1/platform/tenants/{id}` | P operator for writes; any platform role for reads | Tenant management |
 | `POST /v1/platform/tenants/{id}/owner-invitation:resend` | P operator | Rotate and resend a pending provisioning owner invitation |
 | `POST /v1/platform/tenants/{id}/suspend`, `…/reactivate`, `…/deletion-requests` | P operator (suspend also security) | Lifecycle |
 | `PUT /v1/platform/tenants/{id}/apps/{appId}` | P operator | Enable or disable an app |
-| `GET /v1/platform/permissions` | P any platform role | Catalog |
+| `GET /v1/platform/me`, `GET /v1/platform/permissions`, `GET /v1/platform/system-roles` | P any platform role | Role gate and catalog |
 | `GET /v1/platform/audit-events` | P auditor | Platform audit |
-| `POST /v1/platform/support-requests` | P support | Request a grant |
-| `POST /v1/platform/users/{id}/sign-out`, `…/disable` | P security | Emergency actions |
+| `GET /v1/platform/support-roles`, `POST /v1/platform/support-requests`, `GET /v1/platform/tenants/{id}/support-requests` | P support | Read-only support role choices, grant request, and own tenant-scoped request status |
+| Emergency sign-out and user disable | P security | Deferred: Keycloak Admin API user-ID URLs conflict with INV-11; no routes are exposed |
 | `POST /internal/v1/authz/resolve` | I `access.authz.resolve` | Resolve `(user, tenant)` |
 | `POST /internal/v1/users/tenants:list` | I `access.authz.resolve` | User's tenants |
 | `POST /internal/v1/users/invitations:list` | I `access.authz.resolve` | User's pending invitations for verified email |

@@ -13,6 +13,8 @@ var connectionString = builder.Configuration.GetConnectionString("Access")
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddScoped<CatalogSyncService>();
 builder.Services.AddScoped<TenantProvisioningService>();
+builder.Services.AddScoped<PlatformTenantService>();
+builder.Services.AddScoped<PlatformConsoleReadService>();
 builder.Services.AddScoped<IdentityMirrorService>();
 builder.Services.AddScoped<AccessResolutionService>();
 builder.Services.AddScoped<AccessRoleReader>();
@@ -90,6 +92,62 @@ app.Use(async (context, next) =>
     await next(context);
 });
 
+app.MapGet("/v1/platform/tenants", async (PlatformTenantService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.ListAsync(cancellationToken)))
+    .RequireAuthorization("Platform.Staff");
+app.MapGet("/v1/platform/me", (HttpContext context) =>
+    Results.Json(new { roles = context.User.FindAll("platform_roles")
+        .Select(claim => claim.Value).Distinct().Order().ToArray() }))
+    .RequireAuthorization("Platform.Staff");
+app.MapGet("/v1/platform/permissions", async (PlatformConsoleReadService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.PermissionsAsync(cancellationToken)))
+    .RequireAuthorization("Platform.Staff");
+app.MapGet("/v1/platform/system-roles", async (PlatformConsoleReadService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.SystemRolesAsync(cancellationToken)))
+    .RequireAuthorization("Platform.Staff");
+app.MapGet("/v1/platform/support-roles", async (PlatformConsoleReadService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.SupportRolesAsync(cancellationToken)))
+    .RequireAuthorization("Platform.Support");
+app.MapGet("/v1/platform/audit-events", async (PlatformConsoleReadService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.AuditAsync(cancellationToken)))
+    .RequireAuthorization("Platform.Auditor");
+app.MapGet("/v1/platform/tenants/{id:guid}", async (Guid id,
+    PlatformTenantService service, CancellationToken cancellationToken) =>
+{
+    var tenant = await service.GetAsync(id, cancellationToken);
+    return tenant is null ? Results.NotFound() : Results.Json(tenant);
+}).RequireAuthorization("Platform.Staff");
+app.MapPatch("/v1/platform/tenants/{id:guid}", async (Guid id,
+    UpdatePlatformTenantRequest request, PlatformTenantService service,
+    CancellationToken cancellationToken) =>
+    PlatformTenantResponses.Map(await service.UpdateAsync(id, request, cancellationToken)))
+    .RequireAuthorization("Platform.Operator");
+app.MapPost("/v1/platform/tenants/{id:guid}/suspend", async (Guid id,
+    PlatformTenantActionRequest request, PlatformTenantService service,
+    CancellationToken cancellationToken) =>
+    PlatformTenantResponses.Map(await service.SuspendAsync(id, request, cancellationToken)))
+    .RequireAuthorization("Platform.Suspend");
+app.MapPost("/v1/platform/tenants/{id:guid}/reactivate", async (Guid id,
+    PlatformTenantActionRequest request, PlatformTenantService service,
+    CancellationToken cancellationToken) =>
+    PlatformTenantResponses.Map(await service.ReactivateAsync(id, request, cancellationToken)))
+    .RequireAuthorization("Platform.Operator");
+app.MapPost("/v1/platform/tenants/{id:guid}/deletion-requests", async (Guid id,
+    PlatformTenantActionRequest request, PlatformTenantService service,
+    CancellationToken cancellationToken) =>
+    PlatformTenantResponses.Map(await service.RequestDeletionAsync(id, request, cancellationToken)))
+    .RequireAuthorization("Platform.Operator");
+app.MapPut("/v1/platform/tenants/{id:guid}/apps/{appId}", async (Guid id,
+    string appId, SetPlatformTenantAppRequest request, PlatformTenantService service,
+    CancellationToken cancellationToken) =>
+    PlatformTenantResponses.Map(await service.SetAppAsync(id, appId, request, cancellationToken)))
+    .RequireAuthorization("Platform.Operator");
+
 app.MapPost("/v1/platform/tenants", async (CreateTenantRequest request, HttpContext context,
     TenantProvisioningService service, CancellationToken cancellationToken) =>
 {
@@ -123,6 +181,14 @@ app.MapPost("/v1/platform/tenants/{id:guid}/owner-invitation:resend",
 app.MapPost("/v1/platform/support-grants", async (CreateSupportGrantRequest request,
     SupportGrantService service, CancellationToken cancellationToken) =>
     SupportGrantResponses.Map(await service.RequestAsync(request, cancellationToken)))
+    .RequireAuthorization("Platform.Support");
+app.MapPost("/v1/platform/support-requests", async (CreateSupportGrantRequest request,
+    SupportGrantService service, CancellationToken cancellationToken) =>
+    SupportGrantResponses.Map(await service.RequestAsync(request, cancellationToken)))
+    .RequireAuthorization("Platform.Support");
+app.MapGet("/v1/platform/tenants/{id:guid}/support-requests", async (Guid id,
+    SupportGrantService service, CancellationToken cancellationToken) =>
+    Results.Json(await service.ListMineAsync(id, cancellationToken)))
     .RequireAuthorization("Platform.Support");
 
 app.MapPut("/internal/v1/catalog/{app}", async (

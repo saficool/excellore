@@ -10,6 +10,8 @@ public sealed record DecideSupportGrantRequest(string? Reason);
 public sealed record SupportGrantView(Guid Id, Guid TenantId, Guid StaffUserId, Guid RoleId,
     string StaffEmail, string RoleName, string Reason, string Status,
     DateTimeOffset ExpiresAt, DateTimeOffset CreatedAt);
+public sealed record OwnSupportGrantView(Guid Id, Guid TenantId, string RoleName,
+    string Status, DateTimeOffset ExpiresAt, DateTimeOffset CreatedAt);
 public enum SupportGrantStatus { Created, Approved, Revoked, Invalid, Forbidden, StepUpRequired, NotFound, Conflict }
 public sealed record SupportGrantResult(SupportGrantStatus Status, Guid? GrantId = null);
 
@@ -90,6 +92,28 @@ public sealed class SupportGrantService(NpgsqlDataSource dataSource, ICurrentUse
                 reader.GetGuid(3), reader.GetString(4), reader.GetString(5),
                 reader.GetString(6), reader.GetString(7), reader.GetFieldValue<DateTimeOffset>(8),
                 reader.GetFieldValue<DateTimeOffset>(9)));
+        return items;
+    }
+
+    public async Task<IReadOnlyList<OwnSupportGrantView>> ListMineAsync(Guid tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty) return [];
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var tx = await connection.BeginTransactionAsync(cancellationToken);
+        await ScopeAsync(connection, tx, tenantId, cancellationToken);
+        await using var command = Command(connection, tx, """
+            SELECT g.id,g.tenant_id,r.name,g.status,g.expires_at,g.created_at
+            FROM support_grants g JOIN roles r ON r.id=g.role_id
+            WHERE g.tenant_id=@tenant AND g.staff_user_id=@actor
+            ORDER BY g.created_at DESC LIMIT 100
+            """, ("tenant", tenantId), ("actor", user.UserId));
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var items = new List<OwnSupportGrantView>();
+        while (await reader.ReadAsync(cancellationToken))
+            items.Add(new(reader.GetGuid(0), reader.GetGuid(1), reader.GetString(2),
+                reader.GetString(3), reader.GetFieldValue<DateTimeOffset>(4),
+                reader.GetFieldValue<DateTimeOffset>(5)));
         return items;
     }
 
