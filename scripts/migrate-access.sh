@@ -82,4 +82,5 @@ apply_once 016_tenant_deletion_dispatch.sql "SELECT EXISTS (SELECT 1 FROM inform
 apply_once 017_tenant_erasure_receipts.sql "SELECT to_regclass('public.tenant_tombstones') IS NOT NULL"
 apply_once 018_tenant_erasure_finalization.sql "SELECT to_regclass('public.audit_events_archive') IS NOT NULL"
 apply_once 019_tenant_export_requests.sql "SELECT to_regclass('public.tenant_exports') IS NOT NULL"
+apply_once 020_tenant_export_worker.sql "SELECT has_column_privilege('access_worker','tenant_exports','status','UPDATE')"
 echo 'Access database migrations applied.'

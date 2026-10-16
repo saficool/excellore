@@ -46,6 +46,9 @@ const child = spawn(
       AuditExportStore__Endpoint: 'http://127.0.0.1:8333',
       AuditExportStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
       AuditExportStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,
+      ExportStore__Endpoint: 'http://127.0.0.1:8333',
+      ExportStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
+      ExportStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,
     },
   },
 );

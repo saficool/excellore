@@ -7,6 +7,7 @@ public sealed class ProfileMembershipSubscriber(IEventBus eventBus,
     ProfileMembershipProjector projector, ProfileIdentityMirrorProjector identity,
     ProfileTenantErasureProjector erasure,
     ProfilePersonalExportProjector exports,
+    ProfileTenantExportProjector tenantExports,
     ILogger<ProfileMembershipSubscriber> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -26,6 +27,8 @@ public sealed class ProfileMembershipSubscriber(IEventBus eventBus,
             (body, token) => exports.BuildProfileAsync(body, token));
         handlers.Add(AccessUserExportReadyV1.EventType,
             (body, token) => exports.CompleteAsync(body, token));
+        handlers.Add(TenantExportRequestedV1.EventType,
+            (body, token) => tenantExports.ApplyAsync(body, token));
         while (!stoppingToken.IsCancellationRequested)
         {
             try

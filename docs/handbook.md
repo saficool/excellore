@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.11 |
+| **Document version** | 5.12 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.12 | WP-12 tenant exports use opaque-ID events and private object staging for tenant-bounded Access and Profile contributions; Access assembles and streams the authenticated result, and tenant erasure removes all export objects (ADR-0072 proposed). |
 | 5.11 | WP-12 personal exports use opaque-ID events and private object staging for Access and Profile contributions; Profile assembles the authenticated 24-hour download (ADR-0071 proposed). |
 | 5.10 | WP-12 personal-data exports exclude restricted audit originals because they can contain other people's data. Live account, preference, membership, and user-linked service data remain in scope (ADR-0070 proposed). |
 | 5.9 | WP-12 owner-requested tenant exports are limited to one request per tenant per UTC calendar day, enforced in the tenant database (ADR-0069 proposed). |
@@ -1167,7 +1168,7 @@ inbox [P]   event_id PK, received_at                                    -- consu
 | Job | Trigger | Notes |
 |---|---|---|
 | Process avatar | Upload completed | WP-09 API validates type and size, re-encodes to a bounded WebP image, and strips metadata before storage; WP-10 worker may generate additional sizes |
-| Build data export | Export requested | WP-12 gathers data across all the user's tenants and services, stores it privately, and provides an authenticated download. Requests remain pending until that flow exists. |
+| Build data export | Export requested | WP-12 gathers data across all the user's tenants and services, stores it privately, and provides an authenticated 24-hour download. |
 | Purge expired exports | Deferred | Retention remains Q-11; do not schedule automatic purging. |
 | Create member profile | `tenant.member.added.v1` | Seed row in tenant context |
 | Update member status | `tenant.member.suspended.v1`, `…reactivated.v1` | Mirror status |
@@ -1363,6 +1364,8 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 | `profile.export.requested.v1` | Profile | Access, Profile | Build private service contributions; IDs only |
 | `access.user-export.ready.v1` | Access | Profile | Access contribution is staged; IDs only |
 | `profile.export.ready.v1` | Profile | Notifications | Export available |
+| `tenant.export.requested.v1` | Access | Access, Profile | Build private tenant-bounded service contributions; IDs only |
+| `profile.tenant-export.ready.v1` | Profile | Access | Profile tenant contribution is staged; IDs only |
 | `access.erasure.confirmed.v1` / `profile.erasure.confirmed.v1` | Respective service | Access | Confirms erasure of a tenant or identity |
 
 Routing keys follow `<domain>.<entity>.<verb>.v<N>`. Schemas are in [Appendix H](#appendix-h-event-schemas) and `Excellore.Contracts`.
@@ -1754,7 +1757,7 @@ Prefer events and local read models. If unavoidable, use token exchange (RFC 869
 
 **Personal-data export:** includes the requester's live global account, preferences, memberships, tenant profile fields, and other user-linked application data. Profile emits an ID-only request; Access and Profile stage user-bounded JSON contributions in a private export bucket under an opaque export ID. Profile assembles the result after Access confirms its contribution and exposes it for 24 hours only through the authenticated Profile API. Events never contain export content, object keys, or download links (ADR-0071 proposed). Restricted audit originals are excluded because a single record can contain personal data about other people. Their disclosure and redaction policy remains a compliance decision; the export must not expose the restricted archive through the application path (ADR-0070 proposed).
 
-**Tenant export:** a tenant owner with recent MFA can request an export of tenant data (Access exports its data; other services contribute through events). The first-release limit is **one request per tenant per UTC calendar day**, enforced by a database uniqueness constraint, independent of plan (ADR-0069 proposed). A request records a pending job; authenticated download is available only after all service contributions are ready.
+**Tenant export:** Access emits `tenant.export.requested.v1` after the owner, recent-MFA, permission, and one-per-UTC-day gates pass. The first-release limit is enforced by a database uniqueness constraint and is independent of plan. Access and Profile build tenant-bounded contributions under forced RLS and stage them privately under the opaque export ID. Profile signals readiness with `profile.tenant-export.ready.v1`; Access assembles the final object, audits completion, and streams it only through the authenticated tenant-gated Access API. Events contain only tenant and export IDs. Tenant erasure removes every staged and complete export object (ADR-0069, ADR-0072 proposed).
 
 ---
 
@@ -3052,6 +3055,7 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 | `profile.deletion.requested.v1` | `userId` |
 | `profile.export.requested.v1` / `access.user-export.ready.v1` | `userId`, `exportId` (opaque IDs only; no content, key, or link) |
 | `profile.export.ready.v1` | `userId`, `exportId` |
+| `tenant.export.requested.v1` / `profile.tenant-export.ready.v1` | `tenantId`, `exportId` (opaque IDs only; no content, key, or link) |
 | `access.erasure.confirmed.v1` / `profile.erasure.confirmed.v1` | `scope: "tenant"\|"user"`, `service` (matches event type); tenant scope: `tenantId` matching envelope `tenantid`; user scope: `userId` and no tenant ID |
 
 Rules: no personal data beyond opaque identifiers; `changed` lists field names only, never values; consumers de-duplicate on envelope `id`; unknown fields are ignored (forward compatibility).

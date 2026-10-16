@@ -21,6 +21,7 @@ contributions are complete.
 
 The limit resets at UTC midnight. Failed requests still count toward the
 day's limit. The owner sees a stable `429` problem response after reaching it.
-The export remains pending until the cross-service worker is deployed.
+Access reports the export ready after both cross-service contributions are
+assembled in private storage (ADR-0072).
 
 INV-02, INV-03, INV-04, INV-07, INV-11, INV-12, INV-16, INV-17.

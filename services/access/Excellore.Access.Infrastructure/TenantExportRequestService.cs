@@ -1,6 +1,8 @@
 using Excellore.Auth;
 using Excellore.Authz;
 using Npgsql;
+using System.Text.Json;
+using Excellore.Contracts;
 
 namespace Excellore.Access.Infrastructure;
 
@@ -57,6 +59,28 @@ public sealed class TenantExportRequestService(NpgsqlDataSource dataSource,
             await AuditAsync("access.tenant.export-request.denied", "denied",
                 active ? "daily-limit" : "tenant-inactive");
             return new(status);
+        }
+        var payload = JsonSerializer.Serialize(new
+        {
+            specversion = "1.0",
+            id,
+            type = TenantExportRequestedV1.EventType,
+            source = TenantExportRequestedV1.EventSource,
+            time = DateTimeOffset.UtcNow,
+            tenantid = tenantId,
+            correlationid = id,
+            actor = new { sub = user.UserId.ToString("D"), type = "human" },
+            data = new { tenantId, exportId = id }
+        });
+        await using (var outbox = new NpgsqlCommand("""
+            INSERT INTO outbox(id,type,tenant_id,payload) VALUES (@id,@type,@tenant,@payload::jsonb)
+            """, connection, transaction))
+        {
+            outbox.Parameters.AddWithValue("id", id);
+            outbox.Parameters.AddWithValue("type", TenantExportRequestedV1.EventType);
+            outbox.Parameters.AddWithValue("tenant", tenantId);
+            outbox.Parameters.AddWithValue("payload", payload);
+            await outbox.ExecuteNonQueryAsync(cancellationToken);
         }
         await AuditAsync("access.tenant.export-requested", id.ToString("D"), "tenant-export");
         return new(TenantExportRequestStatus.Accepted, id);

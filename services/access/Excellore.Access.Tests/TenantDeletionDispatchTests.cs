@@ -25,7 +25,8 @@ public sealed class TenantDeletionDispatchTests
         await ExecuteAsync(admin, "GRANT USAGE,CREATE ON SCHEMA public TO access_migrator");
         await ExecuteAsync(admin, "GRANT USAGE ON SCHEMA public TO access_app,access_publisher,access_worker");
         await using var migrator = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(
-            postgres.GetConnectionString()) { Username = "access_migrator", Password = password }.ConnectionString);
+            postgres.GetConnectionString())
+        { Username = "access_migrator", Password = password }.ConnectionString);
         await migrator.OpenAsync();
         foreach (var migration in new[]
         {
@@ -34,13 +35,15 @@ public sealed class TenantDeletionDispatchTests
             "011_support_grants_rls.sql", "012_audit_export_requests.sql",
             "013_worker_expiry.sql", "015_role_assignment_batches.sql",
             "016_tenant_deletion_dispatch.sql", "017_tenant_erasure_receipts.sql",
-            "018_tenant_erasure_finalization.sql", "019_tenant_export_requests.sql"
+            "018_tenant_erasure_finalization.sql", "019_tenant_export_requests.sql",
+            "020_tenant_export_worker.sql"
         })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, migration)));
 
         var due = Guid.NewGuid();
         var future = Guid.NewGuid();
+        var tenantExportId = Guid.NewGuid();
         await using (var seed = new NpgsqlCommand("""
             INSERT INTO tenants(id,slug,name,status,deletion_due_at)
             VALUES (@due,'due-tenant','Due','pending_deletion',now()-interval '1 minute'),
@@ -57,16 +60,18 @@ public sealed class TenantDeletionDispatchTests
             INSERT INTO audit_exports(id,tenant_id,requested_by,status,object_key)
             VALUES (gen_random_uuid(),@due,gen_random_uuid(),'ready',@key);
             INSERT INTO tenant_exports(id,tenant_id,requested_by)
-            VALUES (gen_random_uuid(),@due,gen_random_uuid());
+            VALUES (@tenantExportId,@due,gen_random_uuid());
             """, admin))
         {
             seed.Parameters.AddWithValue("due", due);
             seed.Parameters.AddWithValue("future", future);
             seed.Parameters.AddWithValue("key", exportKey);
+            seed.Parameters.AddWithValue("tenantExportId", tenantExportId);
             await seed.ExecuteNonQueryAsync();
         }
         await using var source = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(
-            postgres.GetConnectionString()) { Username = "access_worker", Password = password }.ConnectionString);
+            postgres.GetConnectionString())
+        { Username = "access_worker", Password = password }.ConnectionString);
         var actor = Guid.NewGuid();
         Assert.False(await new TenantDeletionDispatchService(source, new FixedTenant(future))
             .DispatchAsync(actor));
@@ -109,10 +114,15 @@ public sealed class TenantDeletionDispatchTests
             Assert.Equal(due, TenantDeletedV1.Parse(System.Text.Encoding.UTF8.GetBytes(payload)).Data!.TenantId);
         }
         var objects = new MemoryStore();
-        var finalizer = new TenantErasureFinalizer(source, new FixedTenant(due), objects);
+        var privateExports = new MemoryPrivateExportStore();
+        var finalizer = new TenantErasureFinalizer(source, new FixedTenant(due), objects,
+            privateExports);
         Assert.True(await finalizer.FinalizeAsync(actor));
         Assert.False(await finalizer.FinalizeAsync(actor));
         Assert.Equal([exportKey], objects.Deleted);
+        Assert.Equal(new[] { "access", "profile", "complete" },
+            privateExports.Deleted.Select(item => item.Part));
+        Assert.All(privateExports.Deleted, item => Assert.Equal(tenantExportId, item.ExportId));
         Assert.Equal(0L, await CountAsync(admin,
             "SELECT count(*) FROM tenants WHERE id=@tenant", due));
         Assert.Equal(0L, await CountAsync(admin,
@@ -196,12 +206,28 @@ public sealed class TenantDeletionDispatchTests
             throw new NotSupportedException();
     }
 
+    private sealed class MemoryPrivateExportStore : IPrivateExportStore
+    {
+        public List<(Guid ExportId, string Part)> Deleted { get; } = [];
+        public Task DeleteAsync(Guid exportId, string part, CancellationToken cancellationToken)
+        {
+            Deleted.Add((exportId, part));
+            return Task.CompletedTask;
+        }
+        public Task PutAsync(Guid exportId, string part, byte[] data,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<byte[]?> GetAsync(Guid exportId, string part,
+            CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
     private static byte[] Confirmation(Guid tenantId) => JsonSerializer.SerializeToUtf8Bytes(new
     {
-        specversion = "1.0", id = Guid.NewGuid(),
+        specversion = "1.0",
+        id = Guid.NewGuid(),
         type = ProfileErasureConfirmedV1.EventType,
         source = ProfileErasureConfirmedV1.EventSource,
-        time = DateTimeOffset.UtcNow, tenantid = tenantId,
+        time = DateTimeOffset.UtcNow,
+        tenantid = tenantId,
         correlationid = Guid.NewGuid(),
         actor = new { sub = Guid.NewGuid().ToString("D"), type = "machine" },
         data = new { scope = "tenant", tenantId, service = "profile" }

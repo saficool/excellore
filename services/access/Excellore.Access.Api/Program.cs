@@ -3,6 +3,7 @@ using Excellore.Access.Api;
 using Excellore.Access.Infrastructure;
 using Excellore.Auth;
 using Excellore.Authz;
+using Excellore.Platform;
 using Npgsql;
 using System.Net.Mail;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +38,7 @@ builder.Services.AddScoped<AuditExportRequestService>();
 builder.Services.AddScoped<TenantExportRequestService>();
 builder.Services.AddScoped<AuditExportDownloadService>();
 builder.Services.AddSingleton<IAuditExportObjectStore, S3AuditExportObjectStore>();
+builder.Services.AddSingleton<IPrivateExportStore, S3PrivateExportStore>();
 builder.Services.AddScoped<SupportGrantService>();
 builder.Services.AddScoped<ISupportGrantUsageRecorder, SupportGrantUsageRecorder>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
@@ -394,6 +396,18 @@ tenantRoutes.MapGet("/exports/{exportId:guid}", async (Guid exportId,
 {
     var job = await service.GetAsync(exportId, cancellationToken);
     return job is null ? Results.NotFound() : Results.Json(job);
+}).RequirePermission("access.tenant.export");
+tenantRoutes.MapGet("/exports/{exportId:guid}/download", async (Guid exportId,
+    TenantExportRequestService service, IPrivateExportStore objects,
+    HttpContext context, CancellationToken cancellationToken) =>
+{
+    var job = await service.GetAsync(exportId, cancellationToken);
+    if (job?.Status != "ready") return Results.NotFound();
+    var data = await objects.GetAsync(exportId, "complete", cancellationToken);
+    if (data is null) return Results.NotFound();
+    context.Response.Headers.CacheControl = "private, no-store";
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    return Results.File(data, "application/json", "excellore-tenant-data.json");
 }).RequirePermission("access.tenant.export");
 tenantRoutes.MapGet("/support-grants", async (HttpContext context,
     SupportGrantService service, CancellationToken cancellationToken) =>

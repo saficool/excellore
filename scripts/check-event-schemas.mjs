@@ -113,7 +113,11 @@ for (const file of schemaFiles) {
       },
     );
   }
-  if (eventType.startsWith('profile.') && !eventType.includes('.erasure.')) {
+  if (
+    eventType.startsWith('profile.') &&
+    !eventType.includes('.erasure.') &&
+    !eventType.includes('tenant-export')
+  ) {
     invalidExamples.push(
       { ...example, tenantid: '22222222-2222-4222-8222-222222222222' },
       { ...example, data: { ...example.data, email: 'personal@example.test' } },

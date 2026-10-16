@@ -17,6 +17,7 @@ builder.Services.AddSingleton<PostgresEventInbox>();
 builder.Services.AddSingleton<ProfileErasureConfirmationProjector>();
 builder.Services.AddSingleton<IPrivateExportStore, S3PrivateExportStore>();
 builder.Services.AddSingleton<PersonalExportContributor>();
+builder.Services.AddSingleton<TenantExportCoordinator>();
 builder.Services.AddHostedService<AccessLifecycleSubscriber>();
 builder.Services.AddHostedService<Worker>();
 var workerConnectionString = builder.Configuration.GetConnectionString("AccessWorker")
@@ -38,7 +39,8 @@ builder.Services.AddScoped(provider => new TenantDeletionDispatchService(
 builder.Services.AddScoped(provider => new TenantErasureFinalizer(
     provider.GetRequiredService<AccessWorkerDatabase>().Source,
     provider.GetRequiredService<ITenantIdAccessor>(),
-    provider.GetRequiredService<IAuditExportObjectStore>()));
+    provider.GetRequiredService<IAuditExportObjectStore>(),
+    provider.GetRequiredService<IPrivateExportStore>()));
 builder.Services.AddScoped(provider => new RoleAssignmentBatchProcessor(
     provider.GetRequiredService<AccessWorkerDatabase>().Source,
     provider.GetRequiredService<ITenantIdAccessor>()));

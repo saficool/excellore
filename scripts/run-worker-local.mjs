@@ -49,9 +49,9 @@ const workerEnv = {
   ExportStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
   ExportStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,
 };
+assert.match(env[`${prefix}_WORKER_ACTOR_ID`] ?? '', /^[0-9a-f-]{36}$/i);
+workerEnv.Worker__ActorId = env[`${prefix}_WORKER_ACTOR_ID`];
 if (service === 'access') {
-  assert.match(env.ACCESS_WORKER_ACTOR_ID ?? '', /^[0-9a-f-]{36}$/i);
-  workerEnv.Worker__ActorId = env.ACCESS_WORKER_ACTOR_ID;
   workerEnv.AuditExportStore__Endpoint = 'http://127.0.0.1:8333';
   workerEnv.AuditExportStore__AccessKey = env.OBJECTSTORE_ACCESS_KEY;
   workerEnv.AuditExportStore__SecretKey = env.OBJECTSTORE_SECRET_KEY;

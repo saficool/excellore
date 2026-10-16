@@ -20,6 +20,7 @@ builder.Services.AddSingleton<ProfileMembershipProjector>();
 builder.Services.AddSingleton<ProfileTenantErasureProjector>();
 builder.Services.AddSingleton<IPrivateExportStore, S3PrivateExportStore>();
 builder.Services.AddSingleton<ProfilePersonalExportProjector>();
+builder.Services.AddSingleton<ProfileTenantExportProjector>();
 builder.Services.AddKeycloakDirectory(builder.Configuration, "worker-profile");
 builder.Services.AddSingleton<ProfileIdentityMirrorProjector>();
 builder.Services.AddHostedService<Worker>();

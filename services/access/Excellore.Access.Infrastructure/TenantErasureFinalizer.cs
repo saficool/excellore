@@ -6,7 +6,7 @@ namespace Excellore.Access.Infrastructure;
 
 /// <summary>Finalizes Access erasure only after Profile has confirmed its own erasure.</summary>
 public sealed class TenantErasureFinalizer(NpgsqlDataSource database, ITenantIdAccessor tenant,
-    IAuditExportObjectStore objects)
+    IAuditExportObjectStore auditObjects, IPrivateExportStore privateExports)
 {
     // Child rows precede their parents. These are constants, never user input.
     private static readonly string[] TenantTables =
@@ -25,6 +25,7 @@ public sealed class TenantErasureFinalizer(NpgsqlDataSource database, ITenantIdA
             throw new ArgumentException("Machine actor is required.", nameof(machineActorId));
         var tenantId = tenant.TenantId;
         var keys = new List<string>();
+        var exportIds = new List<Guid>();
         await using (var connection = await database.OpenConnectionAsync(cancellationToken))
         await using (var transaction = await connection.BeginTransactionAsync(cancellationToken))
         {
@@ -51,12 +52,24 @@ public sealed class TenantErasureFinalizer(NpgsqlDataSource database, ITenantIdA
                 while (await reader.ReadAsync(cancellationToken))
                     keys.Add(reader.GetString(0));
             }
+            await using (var exports = new NpgsqlCommand("""
+                SELECT id FROM tenant_exports WHERE tenant_id=@tenant
+                """, connection, transaction))
+            {
+                exports.Parameters.AddWithValue("tenant", tenantId);
+                await using var reader = await exports.ExecuteReaderAsync(cancellationToken);
+                while (await reader.ReadAsync(cancellationToken))
+                    exportIds.Add(reader.GetGuid(0));
+            }
             await transaction.CommitAsync(cancellationToken);
         }
 
         // Object deletion is idempotent. A failure leaves the database pending for retry.
         foreach (var key in keys)
-            await objects.DeleteAsync(key, cancellationToken);
+            await auditObjects.DeleteAsync(key, cancellationToken);
+        foreach (var exportId in exportIds)
+            foreach (var part in new[] { "access", "profile", "complete" })
+                await privateExports.DeleteAsync(exportId, part, cancellationToken);
 
         await using var finalizeConnection = await database.OpenConnectionAsync(cancellationToken);
         await using var finalizeTransaction = await finalizeConnection.BeginTransactionAsync(cancellationToken);
@@ -105,9 +118,13 @@ public sealed class TenantErasureFinalizer(NpgsqlDataSource database, ITenantIdA
         var eventId = Guid.NewGuid();
         var payload = JsonSerializer.Serialize(new
         {
-            specversion = "1.0", id = eventId, type = "access.erasure.confirmed.v1",
-            source = "excellore/access", time = DateTimeOffset.UtcNow,
-            tenantid = tenantId, correlationid = Guid.NewGuid(),
+            specversion = "1.0",
+            id = eventId,
+            type = "access.erasure.confirmed.v1",
+            source = "excellore/access",
+            time = DateTimeOffset.UtcNow,
+            tenantid = tenantId,
+            correlationid = Guid.NewGuid(),
             actor = new { sub = machineActorId.ToString("D"), type = "machine" },
             data = new { scope = "tenant", tenantId, service = "access" }
         });

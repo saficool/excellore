@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:excellore:event:profile.tenant-export.ready.v1",
+  "title": "profile.tenant-export.ready.v1",
+  "type": "object",
+  "required": [
+    "specversion",
+    "id",
+    "type",
+    "source",
+    "time",
+    "tenantid",
+    "correlationid",
+    "actor",
+    "data"
+  ],
+  "properties": {
+    "specversion": { "const": "1.0" },
+    "id": { "type": "string", "format": "uuid" },
+    "type": { "const": "profile.tenant-export.ready.v1" },
+    "source": { "const": "excellore/profile" },
+    "time": { "type": "string", "format": "date-time" },
+    "tenantid": { "type": "string", "format": "uuid" },
+    "correlationid": { "type": "string", "format": "uuid" },
+    "actor": {
+      "type": "object",
+      "required": ["sub", "type"],
+      "properties": {
+        "sub": { "type": "string", "minLength": 1 },
+        "type": { "enum": ["human", "machine"] }
+      },
+      "additionalProperties": true
+    },
+    "data": {
+      "type": "object",
+      "required": ["tenantId", "exportId"],
+      "properties": {
+        "tenantId": { "type": "string", "format": "uuid" },
+        "exportId": { "type": "string", "format": "uuid" },
+        "email": false,
+        "displayName": false,
+        "name": false,
+        "givenName": false,
+        "familyName": false,
+        "locale": false,
+        "timeZone": false,
+        "avatar": false,
+        "avatarUrl": false,
+        "preferences": false,
+        "objectKey": false,
+        "downloadUrl": false,
+        "exportUrl": false,
+        "signedUrl": false,
+        "url": false,
+        "token": false
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

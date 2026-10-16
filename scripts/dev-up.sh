@@ -19,7 +19,7 @@ if ! docker info --format '{{.ServerVersion}}' >/dev/null 2>&1; then
 fi
 
 random_value() {
-  if [ "$1" = ACCESS_WORKER_ACTOR_ID ]; then
+  if [ "$1" = ACCESS_WORKER_ACTOR_ID ] || [ "$1" = PROFILE_WORKER_ACTOR_ID ]; then
     node -e "process.stdout.write(require('node:crypto').randomUUID())"
   elif [ "$1" = DEV_OTP_SECRET ]; then
     openssl rand -hex 20 | tr 'abcdef0189' 'ABCDEFABCD'

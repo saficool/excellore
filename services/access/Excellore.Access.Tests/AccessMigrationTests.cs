@@ -43,7 +43,8 @@ public sealed class AccessMigrationTests
         foreach (var migration in new[] { "013_worker_expiry.sql",
                      "014_worker_identity_drift.sql", "015_role_assignment_batches.sql",
                      "016_tenant_deletion_dispatch.sql", "017_tenant_erasure_receipts.sql",
-                     "018_tenant_erasure_finalization.sql", "019_tenant_export_requests.sql" })
+                     "018_tenant_erasure_finalization.sql", "019_tenant_export_requests.sql",
+                     "020_tenant_export_worker.sql" })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, migration)));
 
