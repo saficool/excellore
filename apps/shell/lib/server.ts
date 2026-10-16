@@ -1,5 +1,5 @@
 import 'server-only';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import Valkey from 'iovalkey';
 import {
   canonicalBffRequest,
@@ -68,6 +68,27 @@ function navigation() {
   };
 }
 
+function identity(session: {
+  displayName?: string | undefined;
+  email?: string | undefined;
+}) {
+  const displayName =
+    session.displayName ?? session.email?.split('@')[0] ?? 'My account';
+  return {
+    displayName,
+    ...(session.email ? { email: session.email } : {}),
+  };
+}
+
+export function getPublicNavigation() {
+  return navigation();
+}
+
+export async function hasShellSessionCookie() {
+  const config = loadAuthConfig();
+  return (await cookies()).has(config.SESSION_COOKIE_NAME);
+}
+
 async function pageRequest(path: string) {
   const { config } = await getResources();
   const requestHeaders = await headers();
@@ -98,6 +119,7 @@ export async function getPickerData() {
   return {
     tenants: tenantLinksForApp(catalog(), 'shell', tenants),
     invitations,
+    identity: identity(session),
     ...navigation(),
   };
 }
@@ -125,6 +147,7 @@ export async function getLauncherData(slug: string) {
     tenants: tenantLinksForApp(appCatalog, 'shell', tenants),
     apps: visibleTenantApps(appCatalog, tenant, slug),
     invitations,
+    identity: identity(session),
     ...navigation(),
   };
 }

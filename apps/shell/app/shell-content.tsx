@@ -18,6 +18,7 @@ export function ShellHeader({
   tenants,
   apps = [],
   currentTenant,
+  identity,
 }: {
   accountHref: string;
   tenants: readonly { id: string; name: string; href: string }[];
@@ -28,6 +29,7 @@ export function ShellHeader({
     href: string;
   }[];
   currentTenant?: { slug: string; name: string };
+  identity: { displayName: string; email?: string | undefined };
 }) {
   return (
     <SharedHeader
@@ -36,9 +38,56 @@ export function ShellHeader({
       tenants={tenants}
       apps={apps}
       {...(currentTenant ? { currentTenant } : {})}
-      userLabel="Signed in"
+      userLabel={identity.displayName}
+      userSecondaryLabel={identity.email}
       messages={messages}
     />
+  );
+}
+
+export function identityInitials(label: string) {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  return `${parts[0]?.[0] ?? 'E'}${parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : (parts[0]?.[1] ?? '')}`.toUpperCase();
+}
+
+export function UserWelcome({
+  identity,
+  tenantCount,
+  invitationCount,
+}: {
+  identity: { displayName: string; email?: string | undefined };
+  tenantCount: number;
+  invitationCount: number;
+}) {
+  const firstName =
+    identity.displayName.split(/\s+/)[0] ?? identity.displayName;
+  return (
+    <section className="shell-welcome" aria-labelledby="welcome-heading">
+      <div>
+        <span className="shell-eyebrow">Your Excellore</span>
+        <h1 id="welcome-heading">Welcome back, {firstName}.</h1>
+        <p>Everything you can access, organized by workspace.</p>
+      </div>
+      <div className="shell-identity-card">
+        <span className="shell-avatar" aria-hidden="true">
+          {identityInitials(identity.displayName)}
+        </span>
+        <span>
+          <strong>{identity.displayName}</strong>
+          {identity.email && <small>{identity.email}</small>}
+        </span>
+        <dl>
+          <div>
+            <dt>Workspaces</dt>
+            <dd>{tenantCount}</dd>
+          </div>
+          <div>
+            <dt>Invitations</dt>
+            <dd>{invitationCount}</dd>
+          </div>
+        </dl>
+      </div>
+    </section>
   );
 }
 

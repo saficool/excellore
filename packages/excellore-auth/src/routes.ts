@@ -15,6 +15,14 @@ function setCookie(
   return `${name}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? '; Secure' : ''}`;
 }
 
+function boundedClaim(value: unknown, maximum: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  return normalized.length > 0 && normalized.length <= maximum
+    ? normalized
+    : undefined;
+}
+
 function noStore(headers: Headers): void {
   headers.set('Cache-Control', 'no-store');
   headers.set('Referrer-Policy', 'no-referrer');
@@ -240,6 +248,10 @@ export function createAuthHandlers(
           kcSid: claims.sid,
           sub: claims.sub,
           acr: typeof claims.acr === 'string' ? claims.acr : '',
+          displayName:
+            boundedClaim(claims.name, 200) ??
+            boundedClaim(claims.preferred_username, 200),
+          email: boundedClaim(claims.email, 320),
           accessToken: tokens.access_token,
           accessTokenExpiresAt:
             Math.floor(Date.now() / 1000) + tokens.expires_in,

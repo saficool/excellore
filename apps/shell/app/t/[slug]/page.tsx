@@ -1,7 +1,11 @@
 import { notFound, redirect } from 'next/navigation';
 import { SessionRequiredError, TenantAccessError } from '@excellore/auth';
 import { getLauncherData } from '../../../lib/server';
-import { ShellBanners, ShellHeader } from '../../shell-content';
+import {
+  identityInitials,
+  ShellBanners,
+  ShellHeader,
+} from '../../shell-content';
 import { RememberTenant } from '../../tenant-picker';
 
 export const dynamic = 'force-dynamic';
@@ -28,27 +32,65 @@ export default async function TenantLauncher({
         tenants={data.tenants}
         apps={data.apps}
         currentTenant={{ slug, name: data.tenant.name }}
+        identity={data.identity}
       />
-      <main id="main-content" tabIndex={-1}>
+      <main id="main-content" tabIndex={-1} className="shell-dashboard">
         <ShellBanners
           invitations={data.invitations}
           invitationBase={data.invitationBase}
         />
-        <h1 className="text-3xl font-semibold">{data.tenant.name}</h1>
-        <p>Open an app in this tenant.</p>
+        <section className="shell-workspace-hero">
+          <div>
+            <span className="shell-eyebrow">Current workspace</span>
+            <h1>{data.tenant.name}</h1>
+            <p>Choose an app to continue your work.</p>
+          </div>
+          <a className="shell-account-link" href={data.accountHref}>
+            <span className="shell-avatar" aria-hidden="true">
+              {identityInitials(data.identity.displayName)}
+            </span>
+            <span>
+              <strong>{data.identity.displayName}</strong>
+              <small>View your account</small>
+            </span>
+          </a>
+        </section>
         {data.apps.length > 0 ? (
-          <ul className="ex-launcher">
-            {data.apps.map((app) => (
-              <li key={app.id}>
-                <a className="ex-tile" href={app.href}>
-                  <strong>{app.name}</strong>
-                  <span>{app.description}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
+          <section aria-labelledby="apps-heading">
+            <div className="shell-section-heading">
+              <div>
+                <span className="shell-eyebrow">Available to you</span>
+                <h2 id="apps-heading">Your apps</h2>
+              </div>
+              <span className="shell-count">{data.apps.length}</span>
+            </div>
+            <ul className="ex-launcher">
+              {data.apps.map((app) => (
+                <li key={app.id}>
+                  <a className="ex-tile ex-app-tile" href={app.href}>
+                    <span
+                      className={`ex-app-icon ex-app-icon--${app.id}`}
+                      aria-hidden="true"
+                    >
+                      {app.id === 'access' ? 'A' : 'P'}
+                    </span>
+                    <span className="ex-tile__copy">
+                      <strong>{app.name}</strong>
+                      <span>{app.description}</span>
+                    </span>
+                    <span className="ex-tile__arrow" aria-hidden="true">
+                      →
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : (
-          <p>No apps are available for your membership.</p>
+          <section className="shell-empty">
+            <h2>No apps are available yet</h2>
+            <p>Ask your workspace administrator about your app access.</p>
+          </section>
         )}
       </main>
     </>

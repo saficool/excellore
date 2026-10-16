@@ -23,9 +23,16 @@ export interface SharedHeaderProps {
   currentAppId?: string;
   accountHref: string;
   userLabel: string;
+  userSecondaryLabel?: string | undefined;
   avatarSrc?: string | undefined;
   avatarRevision?: number;
   messages: HeaderMessages;
+}
+
+function userInitials(label: string): string {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'EX';
+  return `${parts[0]?.[0] ?? ''}${parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : (parts[0]?.[1] ?? '')}`.toUpperCase();
 }
 
 function checkedAvatarSrc(src: string): string {
@@ -77,6 +84,7 @@ export function SharedHeader({
   currentAppId,
   accountHref,
   userLabel,
+  userSecondaryLabel,
   avatarSrc,
   avatarRevision,
   messages,
@@ -142,7 +150,7 @@ export function SharedHeader({
           </nav>
           <details className="ex-menu ex-header__user">
             <summary aria-label={messages.userMenu}>
-              {avatarSrc && (
+              {avatarSrc ? (
                 <img
                   key={avatarRevision}
                   className="ex-header__avatar"
@@ -151,10 +159,23 @@ export function SharedHeader({
                   width={32}
                   height={32}
                 />
+              ) : (
+                <span className="ex-header__avatar-fallback" aria-hidden="true">
+                  {userInitials(userLabel)}
+                </span>
               )}
-              {userLabel}
+              <span className="ex-header__user-copy">
+                <strong>{userLabel}</strong>
+                {userSecondaryLabel && <small>{userSecondaryLabel}</small>}
+              </span>
             </summary>
             <ul className="ex-menu__items">
+              {userSecondaryLabel && (
+                <li className="ex-menu__identity">
+                  <strong>{userLabel}</strong>
+                  <span>{userSecondaryLabel}</span>
+                </li>
+              )}
               <li>
                 <a href={checkedHref(accountHref)}>{messages.myAccount}</a>
               </li>

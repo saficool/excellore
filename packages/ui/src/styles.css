@@ -181,6 +181,48 @@
   width: 2rem;
 }
 
+.ex-header__avatar-fallback {
+  align-items: center;
+  background: var(--ex-color-accent);
+  border-radius: 50%;
+  color: var(--ex-color-accent-text);
+  display: inline-flex;
+  flex: 0 0 2rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  height: 2rem;
+  justify-content: center;
+  letter-spacing: 0.03em;
+  width: 2rem;
+}
+
+.ex-header__user-copy {
+  display: grid;
+  line-height: 1.15;
+  text-align: start;
+}
+
+.ex-header__user-copy small {
+  color: var(--ex-color-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  margin-top: 0.18rem;
+}
+
+.ex-menu__identity {
+  border-bottom: 1px solid var(--ex-color-border);
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: var(--ex-space-1);
+  overflow-wrap: anywhere;
+  padding: var(--ex-space-2) var(--ex-space-3) var(--ex-space-3);
+}
+
+.ex-menu__identity span {
+  color: var(--ex-color-muted);
+  font-size: 0.8rem;
+}
+
 .ex-menu__items a,
 .ex-menu__items button {
   background: none;
@@ -254,12 +296,34 @@
   }
 
   .ex-header__nav {
+    font-size: 0.875rem;
+    flex-wrap: nowrap;
+    gap: var(--ex-space-1);
     margin-inline-start: 0;
     order: 3;
+    overflow-x: auto;
+    padding-block-end: var(--ex-space-1);
+    scrollbar-width: thin;
     width: 100%;
+  }
+
+  .ex-header__nav > *,
+  .ex-header__workspaces,
+  .ex-menu > summary {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .ex-header__workspaces,
+  .ex-menu > summary {
+    padding-inline: var(--ex-space-2);
   }
 
   .ex-header__user {
     margin-inline-start: auto;
+  }
+
+  .ex-header__user-copy small {
+    display: none;
   }
 }

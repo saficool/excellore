@@ -127,7 +127,15 @@ function otp(secret) {
 }
 
 const browser = new Browser();
-let response = await browser.request(`${appOrigin}/auth/login?returnTo=%2F`);
+let response = await browser.request(`${appOrigin}/`);
+assert.equal(response.status, 200, 'Public Shell home unavailable');
+let html = await response.text();
+assert.match(html, /Work moves better when everything feels connected/);
+assert.match(html, /Join with an invite/);
+assert.match(html, /\/auth\/login\?returnTo=%2F/);
+assert.doesNotMatch(html, /(?:access_token|refresh_token|id_token)/i);
+
+response = await browser.request(`${appOrigin}/auth/login?returnTo=%2F`);
 assert.equal(response.status, 302, 'Generated app did not start OIDC login');
 const loginUrl = response.headers.get('location');
 assert.ok(
@@ -136,7 +144,7 @@ assert.ok(
 );
 response = await browser.request(loginUrl);
 assert.equal(response.status, 200, 'Keycloak login form unavailable');
-let html = await response.text();
+html = await response.text();
 response = await browser.request(formAction(html), {
   method: 'POST',
   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },

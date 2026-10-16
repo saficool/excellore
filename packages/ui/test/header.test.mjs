@@ -30,7 +30,8 @@ const props = {
   ],
   currentAppId: 'profile',
   accountHref: 'https://profile.example.test/account',
-  userLabel: 'Signed-in user',
+  userLabel: 'Olivia Owner',
+  userSecondaryLabel: 'olivia@example.test',
   messages,
 };
 
@@ -45,6 +46,8 @@ test('header renders tenant and authorized app navigation with POST sign-out', (
   assert.match(html, /href="https:\/\/profile.example.test\/t\/example"/);
   assert.match(html, /aria-current="page"/);
   assert.match(html, /<form action="\/auth\/logout" method="post">/);
+  assert.match(html, /ex-header__avatar-fallback[^>]*>OO</);
+  assert.match(html, /olivia@example\.test/);
   assert.doesNotMatch(html, /access.example.test/);
 });
 

@@ -24,7 +24,16 @@ export function TenantPicker({
       {tenants.map((tenant) => (
         <li key={tenant.id}>
           <a className="ex-tile" href={tenant.href}>
-            {tenant.name}
+            <span className="ex-tile__mark" aria-hidden="true">
+              {tenant.name.slice(0, 2).toUpperCase()}
+            </span>
+            <span className="ex-tile__copy">
+              <strong>{tenant.name}</strong>
+              <span>Organization workspace</span>
+            </span>
+            <span className="ex-tile__arrow" aria-hidden="true">
+              →
+            </span>
           </a>
         </li>
       ))}

@@ -238,6 +238,8 @@ before(async () => {
           sid: keycloakSid,
           nonce,
           acr: nextAcr,
+          name: 'Olivia Owner',
+          email: 'olivia@example.test',
         });
         if (tamperNextIdToken) {
           tamperNextIdToken = false;
@@ -424,6 +426,9 @@ test('login and callback bind PKCE, nonce, state, and browser flow cookie', asyn
     .find((item) => item.startsWith('excellore-dev-profile='));
   assert.ok(sessionCookie);
   const sessionId = sessionCookie.split(';')[0].split('=')[1];
+  const storedSession = await store.get(sessionId);
+  assert.equal(storedSession.displayName, 'Olivia Owner');
+  assert.equal(storedSession.email, 'olivia@example.test');
   assert.equal(
     (
       await handlers.callback(

@@ -8,6 +8,8 @@ const recordSchema = z.object({
   kcSid: z.string(),
   sub: z.string(),
   acr: z.string(),
+  displayName: z.string().trim().min(1).max(200).optional(),
+  email: z.string().trim().min(1).max(320).optional(),
   accessToken: z.string(),
   accessTokenExpiresAt: z.number().int(),
   refreshToken: z.string(),

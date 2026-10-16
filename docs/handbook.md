@@ -1033,7 +1033,9 @@ The front door. It makes separate apps feel like one suite and makes tenant cont
 
 ### 13.2 Responsibilities
 
+- Public signed-out company landing page with clear sign-in and invitation-only join actions. It does not offer self-registration.
 - Sign users in (`excellore-shell`) and show who is signed in.
+- Signed-in identity summary uses the verified OIDC session's name and email with an initials avatar fallback. The uploaded avatar remains Profile-owned.
 - **Tenant picker** at `/`: lists the user's active tenants (from the Access internal contract). One tenant → redirect to it. Last used tenant → redirect to it.
 - **Per-tenant launcher** at `/t/{slug}`: one tile per app that is **enabled for the tenant and for which the user holds `<app>.app.access`**.
 - Shared chrome: logo, **tenant switcher**, app switcher, user menu (My account, sign out). Provided as a component in `@excellore/ui` and reused by Profile and Access.
