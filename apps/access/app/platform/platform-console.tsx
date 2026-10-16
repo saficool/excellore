@@ -11,7 +11,13 @@ type Tenant = {
   plan: string;
   deletionDueAt: string | null;
 };
-type App = { id: string; name: string; core: boolean; status: string };
+type App = {
+  id: string;
+  name: string;
+  core: boolean;
+  status: string;
+  features: Record<string, number>;
+};
 type Detail = { tenant: Tenant; apps: App[] };
 type Permission = {
   key: string;
@@ -34,6 +40,7 @@ type OwnGrant = {
   status: string;
   expiresAt: string;
 };
+type Staff = { username: string; roles: string[] };
 
 const path = (part: string) => `/api/platform/${part}`;
 const mutating = (roles: string[]) =>
@@ -47,13 +54,20 @@ const auditing = (roles: string[]) =>
 const navigation = (roles: string[]): [string, string][] => [
   ['tenants', 'Tenants'],
   ['permissions', 'Permission catalog'],
+  ['staff', 'Platform staff'],
   ...(auditing(roles) ? [['audit', 'Platform audit'] as [string, string]] : []),
   ...(supporting(roles)
     ? [['support', 'Support requests'] as [string, string]]
     : []),
 ];
 
-export function PlatformConsole({ roles }: { roles: string[] }) {
+export function PlatformConsole({
+  roles,
+  staff,
+}: {
+  roles: string[];
+  staff: Staff[];
+}) {
   const [section, setSection] = useState('tenants');
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [selected, setSelected] = useState<Detail | null>(null);
@@ -75,12 +89,24 @@ export function PlatformConsole({ roles }: { roles: string[] }) {
   const [grantRoleId, setGrantRoleId] = useState('');
   const [duration, setDuration] = useState(60);
   const [ownGrants, setOwnGrants] = useState<OwnGrant[]>([]);
+  const [featureDrafts, setFeatureDrafts] = useState<Record<string, string>>(
+    {},
+  );
 
   const loadTenants = useCallback(async () => {
     setTenants(await apiRequest<Tenant[]>(path('tenants')));
   }, []);
   const loadDetail = useCallback(async (id: string) => {
-    setSelected(await apiRequest<Detail>(path(`tenants/${id}`)));
+    const detail = await apiRequest<Detail>(path(`tenants/${id}`));
+    setSelected(detail);
+    setFeatureDrafts(
+      Object.fromEntries(
+        detail.apps.map((app) => [
+          app.id,
+          JSON.stringify(app.features, null, 2),
+        ]),
+      ),
+    );
   }, []);
 
   useEffect(() => {
@@ -177,6 +203,42 @@ export function PlatformConsole({ roles }: { roles: string[] }) {
     } catch (error) {
       setMessage(errorMessage(error));
     }
+  }
+
+  async function saveFeatures(app: App) {
+    if (!selected) return;
+    let features: Record<string, number>;
+    try {
+      const value: unknown = JSON.parse(featureDrafts[app.id] ?? '{}');
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw new Error();
+      const entries = Object.entries(value);
+      if (
+        entries.length > 20 ||
+        entries.some(
+          ([key, number]) =>
+            !/^[a-z][a-zA-Z0-9]{0,39}$/.test(key) ||
+            typeof number !== 'number' ||
+            !Number.isInteger(number) ||
+            number < 0 ||
+            number > 1_000_000,
+        )
+      )
+        throw new Error();
+      features = value as Record<string, number>;
+    } catch {
+      setMessage('Enter up to 20 numeric feature limits as a JSON object.');
+      return;
+    }
+    await run(
+      () =>
+        apiRequest(
+          path(`tenants/${selected.tenant.id}/apps/${app.id}`),
+          'PUT',
+          { enabled: app.status === 'enabled', features, reason },
+        ),
+      'Feature limits updated.',
+    );
   }
 
   const current = selected?.tenant;
@@ -385,33 +447,59 @@ export function PlatformConsole({ roles }: { roles: string[] }) {
                   )}
                 <h3>Apps</h3>
                 {selected.apps.map((app) => (
-                  <div className="access-row" key={app.id}>
-                    <span>
-                      {app.name} · {app.status}
-                      {app.core ? ' · core' : ''}
-                    </span>
-                    {canEdit && !app.core && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(
-                            () =>
-                              apiRequest(
-                                path(
-                                  `tenants/${selected.tenant.id}/apps/${app.id}`,
+                  <div className="access-detail" key={app.id}>
+                    <div className="access-row">
+                      <span>
+                        {app.name} · {app.status}
+                        {app.core ? ' · core' : ''}
+                      </span>
+                      {canEdit && !app.core && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() =>
+                            void run(
+                              () =>
+                                apiRequest(
+                                  path(
+                                    `tenants/${selected.tenant.id}/apps/${app.id}`,
+                                  ),
+                                  'PUT',
+                                  { enabled: app.status !== 'enabled', reason },
                                 ),
-                                'PUT',
-                                { enabled: app.status !== 'enabled', reason },
-                              ),
-                            app.status === 'enabled'
-                              ? 'App disabled.'
-                              : 'App enabled.',
-                          )
-                        }
-                      >
-                        {app.status === 'enabled' ? 'Disable' : 'Enable'}
-                      </button>
+                              app.status === 'enabled'
+                                ? 'App disabled.'
+                                : 'App enabled.',
+                            )
+                          }
+                        >
+                          {app.status === 'enabled' ? 'Disable' : 'Enable'}
+                        </button>
+                      )}
+                    </div>
+                    {canEdit && (
+                      <div className="access-form">
+                        <label>
+                          Numeric feature limits for {app.name}
+                          <textarea
+                            rows={3}
+                            value={featureDrafts[app.id] ?? '{}'}
+                            onChange={(event) =>
+                              setFeatureDrafts((previous) => ({
+                                ...previous,
+                                [app.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={busy}
+                          onClick={() => void saveFeatures(app)}
+                        >
+                          Save limits
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -434,6 +522,19 @@ export function PlatformConsole({ roles }: { roles: string[] }) {
               <p key={permission.key}>
                 <strong>{permission.key}</strong> · {permission.description}
                 {permission.privileged ? ' · privileged' : ''}
+              </p>
+            ))}
+          </section>
+        )}
+        {section === 'staff' && (
+          <section className="ex-card access-card">
+            <h2>Platform staff</h2>
+            <p>
+              Assignments are managed in code and reviewed before deployment.
+            </p>
+            {staff.map((person) => (
+              <p key={person.username}>
+                <strong>{person.username}</strong> · {person.roles.join(', ')}
               </p>
             ))}
           </section>

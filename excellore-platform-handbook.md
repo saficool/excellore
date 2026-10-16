@@ -1222,7 +1222,7 @@ Two faces and one authority:
 | **Permission catalog** | all platform roles (read) | Browse synced permissions and system roles |
 | **Platform audit** | `platform-auditor` | Platform-scope audit |
 | **Security** | `platform-security` | Emergency tenant suspension. Force sign-out and user disable are deferred until a Keycloak Admin API design satisfies INV-11. |
-| **Platform staff** | code-owned | Local fixture roles come from `platform-staff.yaml` and are checked by CI; production assignments require an independently approved PR. |
+| **Platform staff** | read-only | Shows the code-owned staff roster and roles. Local fixture roles come from `platform-staff.yaml` and are checked by CI; production assignments require an independently approved PR. |
 
 ### 15.3 Database overview
 

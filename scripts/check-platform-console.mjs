@@ -102,6 +102,7 @@ response = await browser.request(`${origin}/platform`);
 assert.equal(response.status, 200, 'platform page');
 html = await response.text();
 assert.match(html, /Platform console/);
+assert.match(html, /Platform staff/);
 assert.doesNotMatch(html, /server-only-token|access_token|refresh_token/i);
 
 response = await browser.request(`${origin}/api/platform/me`);

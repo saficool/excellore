@@ -3,6 +3,44 @@ import { z } from 'zod';
 
 export const id = '@excellore/config';
 
+const platformRole = z.enum([
+  'platform-admin',
+  'platform-operator',
+  'platform-support',
+  'platform-auditor',
+  'platform-security',
+]);
+const platformStaffSchema = z
+  .object({
+    staff: z.array(
+      z
+        .object({
+          username: z.string().regex(/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/),
+          roles: z.array(platformRole).nonempty(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+export type PlatformStaff = z.infer<typeof platformStaffSchema>['staff'];
+
+export function parsePlatformStaff(source: string): PlatformStaff {
+  const document = parseDocument(source, { uniqueKeys: true, strict: true });
+  if (document.errors.length > 0)
+    throw new Error('Platform staff YAML is invalid');
+  const parsed = platformStaffSchema.parse(document.toJS() as unknown);
+  const usernames = new Set<string>();
+  for (const entry of parsed.staff) {
+    if (
+      usernames.has(entry.username) ||
+      new Set(entry.roles).size !== entry.roles.length
+    )
+      throw new Error('Duplicate platform staff assignment');
+    usernames.add(entry.username);
+  }
+  return parsed.staff;
+}
+
 const appId = z.string().regex(/^[a-z][a-z0-9-]*$/);
 const tenantSlug = z.string().regex(/^[a-z0-9](?:[a-z0-9-]{1,38})[a-z0-9]$/);
 const catalogSourceSchema = z

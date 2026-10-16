@@ -1,5 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { SessionRequiredError } from '@excellore/auth';
+import { loadPlatformStaff } from '@excellore/config/server';
+import { resolve } from 'node:path';
 import { getPlatformRoles } from '../../lib/server';
 import { PlatformConsole } from './platform-console';
 
@@ -14,5 +16,8 @@ export default async function PlatformPage() {
     throw error;
   }
   if (!roles) notFound();
-  return <PlatformConsole roles={roles} />;
+  const staff = loadPlatformStaff(
+    resolve(process.cwd(), '../../infra/keycloak/platform-staff.yaml'),
+  );
+  return <PlatformConsole roles={roles} staff={staff} />;
 }

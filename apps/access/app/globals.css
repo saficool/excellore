@@ -102,6 +102,7 @@ a {
 }
 .access-form input,
 .access-form select,
+.access-form textarea,
 .access-card > label input {
   width: 100%;
   min-height: 2.6rem;
