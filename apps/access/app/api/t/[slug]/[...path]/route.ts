@@ -17,6 +17,19 @@ async function handle(request: Request, slug: string, path: string[]) {
     slug,
     segments: path,
     request: canonical,
+    ...(path.length === 4 &&
+    path[0] === 'audit-events' &&
+    path[1] === 'exports' &&
+    path[3] === 'download' &&
+    typeof path[2] === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(path[2])
+      ? {
+          download: {
+            contentType: 'application/x-ndjson' as const,
+            maxBytes: 64 * 1024 * 1024,
+          },
+        }
+      : {}),
   });
 }
 

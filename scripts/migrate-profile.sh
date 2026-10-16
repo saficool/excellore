@@ -17,4 +17,7 @@ elif [ "$exists" != t ]; then
   echo 'Could not determine Profile migration state.' >&2
   exit 1
 fi
+docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-profile \
+  sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U profile_migrator -d profile' \
+  < services/profile/Excellore.Profile.Infrastructure/Migrations/002_worker_projections.sql
 echo 'Profile database migration applied.'

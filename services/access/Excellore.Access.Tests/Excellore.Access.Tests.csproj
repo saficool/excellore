@@ -36,6 +36,7 @@
     <None Include="../Excellore.Access.Infrastructure/Migrations/010_ownership_transfers.sql" Link="010_ownership_transfers.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/011_support_grants_rls.sql" Link="011_support_grants_rls.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/012_audit_export_requests.sql" Link="012_audit_export_requests.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Access.Infrastructure/Migrations/013_worker_expiry.sql" Link="013_worker_expiry.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../infra/db/rls-exempt.txt" Link="rls-exempt.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

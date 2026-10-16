@@ -43,6 +43,9 @@ const child = spawn(
       Auth__Authority: 'http://auth.excellore.localhost:8080/realms/excellore',
       ConnectionStrings__Access: `Host=127.0.0.1;Port=5434;Database=access;Username=access_app;Password=${env.ACCESS_APP_PASSWORD}`,
       SVC_ACCESS_ADMIN_SECRET: env.SVC_ACCESS_ADMIN_SECRET,
+      AuditExportStore__Endpoint: 'http://127.0.0.1:8333',
+      AuditExportStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
+      AuditExportStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,
     },
   },
 );

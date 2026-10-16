@@ -8,7 +8,7 @@ internal static class AccessAuthzChangeWriter
 {
     internal static async Task<long> BumpTenantAsync(NpgsqlConnection connection,
         NpgsqlTransaction transaction, Guid tenantId, Guid actorSub,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string actorType = "human")
     {
         await using var command = new NpgsqlCommand("""
             UPDATE tenants SET authz_version = authz_version + 1, updated_at = now()
@@ -18,7 +18,7 @@ internal static class AccessAuthzChangeWriter
         var version = (long)(await command.ExecuteScalarAsync(cancellationToken)
             ?? throw new InvalidOperationException("Tenant unavailable for authorization update."));
         await WriteEventAsync(connection, transaction, tenantId, version, actorSub,
-            "human", Guid.NewGuid(), cancellationToken);
+            actorType, Guid.NewGuid(), cancellationToken);
         return version;
     }
 
@@ -73,7 +73,7 @@ internal static class AccessAuthzChangeWriter
     internal static async Task WriteAssignmentEventAsync(NpgsqlConnection connection,
         NpgsqlTransaction transaction, Guid tenantId, Guid userId, Guid roleId,
         DateTimeOffset? expiresAt, Guid actorSub, string verb,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string actorType = "human")
     {
         if (verb is not ("granted" or "revoked"))
             throw new ArgumentOutOfRangeException(nameof(verb));
@@ -83,7 +83,7 @@ internal static class AccessAuthzChangeWriter
         {
             specversion = "1.0", id, type, source = "excellore/access",
             time = DateTimeOffset.UtcNow, tenantid = tenantId, correlationid = Guid.NewGuid(),
-            actor = new { sub = actorSub.ToString("D"), type = "human" },
+            actor = new { sub = actorSub.ToString("D"), type = actorType },
             data = new { tenantId, userId, roleId, expiresAt }
         }, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
         await using var command = new NpgsqlCommand("""

@@ -5,7 +5,7 @@ using System.Text;
 namespace Excellore.Platform;
 
 /// <summary>Publishes one pending outbox event and marks it sent after broker confirmation.</summary>
-public sealed class PostgresOutboxDispatcher
+public sealed class PostgresOutboxDispatcher(bool globalEventsOnly = false)
 {
     public async Task<bool> DispatchOnceAsync(DbConnection connection, IEventPublisher publisher,
         CancellationToken cancellationToken = default)
@@ -27,7 +27,14 @@ public sealed class PostgresOutboxDispatcher
         await using (var command = connection.CreateCommand())
         {
             command.Transaction = transaction;
-            command.CommandText = """
+            command.CommandText = globalEventsOnly ? """
+                SELECT id, type, NULL::uuid, payload::text
+                FROM outbox
+                WHERE published_at IS NULL
+                ORDER BY created_at, id
+                LIMIT 1
+                FOR UPDATE SKIP LOCKED
+                """ : """
                 SELECT id, type, tenant_id, payload::text
                 FROM outbox
                 WHERE published_at IS NULL

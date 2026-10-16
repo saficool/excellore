@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.4 |
+| **Document version** | 5.5 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.5 | WP-10 keeps one-time invitation-code delivery synchronous under INV-11 and builds private Access audit exports. Complete cross-service personal-data export and erasure, including Profile export job processing, belong to WP-12; requests remain pending until then. |
 | 5.4 | Support grants become class T with forced RLS by owner decision. Support requests are limited to read-only system roles and tenant owner approval. Audit exports use private storage and authenticated BFF streaming, never signed URLs. |
 | 5.3 | Tenant settings write name and slug only; tenant-defined security policies remain deferred (Q-18). App access requests are recorded for platform review, while tenant approvers can approve role requests only (owner decision; ADR-0052 and ADR-0053 proposed). |
 | 5.2 | Member detail lookup uses `POST /members:lookup` with `userId` in the body, by owner decision (INV-11). Ownership nomination is stored under tenant RLS and requires nominee acceptance (ADR-0051 proposed). |
@@ -1089,7 +1090,7 @@ Two levels of "this is me":
 | **Preferences** | Global | Language, time zone, date format, notification preferences, theme | Profile DB |
 | **Security** | Global | Password, authenticators, passkeys, recent sign-ins | Keycloak via `kc_action` ([11.7](#117-account-actions-profile)) |
 | **Sessions** | Global | List sessions, sign out others | Keycloak sessions (own `sub` only) |
-| **My data** | Global | Request data export and download | Profile worker |
+| **My data** | Global | Request data export; complete cross-service build and download in WP-12 | Profile API and WP-12 worker |
 | **Delete my account** | Global | Request deletion (step-up) | Event to Access |
 | **Member profile** | Tenant | Job title, department, work phone, visibility | Profile DB (`tenant_member_profiles`) |
 | **Member directory** | Tenant | Browse and search active members of the tenant | Profile DB |
@@ -1160,13 +1161,13 @@ inbox [P]   event_id PK, received_at                                    -- consu
 | Job | Trigger | Notes |
 |---|---|---|
 | Process avatar | Upload completed | WP-09 API validates type and size, re-encodes to a bounded WebP image, and strips metadata before storage; WP-10 worker may generate additional sizes |
-| Build data export | Export requested | Gather the user's data across tenants the user belongs to (Profile data; other apps contribute through events), archive, store with expiry, notify |
-| Purge expired exports | Daily | Delete past `expires_at` |
+| Build data export | Export requested | WP-12 gathers data across all the user's tenants and services, stores it privately, and provides an authenticated download. Requests remain pending until that flow exists. |
+| Purge expired exports | Deferred | Retention remains Q-11; do not schedule automatic purging. |
 | Create member profile | `tenant.member.added.v1` | Seed row in tenant context |
 | Update member status | `tenant.member.suspended.v1`, `…reactivated.v1` | Mirror status |
 | Erase member profile | `tenant.member.removed.v1` | Remove tenant-scoped profile data |
-| Erase tenant data | `tenant.deleted.v1` | Remove all rows for the tenant; confirm |
-| Erase user data | `identity.user.deleted.v1` | Remove global profile, avatar, exports; anonymize audit; confirm |
+| Erase tenant data | `tenant.deleted.v1` | WP-12 removes tenant rows and confirms |
+| Erase user data | `identity.user.deleted.v1` | WP-12 removes global profile, avatar, exports; anonymizes references and confirms |
 | Refresh mirror | `identity.user.updated.v1` | Update mirrored names and locale |
 
 ### 14.7 Security notes
@@ -1294,10 +1295,10 @@ Tenant-scoped (`/v1/tenants/{tenantId}/…`, tenant gate + permission), user-lev
 | Job | Trigger | Notes |
 |---|---|---|
 | Expire assignments and support grants | Every minute | Removes at `expires_at`, bumps `authz_version`, publishes change event |
-| Send emails | Events | Invitations, requests, approvals, expiry warnings |
+| Send emails | Events | Requests, approvals, and expiry warnings may be worker notifications. One-time invitation codes are delivered synchronously during issuance: only their hash is retained, and the code must never enter a broker event or worker log (INV-11). |
 | Bulk assignment | Admin job | Asynchronous with progress and audit, per-tenant concurrency limit |
 | Drift detection | Nightly | Identity mirror vs Keycloak |
-| Tenant deletion orchestration | Grace period elapsed | Publish `tenant.deleted.v1`, await confirmations, tombstone |
+| Tenant deletion orchestration | Grace period elapsed | WP-12 publishes `tenant.deleted.v1`, awaits confirmations, and writes the tombstone |
 | Audit export | Request | Private object storage; authenticated, tenant-gated BFF download stream. No signed URL. The WP-06 endpoint records a pending job; WP-10 delivers the worker and stream. |
 | Access reviews | Quarterly (later phase) | Open reviews and reminders |
 | Outbox publisher | Continuous | Publishes pending events |
@@ -2315,7 +2316,7 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 
 - **Goal:** Background processing in tenant context.
 - **Depends on:** WP-06, WP-09.
-- **Deliverables:** `Excellore.Access.Worker` and `Excellore.Profile.Worker` jobs from [15.6](#156-worker-jobs-worker-access) and [14.6](#146-worker-jobs-worker-profile); tenant-iterating schedule helper; per-tenant concurrency limiter; Mailpit-backed email tests.
+- **Deliverables:** `Excellore.Access.Worker` and `Excellore.Profile.Worker` background jobs from [15.6](#156-worker-jobs-worker-access) and [14.6](#146-worker-jobs-worker-profile), excluding the cross-service export and erasure work assigned to WP-12; tenant-iterating schedule helper; per-tenant concurrency limiter; Mailpit-backed email tests. Invitation code delivery remains synchronous under INV-11; notification emails may be background jobs. Profile personal-data export requests remain pending until WP-12.
 - **AC:** expiry removes assignments and support access on time and invalidates caches; jobs run in the right tenant context and cannot read another tenant (test with a deliberately wrong context); handlers are idempotent under duplicate delivery; dead-letter behavior verified.
 
 ### WP-11: Platform console and support grants
@@ -2329,7 +2330,7 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 
 - **Goal:** Tenant and user lifecycle is complete and verifiable.
 - **Depends on:** WP-10, WP-11.
-- **Deliverables:** tenant deletion orchestration with grace period; erasure handlers in every service; confirmations; tombstones; tenant export; user deletion with anonymization; data export for users across tenants.
+- **Deliverables:** tenant deletion orchestration with grace period; erasure handlers in every service; confirmations; tombstones; tenant export; user deletion with anonymization; complete personal-data export for users across tenants and services, including Profile job processing and authenticated download.
 - **AC:** E2E: a tenant with data in Access and Profile is deleted; after the grace period every service has zero rows for the tenant (verified by a test that connects as the migrator and counts), objects are gone, confirmations recorded, tombstone remains; user deletion anonymizes references and removes global data.
 
 ### WP-13: Hardening and end-to-end security

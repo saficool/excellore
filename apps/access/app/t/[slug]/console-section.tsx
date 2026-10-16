@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { useTenantAction, useTenantData } from '../../../lib/browser-api';
+import {
+  tenantApiPath,
+  useTenantAction,
+  useTenantData,
+} from '../../../lib/browser-api';
 
 type Member = {
   userId: string;
@@ -779,10 +783,32 @@ function AuditLog({ slug }: { slug: string }) {
       </div>
       <Feedback action={action} />
       {exportId && (
-        <p role="status">
-          Export {exportId}: {exportStatus.data?.status ?? 'checking status'}.
-          The export is not yet available for download.
-        </p>
+        <div role="status">
+          <p>
+            Export {exportId}: {exportStatus.data?.status ?? 'checking status'}.
+          </p>
+          {exportStatus.data?.status === 'ready' ? (
+            <a
+              href={tenantApiPath(
+                slug,
+                `audit-events/exports/${exportId}/download`,
+              )}
+              download="audit-export.jsonl"
+            >
+              Download export
+            </a>
+          ) : exportStatus.data?.status === 'failed' ? (
+            <p>Export could not be completed.</p>
+          ) : (
+            <button
+              type="button"
+              disabled={exportStatus.loading}
+              onClick={() => void exportStatus.reload()}
+            >
+              Refresh export status
+            </button>
+          )}
+        </div>
       )}
       {data?.length === 0 && <p>No audit entries yet.</p>}
       {data && data.length > 0 && (

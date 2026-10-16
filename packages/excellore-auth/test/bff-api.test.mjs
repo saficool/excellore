@@ -132,6 +132,43 @@ test('proxy accepts an empty accepted response and rejects non-JSON content', as
   assert.doesNotMatch(await rejected.text(), /private/);
 });
 
+test('explicit download opt-in streams only the expected bounded content type', async () => {
+  const options = {
+    config,
+    store,
+    oidcClient: {},
+    app: 'access',
+    apiBaseUrl: 'http://localhost:5002',
+    scope: 'me',
+    segments: ['audit-events', 'exports', tenantId, 'download'],
+    request: new Request(
+      `${appOrigin}/api/me/audit-events/exports/${tenantId}/download`,
+      { headers: cookie },
+    ),
+    download: { contentType: 'application/x-ndjson', maxBytes: 64 },
+  };
+  const allowed = await proxyBffApi({
+    ...options,
+    fetchImpl: async () =>
+      new Response('{"id":"opaque"}\n', {
+        headers: { 'Content-Type': 'application/x-ndjson' },
+      }),
+  });
+  assert.equal(allowed.status, 200);
+  assert.equal(
+    allowed.headers.get('content-disposition'),
+    'attachment; filename="audit-export.jsonl"',
+  );
+  assert.equal(await allowed.text(), '{"id":"opaque"}\n');
+  const rejected = await proxyBffApi({
+    ...options,
+    fetchImpl: async () =>
+      new Response('private', { headers: { 'Content-Type': 'text/plain' } }),
+  });
+  assert.equal(rejected.status, 503);
+  assert.doesNotMatch(await rejected.text(), /private/);
+});
+
 test('mutating API requests require origin and CSRF header', () => {
   const bad = new Request(`${appOrigin}/api/me/settings`, {
     method: 'POST',

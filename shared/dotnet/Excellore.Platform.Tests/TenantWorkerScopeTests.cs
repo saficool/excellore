@@ -148,6 +148,44 @@ public sealed class TenantWorkerScopeTests
         return services.BuildServiceProvider(validateScopes: true);
     }
 
+    [Fact]
+    public async Task Scheduler_bounds_parallel_tenants_and_rejects_duplicate_contexts()
+    {
+        using var provider = CreateProvider();
+        var scheduler = provider.GetRequiredService<TenantJobScheduler>();
+        var tenants = Enumerable.Range(0, 8).Select(_ => Guid.NewGuid()).ToArray();
+        var active = 0;
+        var peak = 0;
+        var seen = new ConcurrentBag<Guid>();
+        await scheduler.RunAsync<ProbeJob>(tenants, 2, async (job, token) =>
+        {
+            seen.Add(job.TenantId);
+            var current = Interlocked.Increment(ref active);
+            int observed;
+            do
+            {
+                observed = peak;
+                if (observed >= current) break;
+            } while (Interlocked.CompareExchange(ref peak, current, observed) != observed);
+            await Task.Delay(20, token);
+            Interlocked.Decrement(ref active);
+        });
+        Assert.True(peak is > 0 and <= 2);
+        Assert.True(tenants.ToHashSet().SetEquals(seen));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            scheduler.RunAsync<ProbeJob>([tenants[0], tenants[0]], 2, (_, _) => Task.CompletedTask));
+
+        var completed = new ConcurrentBag<Guid>();
+        await Assert.ThrowsAsync<AggregateException>(() => scheduler.RunAsync<ProbeJob>(tenants, 2,
+            (job, _) =>
+            {
+                if (job.TenantId == tenants[0]) throw new InvalidOperationException("Synthetic failure.");
+                completed.Add(job.TenantId);
+                return Task.CompletedTask;
+            }));
+        Assert.Equal(tenants.Length - 1, completed.Count);
+    }
+
     private sealed class ProbeJob(ITenantIdAccessor tenant) : IAsyncDisposable
     {
         // Constructor access proves the tenant is bound before job resolution.

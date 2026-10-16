@@ -54,6 +54,7 @@ public static class TenantWorkerScopeServiceCollectionExtensions
         services.AddScoped<ITenantIdAccessor>(provider =>
             provider.GetRequiredService<WorkerTenantIdAccessor>());
         services.AddSingleton<TenantWorkerScope>();
+        services.AddSingleton<TenantJobScheduler>();
         return services;
     }
 }

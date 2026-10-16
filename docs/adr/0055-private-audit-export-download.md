@@ -12,4 +12,4 @@ WP-06 records a tenant-scoped export request under forced RLS and returns only a
 
 ## Consequences
 
-The WP-06 job remains pending until WP-10 implements the worker and stream. The BFF bears transfer load and must enforce streaming limits. INV-02, INV-03, INV-04, INV-10, INV-11, INV-12, and INV-16 apply.
+WP-10 processes the request under forced RLS, stores newline-delimited audit JSON in a private object, and marks the job ready in the Access database. The Access API requires the tenant gate, `access.audit.read`, and recent MFA before looking up the opaque key. The BFF opts into only `application/x-ndjson` for this route and streams at most 64 MiB with `no-store` and `nosniff` headers. Exports exceeding that bound are marked failed and audited; larger export packaging remains a follow-up. The browser receives neither the object key nor a signed URL. INV-02, INV-03, INV-04, INV-10, INV-11, INV-12, and INV-16 apply.

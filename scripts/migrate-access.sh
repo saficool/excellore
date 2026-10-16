@@ -71,4 +71,7 @@ apply_once() {
 apply_once 010_ownership_transfers.sql "SELECT to_regclass('public.ownership_transfers') IS NOT NULL"
 apply_once 011_support_grants_rls.sql "SELECT relforcerowsecurity FROM pg_class WHERE oid = 'public.support_grants'::regclass"
 apply_once 012_audit_export_requests.sql "SELECT to_regclass('public.audit_exports') IS NOT NULL"
+docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-access \
+  sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U access_migrator -d access' \
+  < services/access/Excellore.Access.Infrastructure/Migrations/013_worker_expiry.sql
 echo 'Access database migrations applied.'

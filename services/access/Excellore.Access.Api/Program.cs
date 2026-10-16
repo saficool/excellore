@@ -31,6 +31,8 @@ builder.Services.AddScoped<TenantSettingsService>();
 builder.Services.AddScoped<AccessRequestService>();
 builder.Services.AddScoped<TenantDeletionRequestService>();
 builder.Services.AddScoped<AuditExportRequestService>();
+builder.Services.AddScoped<AuditExportDownloadService>();
+builder.Services.AddSingleton<IAuditExportObjectStore, S3AuditExportObjectStore>();
 builder.Services.AddScoped<SupportGrantService>();
 builder.Services.AddScoped<ISupportGrantUsageRecorder, SupportGrantUsageRecorder>();
 builder.Services.AddScoped<IAuthzResolver, AccessAuthorityResolver>();
@@ -256,6 +258,19 @@ tenantRoutes.MapGet("/audit-events/exports/{exportId:guid}", async (
 {
     var export = await service.GetAsync(exportId, cancellationToken);
     return export is null ? Results.NotFound() : Results.Json(export);
+}).RequirePermission("access.audit.read");
+tenantRoutes.MapGet("/audit-events/exports/{exportId:guid}/download", async (
+    Guid exportId, AuditExportDownloadService service, CancellationToken cancellationToken) =>
+{
+    var result = await service.DownloadAsync(exportId, cancellationToken);
+    return result.Status switch
+    {
+        AuditExportDownloadStatus.Ready => Results.File(result.Data!,
+            "application/x-ndjson", "audit-export.jsonl"),
+        AuditExportDownloadStatus.StepUpRequired => Results.Problem(statusCode: 403,
+            type: "urn:excellore:problem:step-up-required", title: "Step-up required"),
+        _ => Results.NotFound()
+    };
 }).RequirePermission("access.audit.read");
 tenantRoutes.MapGet("/settings", async (TenantSettingsService service,
     CancellationToken cancellationToken) =>

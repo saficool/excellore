@@ -71,6 +71,7 @@ export interface BffApiOptions {
   segments: readonly string[];
   request: Request;
   fetchImpl?: typeof fetch;
+  download?: { contentType: 'application/x-ndjson'; maxBytes: number };
 }
 
 export async function proxyBffApi(options: BffApiOptions): Promise<Response> {
@@ -141,7 +142,9 @@ export async function proxyBffApi(options: BffApiOptions): Promise<Response> {
         method: request.method,
         headers: {
           Authorization: `Bearer ${token}`,
-          Accept: 'application/json, application/problem+json',
+          Accept: options.download
+            ? 'application/x-ndjson, application/problem+json'
+            : 'application/json, application/problem+json',
           ...(body && request.headers.get('content-type')
             ? { 'Content-Type': request.headers.get('content-type')! }
             : {}),
@@ -149,7 +152,7 @@ export async function proxyBffApi(options: BffApiOptions): Promise<Response> {
         ...(body ? { body } : {}),
         redirect: 'manual',
         cache: 'no-store',
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(options.download ? 120_000 : 15_000),
       },
     );
     if (response.status >= 300 && response.status < 400)
@@ -158,6 +161,38 @@ export async function proxyBffApi(options: BffApiOptions): Promise<Response> {
     const json =
       contentType === 'application/json' ||
       contentType === 'application/problem+json';
+    if (
+      options.download &&
+      response.ok &&
+      contentType === options.download.contentType &&
+      request.method === 'GET' &&
+      options.download.maxBytes > 0 &&
+      response.body
+    ) {
+      const length = Number(response.headers.get('content-length'));
+      if (length > options.download.maxBytes)
+        return problem(503, 'authz-unavailable');
+      let bytes = 0;
+      const limiter = new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          bytes += chunk.byteLength;
+          if (bytes > options.download!.maxBytes) {
+            controller.error(new Error('Download size exceeded'));
+            return;
+          }
+          controller.enqueue(chunk);
+        },
+      });
+      return new Response(response.body.pipeThrough(limiter), {
+        status: response.status,
+        headers: {
+          'Cache-Control': 'no-store',
+          'Content-Type': options.download.contentType,
+          'Content-Disposition': 'attachment; filename="audit-export.jsonl"',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+    }
     if (response.body && !json) {
       const reader = response.body.getReader();
       while (true) {
