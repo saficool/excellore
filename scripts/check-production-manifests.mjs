@@ -120,6 +120,35 @@ assert(
   'identity proxy must not log action-link URLs',
 );
 
+const configMaps = resources.filter(
+  (resource) => resource.kind === 'ConfigMap',
+);
+for (const config of configMaps) {
+  for (const key of Object.keys(config.data ?? {}))
+    assert(
+      !/(?:secret|password|credential|api[_-]?key|connectionstrings?)/iu.test(
+        key,
+      ),
+      `${config.metadata.name} contains a secret-shaped ConfigMap key`,
+    );
+}
+const profileConfig = configMaps.find(
+  (config) => config.metadata.name === 'excellore-profile-api',
+);
+const tokenEndpoint = new URL(
+  profileConfig?.data?.Authz__TokenEndpoint ?? 'invalid:',
+);
+assert(
+  tokenEndpoint.protocol === 'https:' &&
+    tokenEndpoint.username === '' &&
+    tokenEndpoint.password === '' &&
+    tokenEndpoint.search === '' &&
+    tokenEndpoint.hash === '' &&
+    tokenEndpoint.pathname ===
+      '/realms/excellore/protocol/openid-connect/token',
+  'Profile Authz token endpoint must be the public credential-free realm endpoint',
+);
+
 for (const [component, prefix] of [
   ['profile-api', 'Identity'],
   ['access-api', 'IdentityAdmin'],

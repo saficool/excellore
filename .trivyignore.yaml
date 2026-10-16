@@ -1,0 +1,11 @@
+misconfigurations:
+  - id: KSV-0109
+    paths:
+      - 'infra/k8s/excellore/templates/configmaps.yaml'
+      - 'excellore/templates/configmaps.yaml'
+    expired_at: 2027-10-16
+    statement: >-
+      Authz__TokenEndpoint is a credential-free HTTPS OIDC endpoint. A repository
+      validator rejects secret-shaped ConfigMap keys and requires this exact value
+      to contain no credentials, query, or fragment. Runtime credentials are loaded
+      from workload-specific ExternalSecrets.
