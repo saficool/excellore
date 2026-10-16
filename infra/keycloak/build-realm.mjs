@@ -1,6 +1,7 @@
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import prettier from 'prettier';
+import { parse } from 'yaml';
 
 const platformRoles = [
   'platform-admin',
@@ -9,6 +10,32 @@ const platformRoles = [
   'platform-auditor',
   'platform-security',
 ];
+
+const staffManifest = parse(
+  readFileSync(new URL('./platform-staff.yaml', import.meta.url), 'utf8'),
+);
+if (!staffManifest || !Array.isArray(staffManifest.staff))
+  throw new Error('Invalid platform staff manifest');
+const fixtureNames = new Map([
+  ['penny.platform', ['Penny', 'Platform']],
+  ['sam.support', ['Sam', 'Support']],
+  ['sec.platform', ['Sec', 'Platform']],
+]);
+const seenStaff = new Set();
+for (const entry of staffManifest.staff) {
+  if (
+    !entry ||
+    typeof entry.username !== 'string' ||
+    !fixtureNames.has(entry.username) ||
+    seenStaff.has(entry.username) ||
+    !Array.isArray(entry.roles) ||
+    entry.roles.length === 0 ||
+    new Set(entry.roles).size !== entry.roles.length ||
+    !entry.roles.every((role) => platformRoles.includes(role))
+  )
+    throw new Error('Invalid local platform staff assignment');
+  seenStaff.add(entry.username);
+}
 
 const flowIds = {
   browser: '0d11e28a-5d25-4ab4-9107-af5fb4bc5040',
@@ -424,9 +451,10 @@ const realm = {
     devUser('vera.viewer', 'Vera', 'Viewer'),
     devUser('gina.globex', 'Gina', 'Globex'),
     devUser('nora.nomember', 'Nora', 'NoMember'),
-    devUser('penny.platform', 'Penny', 'Platform', ['platform-operator']),
-    devUser('sam.support', 'Sam', 'Support', ['platform-support']),
-    devUser('sec.platform', 'Sec', 'Platform', ['platform-security']),
+    ...staffManifest.staff.map(({ username, roles }) => {
+      const [first, last] = fixtureNames.get(username);
+      return devUser(username, first, last, roles);
+    }),
     serviceUser('worker-profile', {
       'api-profile': ['profile.worker'],
       'realm-management': ['view-users'],

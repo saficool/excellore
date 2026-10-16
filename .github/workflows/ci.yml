@@ -30,6 +30,8 @@ jobs:
           PERMISSIONS_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
       - run: pnpm -w permissions:test
       - run: pnpm -w format:check
+      - name: Validate code-owned local platform staff assignments
+        run: node infra/keycloak/build-realm.mjs && git diff --exit-code -- infra/keycloak/realm-dev.json
 
   handbook:
     runs-on: ubuntu-latest
