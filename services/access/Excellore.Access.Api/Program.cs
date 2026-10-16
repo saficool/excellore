@@ -380,6 +380,10 @@ tenantRoutes.MapPost("/role-assignments", async (GrantRoleRequest request,
     RoleAssignmentService service, CancellationToken cancellationToken) =>
     RoleAssignmentResponses.Map(await service.GrantAsync(request, cancellationToken)))
     .RequirePermission("access.assignment.manage");
+tenantRoutes.MapGet("/role-assignments", async (AccessTenantReadService service,
+    CancellationToken cancellationToken) =>
+    Results.Json(await service.ListRoleAssignmentsAsync(cancellationToken)))
+    .RequirePermission("access.assignment.manage");
 tenantRoutes.MapDelete("/role-assignments/{assignmentId:guid}", async (Guid assignmentId,
     [FromBody] RevokeRoleRequest request, RoleAssignmentService service,
     CancellationToken cancellationToken) =>

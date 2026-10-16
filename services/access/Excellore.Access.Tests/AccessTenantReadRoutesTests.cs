@@ -63,6 +63,7 @@ public sealed class AccessTenantReadRoutesTests
                 new CatalogPermission("access.app.access", "Open Access", false, false, false, ["owner", "member"]),
                 new CatalogPermission("access.role.read", "Read roles", false, false, false, ["owner"]),
                 new CatalogPermission("access.role.manage", "Manage roles", true, false, false, ["owner"]),
+                new CatalogPermission("access.assignment.manage", "Manage assignments", true, false, false, ["owner"]),
                 new CatalogPermission("access.member.read", "Read members", false, false, false, ["owner"]),
                 new CatalogPermission("access.apps.read", "Read apps", false, false, false, ["owner"]),
                 new CatalogPermission("access.audit.read", "Read audit", false, false, false, ["owner"]),
@@ -115,6 +116,10 @@ public sealed class AccessTenantReadRoutesTests
         await ExecuteAsync(admin, "INSERT INTO role_assignments (id, tenant_id, user_id, role_id, granted_by) VALUES (@id, @tenant, @user, @role, @actor)",
             ("id", Guid.NewGuid()), ("tenant", tenantOne), ("user", userThree),
             ("role", memberRole), ("actor", actor));
+        var assignmentOne = (Guid)(await ScalarAsync(admin,
+            "SELECT id FROM role_assignments WHERE tenant_id = @tenant LIMIT 1", ("tenant", tenantOne)))!;
+        var assignmentTwo = (Guid)(await ScalarAsync(admin,
+            "SELECT id FROM role_assignments WHERE tenant_id = @tenant LIMIT 1", ("tenant", tenantTwo)))!;
 
         var previousConnection = Environment.GetEnvironmentVariable("ConnectionStrings__Access");
         var previousAuthority = Environment.GetEnvironmentVariable("Auth__Authority");
@@ -132,7 +137,7 @@ public sealed class AccessTenantReadRoutesTests
             using var client = factory.CreateClient();
 
             foreach (var path in new[] { "me/access", "roles", $"roles/{firstRole:D}",
-                "permissions", "members", "apps", "audit-events", "settings" })
+                "permissions", "members", "role-assignments", "apps", "audit-events", "settings" })
             {
                 using var response = await GetAsync(client, userOne, tenantOne, path);
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -144,7 +149,7 @@ public sealed class AccessTenantReadRoutesTests
             using (var basicAccess = await GetAsync(client, userThree, tenantOne, "me/access"))
                 Assert.Equal(HttpStatusCode.OK, basicAccess.StatusCode);
             foreach (var path in new[] { "roles", $"roles/{firstRole:D}",
-                "permissions", "members", "apps", "audit-events", "settings" })
+                "permissions", "members", "role-assignments", "apps", "audit-events", "settings" })
             {
                 using var lackingPermission = await GetAsync(client, userThree, tenantOne, path);
                 Assert.Equal(HttpStatusCode.Forbidden, lackingPermission.StatusCode);
@@ -169,6 +174,15 @@ public sealed class AccessTenantReadRoutesTests
                 Assert.Contains(userThree.ToString("D"), body, StringComparison.OrdinalIgnoreCase);
                 Assert.DoesNotContain(userTwo.ToString("D"), body, StringComparison.OrdinalIgnoreCase);
             }
+            using (var assignments = await GetAsync(client, userOne, tenantOne, "role-assignments"))
+            {
+                var body = await assignments.Content.ReadAsStringAsync();
+                Assert.Contains(assignmentOne.ToString("D"), body, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain(assignmentTwo.ToString("D"), body, StringComparison.OrdinalIgnoreCase);
+            }
+            using (var withoutMfa = await GetAsync(client, userOne, tenantOne,
+                "role-assignments", "1"))
+                Assert.Equal(HttpStatusCode.Forbidden, withoutMfa.StatusCode);
             using (var apps = await GetAsync(client, userOne, tenantOne, "apps"))
             {
                 var body = await apps.Content.ReadAsStringAsync();
@@ -221,10 +235,12 @@ public sealed class AccessTenantReadRoutesTests
 
     private static string Email(Guid user) => $"user-{user:D}@example.invalid";
 
-    private static Task<HttpResponseMessage> GetAsync(HttpClient client, Guid user, Guid tenant, string path)
+    private static Task<HttpResponseMessage> GetAsync(HttpClient client, Guid user, Guid tenant,
+        string path, string acr = "2")
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"/v1/tenants/{tenant:D}/{path}");
         request.Headers.Add("X-Test-User", user.ToString("D"));
+        request.Headers.Add("X-Test-Acr", acr);
         return client.SendAsync(request);
     }
 
@@ -245,9 +261,11 @@ public sealed class AccessTenantReadRoutesTests
         return client.SendAsync(request);
     }
 
-    private static async Task<object?> ScalarAsync(NpgsqlConnection connection, string sql)
+    private static async Task<object?> ScalarAsync(NpgsqlConnection connection, string sql,
+        params (string Name, object Value)[] parameters)
     {
         await using var command = new NpgsqlCommand(sql, connection);
+        foreach (var (name, value) in parameters) command.Parameters.AddWithValue(name, value);
         return await command.ExecuteScalarAsync();
     }
 
@@ -271,7 +289,7 @@ public sealed class AccessTenantReadRoutesTests
                 new Claim("sub", user.ToString("D")),
                 new Claim("email", Email(user)),
                 new Claim("email_verified", "true"),
-                new Claim("acr", "1")
+                new Claim("acr", Request.Headers["X-Test-Acr"].ToString() is "2" ? "2" : "1")
             ], "Test");
             return Task.FromResult(AuthenticateResult.Success(
                 new AuthenticationTicket(new ClaimsPrincipal(identity), "Test")));

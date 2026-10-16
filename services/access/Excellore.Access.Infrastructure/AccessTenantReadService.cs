@@ -7,6 +7,8 @@ public sealed record MemberLookupRequest(Guid UserId);
 public sealed record TenantMemberView(Guid UserId, Guid MembershipId, string Status,
     string Email, string? GivenName, string? FamilyName, DateTimeOffset? JoinedAt);
 public sealed record TenantAppView(string Id, string Name);
+public sealed record TenantRoleAssignmentView(Guid Id, Guid UserId, Guid RoleId,
+    string RoleName, DateTimeOffset? ExpiresAt, DateTimeOffset CreatedAt);
 public sealed record TenantAuditView(Guid Id, DateTimeOffset OccurredAt, Guid? ActorSub,
     string ActorType, string Action, string? TargetType, string? TargetId,
     string? Reason, string? Acr);
@@ -71,6 +73,30 @@ public sealed class AccessTenantReadService(NpgsqlDataSource dataSource,
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
             result.Add(new TenantAppView(reader.GetString(0), reader.GetString(1)));
+        return result;
+    }
+
+    public async Task<IReadOnlyList<TenantRoleAssignmentView>> ListRoleAssignmentsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var result = new List<TenantRoleAssignmentView>();
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await SetTenantAsync(connection, transaction, cancellationToken);
+        await using var command = new NpgsqlCommand("""
+            SELECT a.id, a.user_id, a.role_id, r.name, a.expires_at, a.created_at
+            FROM role_assignments a JOIN roles r ON r.id = a.role_id
+            WHERE a.tenant_id = @tenant AND a.revoked_at IS NULL
+              AND (a.expires_at IS NULL OR a.expires_at > now())
+            ORDER BY a.created_at DESC, a.id DESC LIMIT 500
+            """, connection, transaction);
+        command.Parameters.AddWithValue("tenant", tenantContext.TenantId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+            result.Add(new TenantRoleAssignmentView(reader.GetGuid(0), reader.GetGuid(1),
+                reader.GetGuid(2), reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetFieldValue<DateTimeOffset>(4),
+                reader.GetFieldValue<DateTimeOffset>(5)));
         return result;
     }
 
