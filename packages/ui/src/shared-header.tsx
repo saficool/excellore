@@ -21,7 +21,21 @@ export interface SharedHeaderProps {
   currentAppId?: string;
   accountHref: string;
   userLabel: string;
+  avatarSrc?: string | undefined;
+  avatarRevision?: number;
   messages: HeaderMessages;
+}
+
+function checkedAvatarSrc(src: string): string {
+  if (
+    !src.startsWith('/') ||
+    src.startsWith('//') ||
+    src.includes('\\') ||
+    src.includes('?') ||
+    src.includes('#')
+  )
+    throw new Error('Invalid avatar URL');
+  return src;
 }
 
 function checkedHref(href: string): string {
@@ -61,6 +75,8 @@ export function SharedHeader({
   currentAppId,
   accountHref,
   userLabel,
+  avatarSrc,
+  avatarRevision,
   messages,
 }: SharedHeaderProps) {
   return (
@@ -113,7 +129,19 @@ export function SharedHeader({
           )}
         </nav>
         <details className="ex-menu ex-header__user">
-          <summary aria-label={messages.userMenu}>{userLabel}</summary>
+          <summary aria-label={messages.userMenu}>
+            {avatarSrc && (
+              <img
+                key={avatarRevision}
+                className="ex-header__avatar"
+                src={checkedAvatarSrc(avatarSrc)}
+                alt=""
+                width={32}
+                height={32}
+              />
+            )}
+            {userLabel}
+          </summary>
           <ul className="ex-menu__items">
             <li>
               <a href={checkedHref(accountHref)}>{messages.myAccount}</a>

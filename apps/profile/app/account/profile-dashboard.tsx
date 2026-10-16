@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import { applyTheme } from '../theme';
 
 type OwnProfile = {
   firstName: string | null;
@@ -49,6 +50,8 @@ export function ProfileDashboard() {
   const [busy, setBusy] = useState(false);
   const [sessions, setSessions] = useState<OwnSession[] | null>(null);
   const [exportJob, setExportJob] = useState<string | null>(null);
+  const [avatarRevision, setAvatarRevision] = useState(0);
+  const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false);
   useEffect(() => {
     void Promise.all([
       api<OwnProfile>('profile'),
@@ -57,6 +60,7 @@ export function ProfileDashboard() {
       .then(([own, prefs]) => {
         setProfile(own);
         setPreferences(prefs);
+        applyTheme(prefs.theme);
       })
       .catch(() => setMessage('Profile data is temporarily unavailable.'));
     void api<OwnSession[]>('sessions')
@@ -87,6 +91,7 @@ export function ProfileDashboard() {
       setPreferences(
         await api<Preferences>('preferences', 'PATCH', preferences),
       );
+      applyTheme(preferences.theme);
       setMessage('Preferences saved.');
     } catch {
       setMessage('Could not save preferences.');
@@ -161,6 +166,9 @@ export function ProfileDashboard() {
       });
       await api(`avatar/uploads/${upload.id}/complete`, 'POST', { base64Data });
       setProfile((current) => current && { ...current, hasAvatar: true });
+      setAvatarPreviewFailed(false);
+      setAvatarRevision((current) => current + 1);
+      window.dispatchEvent(new Event('profile-avatar-changed'));
       setMessage('Avatar updated.');
     } catch {
       setMessage('Could not process the avatar.');
@@ -179,6 +187,8 @@ export function ProfileDashboard() {
       });
       if (!response.ok) throw new Error();
       setProfile((current) => current && { ...current, hasAvatar: false });
+      setAvatarPreviewFailed(false);
+      window.dispatchEvent(new Event('profile-avatar-changed'));
       setMessage('Avatar removed.');
     } catch {
       setMessage('Could not remove the avatar.');
@@ -255,12 +265,30 @@ export function ProfileDashboard() {
         <h2>Avatar</h2>
         {profile.hasAvatar && (
           <Image
+            key={avatarRevision}
             src="/api/avatar"
             alt="Your avatar"
             width={128}
             height={128}
             unoptimized
+            onError={() => setAvatarPreviewFailed(true)}
+            onLoad={() => setAvatarPreviewFailed(false)}
           />
+        )}
+        {!profile.hasAvatar && <p>No avatar uploaded yet.</p>}
+        {avatarPreviewFailed && (
+          <p role="status">
+            Avatar saved, but the preview could not load.{' '}
+            <button
+              type="button"
+              onClick={() => {
+                setAvatarPreviewFailed(false);
+                setAvatarRevision((current) => current + 1);
+              }}
+            >
+              Retry preview
+            </button>
+          </p>
         )}
         <label className="profile-file">
           Upload image
@@ -315,9 +343,11 @@ export function ProfileDashboard() {
             Theme
             <select
               value={String(preferences.theme ?? 'system')}
-              onChange={(event) =>
-                setPreferences({ ...preferences, theme: event.target.value })
-              }
+              onChange={(event) => {
+                const theme = event.target.value;
+                setPreferences({ ...preferences, theme });
+                applyTheme(theme);
+              }}
             >
               <option value="system">System</option>
               <option value="light">Light</option>

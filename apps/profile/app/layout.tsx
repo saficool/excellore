@@ -1,4 +1,5 @@
 import './globals.css';
+import { ThemeSync } from './theme-sync';
 
 export const metadata = { title: 'Excellore Profile' };
 
@@ -7,7 +8,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ThemeSync />
+        {children}
+      </body>
     </html>
   );
 }

@@ -55,6 +55,22 @@ test('header rejects unsafe navigation URLs', () => {
   );
 });
 
+test('header renders a same-origin avatar and rejects unsafe image URLs', () => {
+  const html = renderToStaticMarkup(
+    createElement(SharedHeader, { ...props, avatarSrc: '/api/avatar' }),
+  );
+  assert.match(html, /src="\/api\/avatar"/);
+  assert.match(html, /class="ex-header__avatar"/);
+  assert.throws(() =>
+    renderToStaticMarkup(
+      createElement(SharedHeader, {
+        ...props,
+        avatarSrc: 'https://other.example.test/avatar',
+      }),
+    ),
+  );
+});
+
 test('shared style sheet is exported for app layouts', () => {
   assert.match(
     import.meta.resolve('@excellore/ui/styles.css'),

@@ -53,7 +53,11 @@ export async function GET(request: Request): Promise<Response> {
       cache: 'no-store',
       signal: AbortSignal.timeout(15_000),
     });
-    if (response.status === 404) return new Response(null, { status: 404 });
+    if (response.status === 404)
+      return new Response(null, {
+        status: 404,
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
     if (
       !response.ok ||
       response.headers.get('content-type') !== 'image/webp' ||
@@ -70,7 +74,13 @@ export async function GET(request: Request): Promise<Response> {
     });
   } catch (error) {
     if (error instanceof SessionRequiredError)
-      return new Response(null, { status: 401 });
-    return new Response(null, { status: 503 });
+      return new Response(null, {
+        status: 401,
+        headers: { 'Cache-Control': 'private, no-store' },
+      });
+    return new Response(null, {
+      status: 503,
+      headers: { 'Cache-Control': 'private, no-store' },
+    });
   }
 }

@@ -58,7 +58,7 @@ a {
   padding: 0.65rem 1rem;
   border: 0;
   border-radius: var(--ex-radius-medium);
-  color: white;
+  color: var(--ex-color-accent-text);
   background: var(--ex-color-accent);
   cursor: pointer;
 }

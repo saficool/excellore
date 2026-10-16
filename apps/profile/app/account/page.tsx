@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
-import { SharedHeader } from '@excellore/ui';
 import { SessionRequiredError } from '@excellore/auth';
 import { getPageSession } from '../../lib/server';
+import { ProfileHeader } from '../profile-header';
 import { ProfileDashboard } from './profile-dashboard';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +16,7 @@ export default async function AccountPage() {
   }
   return (
     <>
-      <SharedHeader
+      <ProfileHeader
         homeHref="/"
         tenants={[]}
         apps={[]}

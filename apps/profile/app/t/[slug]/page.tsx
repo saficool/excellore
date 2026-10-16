@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
-import { SharedHeader } from '@excellore/ui';
 import { SessionRequiredError, TenantAccessError } from '@excellore/auth';
 import { getTenantPageData } from '../../../lib/server';
+import { ProfileHeader } from '../../profile-header';
 import { TenantProfile } from './tenant-profile';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,7 @@ export default async function TenantPage({
   }
   return (
     <>
-      <SharedHeader
+      <ProfileHeader
         homeHref="/"
         currentTenant={{ slug, name: data.tenant.name }}
         tenants={data.tenants}
