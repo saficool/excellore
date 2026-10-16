@@ -279,6 +279,21 @@ assert.equal(
   200,
   'svc-access-admin cannot read Keycloak users',
 );
+for (const [clientId, secret] of [
+  ['worker-access', env.WORKER_ACCESS_SECRET],
+  ['worker-profile', env.WORKER_PROFILE_SECRET],
+]) {
+  const machine = await token({
+    client_id: clientId,
+    client_secret: secret,
+    grant_type: 'client_credentials',
+  });
+  assert.equal(machine.status, 200, `${clientId} token`);
+  const directory = await fetch(`${adminBase}/users?first=0&max=1`, {
+    headers: { authorization: `Bearer ${machine.data.access_token}` },
+  });
+  assert.equal(directory.status, 200, `${clientId} read-only directory`);
+}
 
 class BrowserSession {
   cookies = new Map();

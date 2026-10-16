@@ -1,6 +1,7 @@
 using Excellore.Access.Worker;
 using Excellore.Access.Infrastructure;
 using Excellore.Platform;
+using Excellore.Authz;
 using Npgsql;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -27,6 +28,8 @@ builder.Services.AddScoped(provider => new AuditExportBuilder(
     provider.GetRequiredService<IAuditExportObjectStore>()));
 builder.Services.AddScoped<AccessTenantMaintenanceJob>();
 builder.Services.AddHostedService<AccessExpiryScheduler>();
+builder.Services.AddKeycloakDirectory(builder.Configuration, "worker-access");
+builder.Services.AddHostedService<AccessIdentityDriftWorker>();
 
 var host = builder.Build();
 host.Run();

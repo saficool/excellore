@@ -12,5 +12,6 @@
     <PackageReference Include="Npgsql" Version="10.0.3" />
     <ProjectReference Include="../../../shared/dotnet/Excellore.Platform/Excellore.Platform.csproj" />
     <ProjectReference Include="../../../shared/dotnet/Excellore.Contracts/Excellore.Contracts.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Authz/Excellore.Authz.csproj" />
   </ItemGroup>
 </Project>

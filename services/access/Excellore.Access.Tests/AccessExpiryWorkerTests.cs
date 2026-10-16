@@ -1,9 +1,11 @@
 using System.Security.Cryptography;
 using Excellore.Access.Infrastructure;
+using Excellore.Access.Worker;
 using Excellore.Auth;
 using Excellore.Authz;
 using Excellore.Platform;
 using Npgsql;
+using Microsoft.Extensions.Logging.Abstractions;
 using Testcontainers.PostgreSql;
 
 namespace Excellore.Access.Tests;
@@ -30,7 +32,8 @@ public sealed class AccessExpiryWorkerTests
         {
             "001_initial.sql", "003_membership_index.sql", "004_outbox_publisher.sql",
             "005_audit_append_only.sql", "011_support_grants_rls.sql",
-            "012_audit_export_requests.sql", "013_worker_expiry.sql"
+            "012_audit_export_requests.sql", "013_worker_expiry.sql",
+            "014_worker_identity_drift.sql"
         })
             await ExecAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, migration)));
@@ -102,6 +105,11 @@ public sealed class AccessExpiryWorkerTests
             "SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user"));
         Assert.False(await BoolAsync(source,
             "SELECT has_table_privilege(current_user,'identities','UPDATE')"));
+        var drift = new AccessIdentityDriftWorker(new AccessWorkerDatabase(source),
+            new FakeDirectory(member, staff), NullLogger<AccessIdentityDriftWorker>.Instance);
+        Assert.Equal(1, await drift.CountDriftAsync());
+        Assert.False(await BoolAsync(source,
+            "SELECT has_column_privilege(current_user,'identities','email','SELECT')"));
 
         var exportId = Guid.NewGuid();
         await using (var create = new NpgsqlCommand("""
@@ -172,6 +180,18 @@ public sealed class AccessExpiryWorkerTests
         }
         public Task<byte[]?> GetAsync(string key, CancellationToken cancellationToken) =>
             Task.FromResult<byte[]?>(Data);
+    }
+
+    private sealed class FakeDirectory(Guid active, Guid disabled) : IKeycloakDirectory
+    {
+        public Task<IReadOnlyDictionary<Guid, KeycloakDirectoryUser>> ListAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, KeycloakDirectoryUser>>(
+                new Dictionary<Guid, KeycloakDirectoryUser>
+                {
+                    [active] = new(active, true, null, null, null, null),
+                    [disabled] = new(disabled, false, null, null, null, null)
+                });
     }
 
     private static async Task ExecAsync(NpgsqlConnection connection, string sql)

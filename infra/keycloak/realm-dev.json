@@ -190,6 +190,8 @@
       { "client": "worker-profile", "roles": ["profile.worker"] }
     ],
     "realm-management": [
+      { "client": "worker-access", "roles": ["view-users"] },
+      { "client": "worker-profile", "roles": ["view-users"] },
       {
         "client": "svc-access-admin",
         "roles": ["query-users", "view-users", "manage-users"]
@@ -870,13 +872,19 @@
       "username": "service-account-worker-profile",
       "enabled": true,
       "serviceAccountClientId": "worker-profile",
-      "clientRoles": { "api-profile": ["profile.worker"] }
+      "clientRoles": {
+        "api-profile": ["profile.worker"],
+        "realm-management": ["view-users"]
+      }
     },
     {
       "username": "service-account-worker-access",
       "enabled": true,
       "serviceAccountClientId": "worker-access",
-      "clientRoles": { "api-access": ["access.worker"] }
+      "clientRoles": {
+        "api-access": ["access.worker"],
+        "realm-management": ["view-users"]
+      }
     },
     {
       "username": "service-account-svc-shell-authz",

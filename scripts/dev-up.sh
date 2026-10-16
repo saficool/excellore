@@ -110,3 +110,4 @@ done
 
 bash scripts/check-dev-stack.sh
 node scripts/sync-dev-access-redirect.mjs
+node scripts/sync-dev-worker-directory.mjs

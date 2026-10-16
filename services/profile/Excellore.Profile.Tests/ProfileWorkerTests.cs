@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Excellore.Contracts;
+using Excellore.Authz;
 using Excellore.Platform;
 using Excellore.Profile.Worker;
 using Npgsql;
@@ -30,7 +31,8 @@ public sealed class ProfileWorkerTests
         await using var migrator = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(
             postgres.GetConnectionString()) { Username = "profile_migrator", Password = adminPassword }.ConnectionString);
         await migrator.OpenAsync();
-        foreach (var migration in new[] { "001_initial.sql", "002_worker_projections.sql" })
+        foreach (var migration in new[] { "001_initial.sql", "002_worker_projections.sql",
+            "003_identity_mirror.sql" })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, migration)));
 
@@ -76,6 +78,39 @@ public sealed class ProfileWorkerTests
             "SELECT rolbypassrls FROM pg_roles WHERE rolname=current_user"));
         Assert.False(await ScalarBoolAsync(source,
             "SELECT has_table_privilege(current_user,'user_profiles','SELECT')"));
+
+        await using (var seedProfile = new NpgsqlCommand(
+            "INSERT INTO user_profiles(user_id,mirror_first_name) VALUES (@user,'Before')", admin))
+        {
+            seedProfile.Parameters.AddWithValue("user", userId);
+            await seedProfile.ExecuteNonQueryAsync();
+        }
+        var identity = new FakeDirectory(userId);
+        var identityProjector = new ProfileIdentityMirrorProjector(
+            new ProfileWorkerDatabase(source), new PostgresEventInbox(), identity);
+        var changedEvent = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            specversion = "1.0", id = Guid.NewGuid(), type = IdentityUserUpdatedV1.EventType,
+            source = "excellore/access", time = DateTimeOffset.UtcNow,
+            correlationid = Guid.NewGuid(),
+            actor = new { sub = userId.ToString("D"), type = "human" },
+            data = new { userId, changed = new[] { "givenName", "familyName", "locale" } }
+        });
+        Assert.True(await identityProjector.ApplyAsync(changedEvent));
+        Assert.False(await identityProjector.ApplyAsync(changedEvent));
+        await using (var mirror = new NpgsqlCommand(
+            "SELECT mirror_first_name,mirror_last_name,mirror_locale FROM user_profiles WHERE user_id=@user",
+            admin))
+        {
+            mirror.Parameters.AddWithValue("user", userId);
+            await using var reader = await mirror.ExecuteReaderAsync();
+            Assert.True(await reader.ReadAsync());
+            Assert.Equal("After", reader.GetString(0));
+            Assert.Equal("Person", reader.GetString(1));
+            Assert.Equal("en", reader.GetString(2));
+        }
+        Assert.False(await ScalarBoolAsync(source,
+            "SELECT has_column_privilege(current_user,'user_profiles','avatar_object_key','SELECT')"));
 
         var outboxId = Guid.NewGuid();
         var globalEvent = JsonSerializer.Serialize(new
@@ -170,5 +205,16 @@ public sealed class ProfileWorkerTests
             return Task.CompletedTask;
         }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private sealed class FakeDirectory(Guid userId) : IKeycloakDirectory
+    {
+        public Task<IReadOnlyDictionary<Guid, KeycloakDirectoryUser>> ListAsync(
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, KeycloakDirectoryUser>>(
+                new Dictionary<Guid, KeycloakDirectoryUser>
+                {
+                    [userId] = new(userId, true, null, "After", "Person", "en")
+                });
     }
 }

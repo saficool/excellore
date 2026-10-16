@@ -4,7 +4,8 @@ using Excellore.Platform;
 namespace Excellore.Profile.Worker;
 
 public sealed class ProfileMembershipSubscriber(IEventBus eventBus,
-    ProfileMembershipProjector projector, ILogger<ProfileMembershipSubscriber> logger) : BackgroundService
+    ProfileMembershipProjector projector, ProfileIdentityMirrorProjector identity,
+    ILogger<ProfileMembershipSubscriber> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -15,6 +16,8 @@ public sealed class ProfileMembershipSubscriber(IEventBus eventBus,
         };
         var handlers = types.ToDictionary(type => type,
             type => (PlatformEventHandler)((body, token) => projector.ApplyAsync(type, body, token)));
+        handlers.Add(IdentityUserUpdatedV1.EventType,
+            (body, token) => identity.ApplyAsync(body, token));
         while (!stoppingToken.IsCancellationRequested)
         {
             try

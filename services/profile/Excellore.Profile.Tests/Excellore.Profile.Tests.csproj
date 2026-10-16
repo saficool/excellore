@@ -26,6 +26,8 @@
           Link="001_initial.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Profile.Infrastructure/Migrations/002_worker_projections.sql"
           Link="002_worker_projections.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Profile.Infrastructure/Migrations/003_identity_mirror.sql"
+          Link="003_identity_mirror.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

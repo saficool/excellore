@@ -20,4 +20,7 @@ fi
 docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-profile \
   sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U profile_migrator -d profile' \
   < services/profile/Excellore.Profile.Infrastructure/Migrations/002_worker_projections.sql
+docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-profile \
+  sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U profile_migrator -d profile' \
+  < services/profile/Excellore.Profile.Infrastructure/Migrations/003_identity_mirror.sql
 echo 'Profile database migration applied.'

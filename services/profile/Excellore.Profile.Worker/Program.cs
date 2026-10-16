@@ -1,5 +1,6 @@
 using Excellore.Profile.Worker;
 using Excellore.Platform;
+using Excellore.Authz;
 using Npgsql;
 
 var builder = Host.CreateApplicationBuilder(args);
@@ -16,6 +17,8 @@ var workerConnectionString = builder.Configuration.GetConnectionString("ProfileW
 builder.Services.AddSingleton(new ProfileWorkerDatabase(NpgsqlDataSource.Create(workerConnectionString)));
 builder.Services.AddSingleton<PostgresEventInbox>();
 builder.Services.AddSingleton<ProfileMembershipProjector>();
+builder.Services.AddKeycloakDirectory(builder.Configuration, "worker-profile");
+builder.Services.AddSingleton<ProfileIdentityMirrorProjector>();
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<ProfileMembershipSubscriber>();
 

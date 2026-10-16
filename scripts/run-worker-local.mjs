@@ -27,6 +27,7 @@ assert.ok(
   env.RABBITMQ_USER && env.RABBITMQ_PASSWORD,
   'Local RabbitMQ credentials are missing',
 );
+assert.ok(env[`WORKER_${prefix}_SECRET`], 'Local worker identity is missing');
 const broker = new URL('amqp://127.0.0.1:5672/');
 broker.username = env.RABBITMQ_USER;
 broker.password = env.RABBITMQ_PASSWORD;
@@ -36,6 +37,9 @@ const connection = (role, password) =>
 const workerEnv = {
   ...process.env,
   DOTNET_ENVIRONMENT: 'Development',
+  EXCELLORE_INSECURE_LOCAL_DEV: 'true',
+  Auth__Authority: 'http://auth.excellore.localhost:8080/realms/excellore',
+  IdentityDirectory__ClientSecret: env[`WORKER_${prefix}_SECRET`],
   Messaging__RabbitMqUri: broker.toString(),
   [`ConnectionStrings__${service === 'access' ? 'Access' : 'Profile'}Publisher`]:
     connection(`${service}_publisher`, env[`${prefix}_PUBLISHER_PASSWORD`]),
@@ -45,7 +49,6 @@ const workerEnv = {
 if (service === 'access') {
   assert.match(env.ACCESS_WORKER_ACTOR_ID ?? '', /^[0-9a-f-]{36}$/i);
   workerEnv.Worker__ActorId = env.ACCESS_WORKER_ACTOR_ID;
-  workerEnv.EXCELLORE_INSECURE_LOCAL_DEV = 'true';
   workerEnv.AuditExportStore__Endpoint = 'http://127.0.0.1:8333';
   workerEnv.AuditExportStore__AccessKey = env.OBJECTSTORE_ACCESS_KEY;
   workerEnv.AuditExportStore__SecretKey = env.OBJECTSTORE_SECRET_KEY;

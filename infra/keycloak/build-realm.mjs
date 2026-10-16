@@ -308,6 +308,8 @@ const realm = {
     ],
     'api-profile': [{ client: 'worker-profile', roles: ['profile.worker'] }],
     'realm-management': [
+      { client: 'worker-access', roles: ['view-users'] },
+      { client: 'worker-profile', roles: ['view-users'] },
       {
         client: 'svc-access-admin',
         roles: ['query-users', 'view-users', 'manage-users'],
@@ -425,8 +427,14 @@ const realm = {
     devUser('penny.platform', 'Penny', 'Platform', ['platform-operator']),
     devUser('sam.support', 'Sam', 'Support', ['platform-support']),
     devUser('sec.platform', 'Sec', 'Platform', ['platform-security']),
-    serviceUser('worker-profile', { 'api-profile': ['profile.worker'] }),
-    serviceUser('worker-access', { 'api-access': ['access.worker'] }),
+    serviceUser('worker-profile', {
+      'api-profile': ['profile.worker'],
+      'realm-management': ['view-users'],
+    }),
+    serviceUser('worker-access', {
+      'api-access': ['access.worker'],
+      'realm-management': ['view-users'],
+    }),
     serviceUser('svc-shell-authz', { 'api-access': ['access.authz.resolve'] }),
     serviceUser('svc-profile-authz', {
       'api-access': ['access.authz.resolve'],
