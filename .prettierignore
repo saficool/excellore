@@ -10,3 +10,5 @@ excellore-platform-handbook.md
 docs/handbook.md
 AGENTS.md
 pnpm-lock.yaml
+infra/k8s/**/templates/*.yaml
+infra/k8s/**/templates/*.tpl

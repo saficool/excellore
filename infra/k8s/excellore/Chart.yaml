@@ -1,0 +1,7 @@
+apiVersion: v2
+name: excellore
+description: Production Kubernetes resources for the Excellore platform
+type: application
+version: 0.1.0
+appVersion: '1.0.0'
+kubeVersion: '>=1.30.0-0'

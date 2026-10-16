@@ -53,6 +53,18 @@ public sealed class KeycloakDirectoryClientTests
             "https://name:secret@identity.example/realms/excellore", false));
     }
 
+    [Fact]
+    public void Directory_endpoint_allows_only_the_exact_private_http_host()
+    {
+        var endpoints = KeycloakDirectoryClient.Endpoints(
+            "http://keycloak.excellore.svc.cluster.local:8080/realms/excellore", false,
+            "keycloak.excellore.svc.cluster.local");
+        Assert.Equal("keycloak.excellore.svc.cluster.local", endpoints.Token.Host);
+        Assert.Throws<ArgumentException>(() => KeycloakDirectoryClient.Endpoints(
+            "http://keycloak.attacker.svc.cluster.local:8080/realms/excellore", false,
+            "keycloak.excellore.svc.cluster.local"));
+    }
+
     private static HttpResponseMessage Json(string value) => new(HttpStatusCode.OK)
     {
         Content = new StringContent(value, Encoding.UTF8, "application/json")

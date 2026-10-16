@@ -15,11 +15,11 @@ public sealed class KeycloakOwnIdentityClient(HttpClient http, IConfiguration co
     {
         if (firstName is null && lastName is null && locale is null) return true;
         if (userId == Guid.Empty) return false;
-        var authority = configuration["Auth:Authority"];
+        var authority = configuration["Identity:Authority"] ?? configuration["Auth:Authority"];
         var secret = configuration["Identity:ClientSecret"];
         if (!Uri.TryCreate(authority, UriKind.Absolute, out var issuer) ||
             issuer.AbsolutePath.TrimEnd('/') != "/realms/excellore" ||
-            issuer.Scheme is not ("https" or "http") ||
+            !Allowed(issuer) ||
             string.IsNullOrWhiteSpace(secret)) return false;
         var baseUri = issuer.GetLeftPart(UriPartial.Authority);
         var tokenUri = new Uri($"{baseUri}/realms/excellore/protocol/openid-connect/token");
@@ -138,9 +138,10 @@ public sealed class KeycloakOwnIdentityClient(HttpClient http, IConfiguration co
     private async Task<(Uri Issuer, string Token)?> CredentialsAsync(CancellationToken ct)
     {
         var secret = configuration["Identity:ClientSecret"];
-        if (!Uri.TryCreate(configuration["Auth:Authority"], UriKind.Absolute, out var issuer) ||
+        if (!Uri.TryCreate(configuration["Identity:Authority"] ?? configuration["Auth:Authority"],
+                UriKind.Absolute, out var issuer) ||
             issuer.AbsolutePath.TrimEnd('/') != "/realms/excellore" ||
-            issuer.Scheme is not ("https" or "http") || string.IsNullOrWhiteSpace(secret))
+            !Allowed(issuer) || string.IsNullOrWhiteSpace(secret))
             return null;
         try
         {
@@ -165,6 +166,21 @@ public sealed class KeycloakOwnIdentityClient(HttpClient http, IConfiguration co
         {
             return null;
         }
+    }
+
+    private bool Allowed(Uri authority)
+    {
+        if (authority.UserInfo.Length > 0 || authority.Query.Length > 0 ||
+            authority.Fragment.Length > 0) return false;
+        if (authority.Scheme == Uri.UriSchemeHttps) return true;
+        if (authority.Scheme != Uri.UriSchemeHttp) return false;
+        var local = string.Equals(configuration["EXCELLORE_INSECURE_LOCAL_DEV"], "true",
+            StringComparison.OrdinalIgnoreCase) &&
+            (authority.IsLoopback || authority.Host.EndsWith(".localhost",
+                StringComparison.OrdinalIgnoreCase));
+        var privateHost = configuration["Identity:PrivateHttpHost"];
+        return local || privateHost is { Length: > 0 } &&
+            string.Equals(authority.Host, privateHost, StringComparison.OrdinalIgnoreCase);
     }
 
     private static DateTimeOffset? ReadEpoch(JsonElement element, string field)

@@ -1,0 +1,199 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-identity-proxy
+  labels:
+    {{- include "excellore.labels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    error_log /dev/stderr crit;
+    pid /tmp/nginx.pid;
+    events {}
+    http {
+      access_log off;
+      client_body_temp_path /tmp/client_body;
+      proxy_temp_path /tmp/proxy;
+      server {
+        listen 8080;
+        server_tokens off;
+        location ~ ^/realms/master(?:/|$) { return 404; }
+        location ^~ /admin { return 404; }
+        location ^~ /internal { return 404; }
+        location ^~ /realms/ { proxy_pass http://{{ include "excellore.fullname" . }}-keycloak:8080; include /etc/nginx/proxy.conf; }
+        location ^~ /resources/ { proxy_pass http://{{ include "excellore.fullname" . }}-keycloak:8080; include /etc/nginx/proxy.conf; }
+        location = /robots.txt { proxy_pass http://{{ include "excellore.fullname" . }}-keycloak:8080; include /etc/nginx/proxy.conf; }
+        location = /health/live { return 200 'Healthy'; add_header Content-Type text/plain; }
+        location / { return 404; }
+      }
+    }
+  proxy.conf: |
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Port 443;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Connection "";
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "excellore.fullname" . }}-keycloak
+  labels:
+    {{- include "excellore.labels" . | nindent 4 }}
+    app.kubernetes.io/name: keycloak
+spec:
+  replicas: {{ .Values.replicas.keycloak }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: {{ include "excellore.name" . }}
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: {{ include "excellore.name" . }}
+        app.kubernetes.io/name: keycloak
+        excellore.io/class: identity
+    spec:
+      serviceAccountName: {{ include "excellore.fullname" . }}-keycloak
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      terminationGracePeriodSeconds: 60
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/part-of: {{ include "excellore.name" . }}
+                  app.kubernetes.io/name: keycloak
+      containers:
+        - name: keycloak
+          image: {{ include "excellore.image" (dict "root" . "key" "keycloak") }}
+          imagePullPolicy: IfNotPresent
+          args: ["start", "--optimized", "--import-realm", "--cache=ispn"]
+          securityContext:
+            {{- include "excellore.containerSecurityContext" . | nindent 12 }}
+          envFrom:
+            - configMapRef: { name: {{ include "excellore.fullname" . }}-keycloak }
+            - secretRef: { name: {{ include "excellore.fullname" . }}-keycloak }
+          ports:
+            - { name: http, containerPort: 8080 }
+            - { name: management, containerPort: 9000 }
+            - { name: jgroups, containerPort: 7800 }
+            - { name: jgroups-fd, containerPort: 57800 }
+          startupProbe:
+            httpGet: { path: /health/started, port: management }
+            failureThreshold: 60
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health/live, port: management }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /health/ready, port: management }
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources.keycloak | nindent 12 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: data, mountPath: /opt/keycloak/data/tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - { name: data, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "excellore.fullname" . }}-keycloak
+  labels:
+    {{- include "excellore.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/part-of: {{ include "excellore.name" . }}
+    app.kubernetes.io/name: keycloak
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+    - { name: jgroups, port: 7800, targetPort: jgroups }
+    - { name: jgroups-fd, port: 57800, targetPort: jgroups-fd }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "excellore.fullname" . }}-identity-proxy
+  labels:
+    {{- include "excellore.labels" . | nindent 4 }}
+    app.kubernetes.io/name: identity-proxy
+spec:
+  replicas: {{ .Values.replicas.identityProxy }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: {{ include "excellore.name" . }}
+      app.kubernetes.io/name: identity-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: {{ include "excellore.name" . }}
+        app.kubernetes.io/name: identity-proxy
+        excellore.io/class: public-edge
+    spec:
+      serviceAccountName: {{ include "excellore.fullname" . }}-identity-proxy
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "excellore.podSecurityContext" . | nindent 8 }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/part-of: {{ include "excellore.name" . }}
+                    app.kubernetes.io/name: identity-proxy
+      containers:
+        - name: proxy
+          image: {{ include "excellore.image" (dict "root" . "key" "proxy") }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            {{- include "excellore.containerSecurityContext" . | nindent 12 }}
+          ports:
+            - { name: http, containerPort: 8080 }
+          livenessProbe:
+            httpGet: { path: /health/live, port: http }
+          readinessProbe:
+            httpGet: { path: /health/live, port: http }
+          resources:
+            {{- toYaml .Values.resources.proxy | nindent 12 }}
+          volumeMounts:
+            - { name: config, mountPath: /etc/nginx/nginx.conf, subPath: nginx.conf, readOnly: true }
+            - { name: config, mountPath: /etc/nginx/proxy.conf, subPath: proxy.conf, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: config
+          configMap: { name: {{ include "excellore.fullname" . }}-identity-proxy }
+        - { name: tmp, emptyDir: {} }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "excellore.fullname" . }}-identity-proxy
+  labels:
+    {{- include "excellore.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/part-of: {{ include "excellore.name" . }}
+    app.kubernetes.io/name: identity-proxy
+  ports:
+    - { name: http, port: 8080, targetPort: http }

@@ -1,0 +1,106 @@
+nameOverride: ''
+fullnameOverride: ''
+
+imagePullSecrets: []
+
+ingress:
+  enabled: true
+  className: nginx
+  namespace: ingress-nginx
+  tlsSecretName: excellore-public-tls
+  hosts:
+    shell: excellore.example.invalid
+    profile: profile.excellore.example.invalid
+    access: access.excellore.example.invalid
+    identity: auth.excellore.example.invalid
+
+externalSecrets:
+  enabled: true
+  apiVersion: external-secrets.io/v1
+  refreshInterval: 1h
+  storeRef:
+    kind: ClusterSecretStore
+    name: excellore-production
+  remotePrefix: excellore/production
+
+platform:
+  issuer: https://auth.excellore.example.invalid/realms/excellore
+  valkeyUrl: rediss://valkey.private.example.invalid:6379
+  accessInternalUrl: http://excellore-access-api:8080
+  smtpHost: smtp.private.example.invalid
+  smtpPort: '587'
+  invitationFrom: invites@example.invalid
+
+images:
+  shell:
+    repository: ghcr.io/saficool/excellore-shell
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  profileBff:
+    repository: ghcr.io/saficool/excellore-profile
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  accessBff:
+    repository: ghcr.io/saficool/excellore-access
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  profileApi:
+    repository: ghcr.io/saficool/excellore-profile-api
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  accessApi:
+    repository: ghcr.io/saficool/excellore-access-api
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  profileWorker:
+    repository: ghcr.io/saficool/excellore-profile-worker
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  accessWorker:
+    repository: ghcr.io/saficool/excellore-access-worker
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  keycloak:
+    repository: ghcr.io/saficool/excellore-keycloak
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  proxy:
+    repository: nginxinc/nginx-unprivileged
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  rlsAuditor:
+    repository: postgres
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+replicas:
+  bff: 2
+  api: 2
+  worker: 2
+  keycloak: 2
+  identityProxy: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  cpuUtilization: 70
+
+resources:
+  bff:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { cpu: '1', memory: 512Mi }
+  api:
+    requests: { cpu: 150m, memory: 256Mi }
+    limits: { cpu: '1', memory: 768Mi }
+  worker:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { cpu: '1', memory: 768Mi }
+  keycloak:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { cpu: '2', memory: 2Gi }
+  proxy:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+
+network:
+  # Private endpoint CIDRs are mandatory deployment inputs. Empty lists keep egress denied.
+  postgresCidrs: []
+  valkeyCidrs: []
+  rabbitMqCidrs: []
+  objectStoreCidrs: []
+  smtpCidrs: []
+  identityIngressCidrs: []
+
+podDisruptionBudget:
+  minAvailable: 1

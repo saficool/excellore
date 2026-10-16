@@ -73,6 +73,36 @@ public sealed class KeycloakIdentityAdminTests
         Assert.Equal(IdentityCreationStatus.Existing, result.Status);
     }
 
+    [Fact]
+    public async Task Private_http_authority_requires_an_exact_configured_host()
+    {
+        var handler = new StubHandler(_ => Task.FromResult(
+            new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)));
+        using var http = new HttpClient(handler);
+        var actor = new IdentityAdminActor(Guid.NewGuid(), "2");
+        var invitation = Guid.NewGuid();
+        var accepted = new IdentityAdminOptions(
+            "http://keycloak.excellore.svc.cluster.local:8080/realms/excellore",
+            "test-only-secret", "https://access.example.invalid/", false,
+            "keycloak.excellore.svc.cluster.local");
+        var rejected = accepted with
+        {
+            Authority = "http://keycloak.attacker.svc.cluster.local:8080/realms/excellore"
+        };
+
+        var acceptedResult = await new KeycloakIdentityAdmin(http, accepted,
+            new IdentityAdminCircuit()).EnsureInvitationIdentityAsync(
+                "person@example.invalid", invitation, actor);
+        Assert.Equal(IdentityCreationStatus.Unavailable, acceptedResult.Status);
+        Assert.Equal(2, handler.Requests);
+
+        var rejectedResult = await new KeycloakIdentityAdmin(http, rejected,
+            new IdentityAdminCircuit()).EnsureInvitationIdentityAsync(
+                "person@example.invalid", invitation, actor);
+        Assert.Equal(IdentityCreationStatus.Unavailable, rejectedResult.Status);
+        Assert.Equal(2, handler.Requests);
+    }
+
     private static IdentityAdminOptions Options() => new(
         "https://identity.example.invalid/realms/excellore", "test-only-secret",
         "https://access.example.invalid/", false);

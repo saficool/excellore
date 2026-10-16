@@ -1,0 +1,44 @@
+{{- $root := . -}}
+{{- range $name := list "shell" "profile-bff" "access-bff" "profile-api" "access-api" "profile-worker" "access-worker" "keycloak" "identity-proxy" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "excellore.fullname" $root }}-{{ $name }}
+  labels:
+    {{- include "excellore.labels" $root | nindent 4 }}
+spec:
+  minAvailable: {{ $root.Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: {{ include "excellore.name" $root }}
+      app.kubernetes.io/name: {{ $name }}
+{{- end }}
+{{- if .Values.autoscaling.enabled }}
+{{- range $name := list "shell" "profile-bff" "access-bff" "profile-api" "access-api" }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "excellore.fullname" $root }}-{{ $name }}
+  labels:
+    {{- include "excellore.labels" $root | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "excellore.fullname" $root }}-{{ $name }}
+  minReplicas: {{ $root.Values.autoscaling.minReplicas }}
+  maxReplicas: {{ $root.Values.autoscaling.maxReplicas }}
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $root.Values.autoscaling.cpuUtilization }}
+{{- end }}
+{{- end }}

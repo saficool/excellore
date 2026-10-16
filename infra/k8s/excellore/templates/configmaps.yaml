@@ -1,0 +1,122 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-shell
+data:
+  NODE_ENV: production
+  OIDC_ISSUER: {{ .Values.platform.issuer | quote }}
+  OIDC_CLIENT_ID: excellore-shell
+  OIDC_SCOPES: openid profile email
+  APP_BASE_URL: {{ printf "https://%s" .Values.ingress.hosts.shell | quote }}
+  SESSION_COOKIE_NAME: __Host-excellore-shell
+  SESSION_STORE_URL: {{ .Values.platform.valkeyUrl | quote }}
+  SESSION_KEY_PREFIX: "shell:sess:"
+  ACCESS_INTERNAL_URL: {{ .Values.platform.accessInternalUrl | quote }}
+  AUTHZ_CLIENT_ID: svc-shell-authz
+  PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
+  ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-profile-bff
+data:
+  NODE_ENV: production
+  OIDC_ISSUER: {{ .Values.platform.issuer | quote }}
+  OIDC_CLIENT_ID: excellore-profile
+  OIDC_SCOPES: openid profile email api-profile
+  APP_BASE_URL: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
+  SESSION_COOKIE_NAME: __Host-excellore-profile
+  SESSION_STORE_URL: {{ .Values.platform.valkeyUrl | quote }}
+  SESSION_KEY_PREFIX: "profile:sess:"
+  ACCESS_INTERNAL_URL: {{ .Values.platform.accessInternalUrl | quote }}
+  AUTHZ_CLIENT_ID: svc-profile-authz
+  API_BASE_URL: http://excellore-profile-api:8080
+  PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
+  ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-access-bff
+data:
+  NODE_ENV: production
+  OIDC_ISSUER: {{ .Values.platform.issuer | quote }}
+  OIDC_CLIENT_ID: excellore-access
+  OIDC_SCOPES: openid profile email api-access
+  APP_BASE_URL: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
+  SESSION_COOKIE_NAME: __Host-excellore-access
+  SESSION_STORE_URL: {{ .Values.platform.valkeyUrl | quote }}
+  SESSION_KEY_PREFIX: "access:sess:"
+  ACCESS_INTERNAL_URL: {{ .Values.platform.accessInternalUrl | quote }}
+  AUTHZ_CLIENT_ID: svc-access-authz
+  API_BASE_URL: http://excellore-access-api:8080
+  PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
+  ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-profile-api
+data:
+  DOTNET_ENVIRONMENT: Production
+  Auth__Authority: {{ .Values.platform.issuer | quote }}
+  Auth__Audience: api-profile
+  Auth__RequireHttpsMetadata: "true"
+  Authz__AccessInternalUrl: {{ .Values.platform.accessInternalUrl | quote }}
+  Authz__TokenEndpoint: {{ printf "%s/protocol/openid-connect/token" .Values.platform.issuer | quote }}
+  Authz__ClientId: svc-profile-authz
+  Authz__Valkey: {{ .Values.platform.valkeyUrl | quote }}
+  Identity__Authority: {{ printf "http://%s-keycloak.%s.svc.cluster.local:8080/realms/excellore" (include "excellore.fullname" .) .Release.Namespace | quote }}
+  Identity__PrivateHttpHost: {{ printf "%s-keycloak.%s.svc.cluster.local" (include "excellore.fullname" .) .Release.Namespace | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-access-api
+data:
+  DOTNET_ENVIRONMENT: Production
+  Auth__Authority: {{ .Values.platform.issuer | quote }}
+  Auth__Audience: api-access
+  Auth__RequireHttpsMetadata: "true"
+  Invitation__SmtpHost: {{ .Values.platform.smtpHost | quote }}
+  Invitation__SmtpPort: {{ .Values.platform.smtpPort | quote }}
+  Invitation__From: {{ .Values.platform.invitationFrom | quote }}
+  Invitation__AcceptanceOrigin: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
+  Invitation__SmtpTls: "true"
+  IdentityAdmin__Authority: {{ printf "http://%s-keycloak.%s.svc.cluster.local:8080/realms/excellore" (include "excellore.fullname" .) .Release.Namespace | quote }}
+  IdentityAdmin__PrivateHttpHost: {{ printf "%s-keycloak.%s.svc.cluster.local" (include "excellore.fullname" .) .Release.Namespace | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-profile-worker
+data:
+  DOTNET_ENVIRONMENT: Production
+  IdentityDirectory__Authority: {{ printf "http://%s-keycloak.%s.svc.cluster.local:8080/realms/excellore" (include "excellore.fullname" .) .Release.Namespace | quote }}
+  IdentityDirectory__PrivateHttpHost: {{ printf "%s-keycloak.%s.svc.cluster.local" (include "excellore.fullname" .) .Release.Namespace | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-access-worker
+data:
+  DOTNET_ENVIRONMENT: Production
+  IdentityDirectory__Authority: {{ printf "http://%s-keycloak.%s.svc.cluster.local:8080/realms/excellore" (include "excellore.fullname" .) .Release.Namespace | quote }}
+  IdentityDirectory__PrivateHttpHost: {{ printf "%s-keycloak.%s.svc.cluster.local" (include "excellore.fullname" .) .Release.Namespace | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-keycloak
+data:
+  KC_DB: postgres
+  KC_HOSTNAME: {{ printf "https://%s" .Values.ingress.hosts.identity | quote }}
+  KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+  KC_HTTP_ENABLED: "true"
+  KC_PROXY_HEADERS: xforwarded
+  KC_HEALTH_ENABLED: "true"
+  KC_METRICS_ENABLED: "true"
+  KC_CACHE: ispn
+  KC_CACHE_STACK: jdbc-ping
+  KC_HTTP_MANAGEMENT_SCHEME: http

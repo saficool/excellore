@@ -31,15 +31,71 @@ jobs:
       - run: pnpm -w permissions:test
       - run: pnpm -w security:scenarios
       - run: pnpm -w observability:check
+      - name: Render production Kubernetes chart
+        shell: bash
+        run: |
+          mkdir -p .local
+          docker run --rm \
+            -v "$PWD/infra/k8s/excellore:/chart:ro" \
+            alpine/helm:3.19.0 template excellore /chart --namespace excellore \
+            > .local/production-manifests.yaml
+      - run: pnpm -w infra:check -- .local/production-manifests.yaml
       - run: pnpm -w format:check
       - name: Validate code-owned local platform staff assignments
-        run: node infra/keycloak/build-realm.mjs && git diff --exit-code -- infra/keycloak/realm-dev.json
+        run: |
+          node infra/keycloak/build-realm.mjs
+          node infra/keycloak/build-realm.mjs --production
+          git diff --exit-code -- infra/keycloak/realm-dev.json infra/keycloak/realm-production.json
 
   handbook:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - run: cmp excellore-platform-handbook.md docs/handbook.md
+
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check recovery script syntax
+        run: bash -n scripts/operations/*.sh
+      - name: Check OpenTofu formatting
+        run: >-
+          docker run --rm -v "$PWD/infra/tofu:/workspace:ro" -w /workspace
+          ghcr.io/opentofu/opentofu:1.13.1 fmt -recursive -check
+      - name: Initialize OpenTofu providers
+        run: >-
+          docker run --rm -v "$PWD/infra:/infra" -w /infra/tofu
+          ghcr.io/opentofu/opentofu:1.13.1 -chdir=environments/staging
+          init -backend=false -lockfile=readonly
+      - name: Validate OpenTofu
+        run: >-
+          docker run --rm -v "$PWD/infra:/infra" -w /infra/tofu
+          ghcr.io/opentofu/opentofu:1.13.1 -chdir=environments/staging validate
+
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10.34.6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node infra/keycloak/build-realm.mjs --production
+      - name: Build representative production images
+        run: |
+          docker build -f infra/images/next/Dockerfile --build-arg APP_NAME=shell -t excellore-shell:ci .
+          docker build -f infra/images/dotnet/Dockerfile --build-arg PROJECT=services/access/Excellore.Access.Api/Excellore.Access.Api.csproj -t excellore-access-api:ci .
+          docker build -f infra/images/keycloak/Dockerfile -t excellore-keycloak:ci .
+      - name: Verify non-root runtime users
+        run: |
+          test "$(docker image inspect excellore-shell:ci --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect excellore-access-api:ci --format '{{.Config.User}}')" = "1654:1654"
+          test "$(docker image inspect excellore-keycloak:ci --format '{{.Config.User}}')" = "1000:0"
 
   dotnet:
     runs-on: ubuntu-latest

@@ -18,4 +18,10 @@ coverage/
 .env
 .env.*
 !.env.example
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform/
+*.auto.tfvars
+!*.auto.tfvars.example
 

@@ -30,3 +30,17 @@ docker build -f infra/images/dotnet/Dockerfile \
 The image entrypoint is `dotnet`; the deployment supplies the published assembly name as its
 argument, for example `Excellore.Access.Api.dll`. API containers listen on port 8080. Workers do
 not expose a port.
+
+## Keycloak
+
+Generate the production realm and build the optimized Keycloak image:
+
+```bash
+node infra/keycloak/build-realm.mjs --production
+docker build -f infra/images/keycloak/Dockerfile -t excellore-keycloak:local .
+```
+
+The production realm contains clients, scopes, flows, and service accounts, with client secrets
+resolved from runtime environment variables during the first import. It contains no development
+people, passwords, or OTP seeds. Subsequent realm changes require the deployment pipeline's realm
+reconciliation step; Keycloak import does not overwrite an existing realm.

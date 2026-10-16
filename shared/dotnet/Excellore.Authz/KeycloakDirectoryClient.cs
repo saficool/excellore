@@ -71,12 +71,15 @@ public sealed class KeycloakDirectoryClient(IHttpClientFactory clients,
         throw new InvalidOperationException("Identity directory exceeds configured limit.");
     }
 
-    public static (Uri Token, Uri Users) Endpoints(string? authority, bool allowLocalHttp)
+    public static (Uri Token, Uri Users) Endpoints(string? authority, bool allowLocalHttp,
+        string? privateHttpHost = null)
     {
         if (!Uri.TryCreate(authority, UriKind.Absolute, out var parsed) ||
             (parsed.Scheme != Uri.UriSchemeHttps &&
              !(allowLocalHttp && parsed.Scheme == Uri.UriSchemeHttp &&
-               parsed.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))) ||
+               parsed.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)) &&
+             !(parsed.Scheme == Uri.UriSchemeHttp && privateHttpHost is { Length: > 0 } &&
+               string.Equals(parsed.Host, privateHttpHost, StringComparison.OrdinalIgnoreCase))) ||
             parsed.UserInfo.Length > 0 || parsed.Query.Length > 0 || parsed.Fragment.Length > 0)
             throw new ArgumentException("Identity authority is invalid.");
         var parts = parsed.AbsolutePath.Trim('/').Split('/');
@@ -121,7 +124,8 @@ public static class KeycloakDirectoryRegistration
         var allowLocalHttp = string.Equals(configuration["EXCELLORE_INSECURE_LOCAL_DEV"],
             "true", StringComparison.OrdinalIgnoreCase);
         var (token, users) = KeycloakDirectoryClient.Endpoints(
-            configuration["Auth:Authority"], allowLocalHttp);
+            configuration["IdentityDirectory:Authority"] ?? configuration["Auth:Authority"],
+            allowLocalHttp, configuration["IdentityDirectory:PrivateHttpHost"]);
         var secret = configuration["IdentityDirectory:ClientSecret"];
         if (string.IsNullOrWhiteSpace(secret))
             throw new ArgumentException("Identity directory credentials are missing.");

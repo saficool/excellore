@@ -7,7 +7,7 @@ namespace Excellore.Access.Infrastructure;
 
 public sealed record IdentityAdminActor(Guid Sub, string? Acr);
 public sealed record IdentityAdminOptions(string? Authority, string? ClientSecret,
-    string? AcceptanceOrigin, bool AllowLocalHttp);
+    string? AcceptanceOrigin, bool AllowLocalHttp, string? PrivateHttpHost = null);
 public enum IdentityCreationStatus { Created, Existing, Unavailable }
 public sealed record IdentityCreationResult(IdentityCreationStatus Status, Guid? UserId = null);
 
@@ -217,7 +217,8 @@ public sealed class KeycloakIdentityAdmin(HttpClient http, IdentityAdminOptions 
             !Uri.TryCreate(options.Authority, UriKind.Absolute, out var authority) ||
             !Uri.TryCreate(options.AcceptanceOrigin, UriKind.Absolute, out origin) ||
             authority.AbsolutePath.TrimEnd('/') != "/realms/excellore" ||
-            !Allowed(authority) || !Allowed(origin) || origin.AbsolutePath != "/" ||
+            !Allowed(authority, options.PrivateHttpHost) || !Allowed(origin, null) ||
+            origin.AbsolutePath != "/" ||
             origin.Query.Length != 0 || origin.Fragment.Length != 0 ||
             authority.Query.Length != 0 || authority.Fragment.Length != 0)
             return false;
@@ -227,7 +228,9 @@ public sealed class KeycloakIdentityAdmin(HttpClient http, IdentityAdminOptions 
         return true;
     }
 
-    private bool Allowed(Uri uri) => uri.Scheme == Uri.UriSchemeHttps ||
+    private bool Allowed(Uri uri, string? privateHttpHost) => uri.Scheme == Uri.UriSchemeHttps ||
         options.AllowLocalHttp && uri.Scheme == Uri.UriSchemeHttp &&
-        (uri.IsLoopback || uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase));
+        (uri.IsLoopback || uri.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)) ||
+        uri.Scheme == Uri.UriSchemeHttp && privateHttpHost is { Length: > 0 } &&
+        string.Equals(uri.Host, privateHttpHost, StringComparison.OrdinalIgnoreCase);
 }

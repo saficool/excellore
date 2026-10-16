@@ -55,9 +55,11 @@ builder.Services.AddExcelloreAuthz();
 builder.Services.AddProblemDetails();
 var allowLocalHttp = builder.Environment.IsDevelopment() &&
     string.Equals(builder.Configuration["EXCELLORE_INSECURE_LOCAL_DEV"], "true", StringComparison.OrdinalIgnoreCase);
-builder.Services.AddSingleton(new IdentityAdminOptions(builder.Configuration["Auth:Authority"],
+builder.Services.AddSingleton(new IdentityAdminOptions(
+    builder.Configuration["IdentityAdmin:Authority"] ?? builder.Configuration["Auth:Authority"],
     builder.Configuration["IdentityAdmin:ClientSecret"] ?? builder.Configuration["SVC_ACCESS_ADMIN_SECRET"],
-    builder.Configuration["Invitation:AcceptanceOrigin"], allowLocalHttp));
+    builder.Configuration["Invitation:AcceptanceOrigin"], allowLocalHttp,
+    builder.Configuration["IdentityAdmin:PrivateHttpHost"]));
 builder.Services.AddSingleton<IdentityAdminCircuit>();
 builder.Services.AddHttpClient<IIdentityAdmin, KeycloakIdentityAdmin>(client =>
     client.Timeout = TimeSpan.FromSeconds(10));

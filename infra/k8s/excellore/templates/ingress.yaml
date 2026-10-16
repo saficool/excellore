@@ -1,0 +1,55 @@
+{{- if .Values.ingress.enabled }}
+{{- $root := . -}}
+{{- range $route := list
+  (dict "name" "shell" "host" .Values.ingress.hosts.shell "service" "shell")
+  (dict "name" "profile" "host" .Values.ingress.hosts.profile "service" "profile-bff")
+  (dict "name" "access" "host" .Values.ingress.hosts.access "service" "access-bff")
+}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "excellore.fullname" $root }}-{{ $route.name }}
+  labels:
+    {{- include "excellore.labels" $root | nindent 4 }}
+spec:
+  ingressClassName: {{ $root.Values.ingress.className }}
+  tls:
+    - hosts: [{{ $route.host | quote }}]
+      secretName: {{ $root.Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ $route.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "excellore.fullname" $root }}-{{ $route.service }}
+                port: { name: http }
+{{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "excellore.fullname" . }}-identity
+  labels:
+    {{- include "excellore.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts: [{{ .Values.ingress.hosts.identity | quote }}]
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.hosts.identity | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "excellore.fullname" . }}-identity-proxy
+                port: { name: http }
+{{- end }}

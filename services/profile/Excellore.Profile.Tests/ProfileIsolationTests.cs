@@ -143,12 +143,16 @@ public sealed class ProfileIsolationTests
             new Dictionary<string, string?>
             {
                 ["Auth:Authority"] = "https://id.example.invalid/realms/excellore",
+                ["Identity:Authority"] = "http://keycloak.private.svc.cluster.local/realms/excellore",
+                ["Identity:PrivateHttpHost"] = "keycloak.private.svc.cluster.local",
                 ["Identity:ClientSecret"] = "test-only"
             }).Build();
         var client = new KeycloakOwnIdentityClient(http, config);
         Assert.True(await client.UpdateAsync(userId, "New", null, "en", default));
         Assert.All(handler.UserRequests, path =>
             Assert.Contains(userId.ToString("D"), path, StringComparison.Ordinal));
+        Assert.All(handler.Requests, uri =>
+            Assert.Equal("keycloak.private.svc.cluster.local", uri.Host));
         using var changed = JsonDocument.Parse(handler.UpdatedBody!);
         Assert.Equal("New", changed.RootElement.GetProperty("firstName").GetString());
         Assert.Equal("person@example.invalid", changed.RootElement.GetProperty("email").GetString());
@@ -232,11 +236,13 @@ public sealed class ProfileIsolationTests
     }
     private sealed class IdentityHttpHandler(Guid userId) : HttpMessageHandler
     {
+        public List<Uri> Requests { get; } = [];
         public List<string> UserRequests { get; } = [];
         public string? UpdatedBody { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            Requests.Add(request.RequestUri!);
             if (request.RequestUri!.AbsolutePath.EndsWith("/token", StringComparison.Ordinal))
                 return new HttpResponseMessage(HttpStatusCode.OK) {
                     Content = new StringContent("{\"access_token\":\"test-token\"}") };

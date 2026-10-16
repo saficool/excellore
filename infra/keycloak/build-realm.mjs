@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 import prettier from 'prettier';
 import { parse } from 'yaml';
 
+const production = process.argv.includes('--production');
+
 const platformRoles = [
   'platform-admin',
   'platform-operator',
@@ -445,16 +447,20 @@ const realm = {
     machine('svc-profile-identity', 'SVC_PROFILE_IDENTITY_SECRET'),
   ],
   users: [
-    devUser('olivia.owner', 'Olivia', 'Owner'),
-    devUser('adam.admin', 'Adam', 'Admin'),
-    devUser('mia.member', 'Mia', 'Member'),
-    devUser('vera.viewer', 'Vera', 'Viewer'),
-    devUser('gina.globex', 'Gina', 'Globex'),
-    devUser('nora.nomember', 'Nora', 'NoMember'),
-    ...staffManifest.staff.map(({ username, roles }) => {
-      const [first, last] = fixtureNames.get(username);
-      return devUser(username, first, last, roles);
-    }),
+    ...(!production
+      ? [
+          devUser('olivia.owner', 'Olivia', 'Owner'),
+          devUser('adam.admin', 'Adam', 'Admin'),
+          devUser('mia.member', 'Mia', 'Member'),
+          devUser('vera.viewer', 'Vera', 'Viewer'),
+          devUser('gina.globex', 'Gina', 'Globex'),
+          devUser('nora.nomember', 'Nora', 'NoMember'),
+          ...staffManifest.staff.map(({ username, roles }) => {
+            const [first, last] = fixtureNames.get(username);
+            return devUser(username, first, last, roles);
+          }),
+        ]
+      : []),
     serviceUser('worker-profile', {
       'api-profile': ['profile.worker'],
       'realm-management': ['view-users'],
@@ -480,7 +486,12 @@ const realm = {
   ],
 };
 
-const output = fileURLToPath(new URL('./realm-dev.json', import.meta.url));
+const output = fileURLToPath(
+  new URL(
+    production ? './realm-production.json' : './realm-dev.json',
+    import.meta.url,
+  ),
+);
 writeFileSync(
   output,
   await prettier.format(JSON.stringify(realm), {
