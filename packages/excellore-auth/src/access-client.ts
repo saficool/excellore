@@ -40,7 +40,7 @@ const snapshotSchema = z.object({
   permissions: z.array(code),
   apps: z.array(code).optional(),
   version: z.number().int().nonnegative().optional(),
-  resolvedAt: z.iso.datetime().optional(),
+  resolvedAt: z.iso.datetime({ offset: true }).optional(),
 });
 
 export type ResolvedTenant = z.infer<typeof tenantSchema>;

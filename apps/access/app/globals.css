@@ -1,0 +1,222 @@
+@import 'tailwindcss';
+@import '@excellore/ui/styles.css';
+
+body {
+  margin: 0;
+  background: var(--ex-color-background);
+  color: var(--ex-color-text);
+  font-family: system-ui, sans-serif;
+}
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+a {
+  color: var(--ex-color-accent);
+}
+.ex-card {
+  background: var(--ex-color-surface);
+  border: 1px solid var(--ex-color-border);
+  border-radius: var(--ex-radius-medium);
+  padding: 1.5rem;
+}
+
+.access-layout {
+  display: grid;
+  grid-template-columns: 13rem minmax(0, 1fr);
+  max-width: 88rem;
+  margin: auto;
+}
+.access-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 2rem 1rem;
+  border-right: 1px solid var(--ex-color-border);
+}
+.access-sidebar a {
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--ex-radius-medium);
+  color: var(--ex-color-text);
+  text-decoration: none;
+}
+.access-sidebar a:hover,
+.access-sidebar a:focus-visible,
+.access-sidebar a[aria-current='page'] {
+  background: var(--ex-color-surface);
+  outline-offset: 2px;
+}
+.access-main {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: 2rem;
+}
+.access-eyebrow {
+  color: var(--ex-color-accent);
+  font-weight: 600;
+}
+.access-stack {
+  display: grid;
+  gap: 1.5rem;
+}
+.access-card h2 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+.access-card h3 {
+  font-size: 1.1rem;
+}
+.access-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+}
+.access-card ul {
+  overflow-wrap: anywhere;
+}
+.access-form {
+  display: grid;
+  gap: 1rem;
+  max-width: 38rem;
+}
+.access-form label,
+.access-card > label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+.access-form input,
+.access-form select,
+.access-card > label input {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--ex-color-border);
+  border-radius: 0.4rem;
+  background: var(--ex-color-background);
+  color: var(--ex-color-text);
+}
+.access-form fieldset {
+  border: 1px solid var(--ex-color-border);
+  border-radius: 0.4rem;
+  max-height: 23rem;
+  overflow: auto;
+}
+.access-form .access-check,
+.access-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 0.5rem 0;
+  font-weight: 400;
+}
+.access-check input {
+  width: auto;
+  min-height: auto;
+  margin-top: 0.2rem;
+}
+.access-actions,
+.access-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.access-row {
+  justify-content: space-between;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--ex-color-border);
+}
+.access-row span {
+  overflow-wrap: anywhere;
+}
+.access-card button,
+.access-button {
+  display: inline-block;
+  cursor: pointer;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--ex-color-accent);
+  border-radius: 0.4rem;
+  background: var(--ex-color-accent);
+  color: white;
+  text-decoration: none;
+  font: inherit;
+}
+.access-card button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.access-card button:focus-visible,
+.access-button:focus-visible,
+.access-form input:focus-visible,
+.access-form select:focus-visible {
+  outline: 3px solid var(--ex-color-accent);
+  outline-offset: 2px;
+}
+.access-table-wrap {
+  overflow-x: auto;
+}
+.access-filters {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.access-filters label {
+  display: grid;
+  gap: 0.4rem;
+}
+.access-filters input,
+.access-filters select {
+  min-height: 2.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--ex-color-border);
+  border-radius: 0.4rem;
+  background: var(--ex-color-background);
+  color: var(--ex-color-text);
+}
+.access-detail {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--ex-color-border);
+  border-radius: 0.4rem;
+}
+.access-card table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.access-card th,
+.access-card td {
+  border-bottom: 1px solid var(--ex-color-border);
+  padding: 0.7rem;
+  text-align: left;
+  vertical-align: top;
+}
+.access-feedback {
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border-left: 3px solid var(--ex-color-accent);
+  background: var(--ex-color-background);
+}
+.access-accept {
+  max-width: 40rem;
+}
+@media (max-width: 48rem) {
+  .access-layout {
+    grid-template-columns: 1fr;
+  }
+  .access-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--ex-color-border);
+  }
+  .access-sidebar a {
+    white-space: nowrap;
+  }
+  .access-main {
+    padding: 1.5rem;
+  }
+}

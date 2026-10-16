@@ -137,7 +137,7 @@ before(async () => {
         permissions: mode === 'no-app' ? [] : ['profile.app.access'],
         apps: mode === 'no-app' ? [] : ['profile'],
         version: 42,
-        resolvedAt: new Date().toISOString(),
+        resolvedAt: new Date().toISOString().replace('Z', '+00:00'),
       });
       return;
     }

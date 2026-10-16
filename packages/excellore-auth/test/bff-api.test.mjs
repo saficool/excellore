@@ -100,6 +100,38 @@ test('tenant proxy uses only Access resolved tenant ID, never browser path', asy
   assert.equal(response.headers.get('cache-control'), 'no-store');
 });
 
+test('proxy accepts an empty accepted response and rejects non-JSON content', async () => {
+  const options = {
+    config,
+    store,
+    oidcClient: {},
+    app: 'profile',
+    apiBaseUrl: 'http://localhost:5001',
+    scope: 'me',
+    segments: ['invitations'],
+    request: new Request(`${appOrigin}/api/me/invitations`, {
+      method: 'POST',
+      headers: {
+        ...cookie,
+        Origin: appOrigin,
+        'X-Excellore-CSRF': '1',
+      },
+    }),
+  };
+  const accepted = await proxyBffApi({
+    ...options,
+    fetchImpl: async () => new Response('', { status: 202 }),
+  });
+  assert.equal(accepted.status, 202);
+  assert.equal(await accepted.text(), '');
+  const rejected = await proxyBffApi({
+    ...options,
+    fetchImpl: async () => new Response('private', { status: 200 }),
+  });
+  assert.equal(rejected.status, 503);
+  assert.doesNotMatch(await rejected.text(), /private/);
+});
+
 test('mutating API requests require origin and CSRF header', () => {
   const bad = new Request(`${appOrigin}/api/me/settings`, {
     method: 'POST',
@@ -117,6 +149,21 @@ test('mutating API requests require origin and CSRF header', () => {
       appOrigin,
       ['settings'],
     ),
+    400,
+  );
+});
+
+test('tenant proxy accepts only known colon action segments', () => {
+  const request = new Request(`${appOrigin}/api/t/my-tenant/members:suspend`, {
+    method: 'POST',
+    headers: { Origin: appOrigin, 'X-Excellore-CSRF': '1' },
+  });
+  assert.equal(
+    validateApiProxyRequest(request, appOrigin, ['members:suspend']),
+    null,
+  );
+  assert.equal(
+    validateApiProxyRequest(request, appOrigin, ['unknown:action']),
     400,
   );
 });

@@ -11,6 +11,11 @@ import {
 } from './tenant.js';
 
 const safeSegment = /^[a-z0-9][a-z0-9-]{0,127}$/;
+const actionSegments = new Set([
+  'members:lookup',
+  'members:suspend',
+  'members:reactivate',
+]);
 const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 function problem(status: number, name: string): Response {
@@ -40,7 +45,9 @@ export function validateApiProxyRequest(
       request.method,
     ) ||
     segments.length > 12 ||
-    segments.some((segment) => !safeSegment.test(segment))
+    segments.some(
+      (segment) => !safeSegment.test(segment) && !actionSegments.has(segment),
+    )
   )
     return 400;
   if (
@@ -148,17 +155,25 @@ export async function proxyBffApi(options: BffApiOptions): Promise<Response> {
     if (response.status >= 300 && response.status < 400)
       return problem(503, 'authz-unavailable');
     const contentType = response.headers.get('content-type')?.split(';')[0];
-    if (
-      response.body &&
-      contentType !== 'application/json' &&
-      contentType !== 'application/problem+json'
-    )
-      return problem(503, 'authz-unavailable');
-    return new Response(response.body, {
+    const json =
+      contentType === 'application/json' ||
+      contentType === 'application/problem+json';
+    if (response.body && !json) {
+      const reader = response.body.getReader();
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.value?.byteLength) {
+          await reader.cancel();
+          return problem(503, 'authz-unavailable');
+        }
+        if (chunk.done) break;
+      }
+    }
+    return new Response(json ? response.body : null, {
       status: response.status,
       headers: {
         'Cache-Control': 'no-store',
-        ...(contentType ? { 'Content-Type': contentType } : {}),
+        ...(json ? { 'Content-Type': contentType! } : {}),
       },
     });
   } catch (error) {
