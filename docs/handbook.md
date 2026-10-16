@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.7 |
+| **Document version** | 5.8 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.8 | WP-12 tenant deletion retains audit history in restricted, forced-RLS archives and opaque tombstones; active tenant rows and objects are erased only after service confirmations (ADR-0067 proposed). Profile outbox now carries nullable tenant routing metadata for erasure confirmations. Keycloak user deletion remains deferred under INV-11; restricted hash-chained audit originals are preserved with an appended erasure marker (ADR-0068 proposed). |
 | 5.7 | WP-11 app enablement uses a transaction-local tenant context for only the app metadata row, with forced RLS and dual-scope audit (ADR-0066 proposed). Keycloak emergency user actions are deferred under INV-11. |
 | 5.6 | WP-10 adds bounded, owner-approved bulk role assignment jobs with per-target worker rechecks, tenant RLS, and aggregate progress (ADR-0065 proposed). |
 | 5.5 | WP-10 keeps one-time invitation-code delivery synchronous under INV-11 and builds private Access audit exports. Complete cross-service personal-data export and erasure, including Profile export job processing, belong to WP-12; requests remain pending until then. |
@@ -1154,7 +1155,7 @@ avatar_uploads [P]  id, user_id, object_key, status, content_type, size_bytes, c
 data_export_jobs [P] id, user_id, status, object_key, requested_at, completed_at, expires_at
 profile_audit_events [H]  id, tenant_id null, actor_sub, target_sub, action, before jsonb,
                           after jsonb, correlation_id, occurred_at     -- append-only
-outbox [P]  id, type, payload jsonb, created_at, published_at
+outbox [P]  id, type, tenant_id nullable (routing metadata), payload jsonb, created_at, published_at
 inbox [P]   event_id PK, received_at                                    -- consumer de-duplication
 ```
 
@@ -1742,9 +1743,9 @@ Prefer events and local read models. If unavoidable, use token exchange (RFC 869
 
 ### 22.3 Tenant and user deletion
 
-**Tenant deletion** (`tenant.deleted.v1`): every service deletes all rows with that `tenant_id` (in tenant context, in batches), removes `tenants/{tenantId}/…` objects, clears cache keys, and publishes `<service>.erasure.confirmed.v1`. Access waits for all confirmations before writing the tombstone. Handling of audit rows is a placeholder (Q-11): until decided, keep them and anonymize personal fields only if erasure of a person is requested.
+**Tenant deletion** (`tenant.deleted.v1`): after the 14-day grace period, Access dispatches the event. Every service deletes active rows with that `tenant_id` in tenant context, removes private objects, and publishes `<service>.erasure.confirmed.v1`. Access waits for Profile's confirmation, erases its own rows and objects, and records its confirmation and an opaque tombstone. Audit rows move to restricted, forced-RLS archives that preserve their hash chain; archives and tombstones are the explicit exceptions to the active-row zero-count check (ADR-0067). Restricted audit originals remain unchanged on user erasure, with an appended erasure marker (ADR-0068); general audit retention remains Q-11.
 
-**User deletion** (`identity.user.deleted.v1`): every service removes global user data and **anonymizes** user references inside tenant data that must be kept (for example `created_by` becomes a tombstone ID), then confirms.
+**User erasure**: every service removes global application data and **anonymizes** live user references inside tenant data that must be kept (for example `created_by` becomes a tombstone ID), then confirms. Restricted hash-chained audit originals are preserved with an appended erasure marker (ADR-0068). Keycloak identity deletion is deferred under INV-11 because its Admin API puts the user ID in a server-to-server URL. Until an approved design deletes the Keycloak identity, the overall deletion request remains pending and `identity.user.deleted.v1` MUST NOT be published.
 
 **Tenant export:** a tenant owner can request an export of tenant data (Access exports its data; other services contribute through events). Frequency limited per plan.
 
@@ -2332,8 +2333,8 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 
 - **Goal:** Tenant and user lifecycle is complete and verifiable.
 - **Depends on:** WP-10, WP-11.
-- **Deliverables:** tenant deletion orchestration with grace period; erasure handlers in every service; confirmations; tombstones; tenant export; user deletion with anonymization; complete personal-data export for users across tenants and services, including Profile job processing and authenticated download.
-- **AC:** E2E: a tenant with data in Access and Profile is deleted; after the grace period every service has zero rows for the tenant (verified by a test that connects as the migrator and counts), objects are gone, confirmations recorded, tombstone remains; user deletion anonymizes references and removes global data.
+- **Deliverables:** tenant deletion orchestration with grace period; erasure handlers in every service; confirmations; tombstones; tenant export; application user erasure with anonymization and a visibly pending external Keycloak deletion state (ADR-0068); complete personal-data export for users across tenants and services, including Profile job processing and authenticated download.
+- **AC:** E2E: a tenant with data in Access and Profile is deleted; after the grace period every service has zero active tenant rows (verified by a test that connects as the migrator and counts), objects are gone, confirmations recorded, and only restricted audit archives and opaque tombstones remain; application user erasure anonymizes live references and removes global app data, while external Keycloak deletion remains visibly pending.
 
 ### WP-13: Hardening and end-to-end security
 
