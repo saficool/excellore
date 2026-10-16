@@ -11,7 +11,15 @@ using Microsoft.AspNetCore.Mvc;
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Access")
     ?? throw new InvalidOperationException("ConnectionStrings:Access is required.");
-builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
+var dataSource = NpgsqlDataSource.Create(connectionString);
+builder.Services.AddSingleton(dataSource);
+builder.Services.AddExcelloreHealthChecks()
+    .AddAsyncCheck("postgres", async cancellationToken =>
+    {
+        await using var command = dataSource.CreateCommand("SELECT 1");
+        await command.ExecuteScalarAsync(cancellationToken);
+        return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy();
+    });
 builder.Services.AddScoped<CatalogSyncService>();
 builder.Services.AddScoped<TenantProvisioningService>();
 builder.Services.AddScoped<PlatformTenantService>();
@@ -66,6 +74,7 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapExcelloreHealthChecks();
 app.Use(async (context, next) =>
 {
     if (!context.Request.Path.StartsWithSegments("/v1") || context.User.Identity?.IsAuthenticated != true)

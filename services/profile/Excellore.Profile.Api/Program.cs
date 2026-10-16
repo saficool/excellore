@@ -12,16 +12,27 @@ var localHttp = builder.Environment.IsDevelopment() &&
         StringComparison.OrdinalIgnoreCase);
 var connectionString = builder.Configuration.GetConnectionString("Profile")
     ?? throw new InvalidOperationException("ConnectionStrings:Profile is required.");
-builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
+var dataSource = NpgsqlDataSource.Create(connectionString);
+builder.Services.AddSingleton(dataSource);
 builder.Services.AddScoped<ProfileRepository>();
 builder.Services.AddSingleton<IAvatarObjectStore, S3AvatarObjectStore>();
 builder.Services.AddSingleton<IPrivateExportStore, S3PrivateExportStore>();
 builder.Services.AddScoped<OwnIdentityService>();
 builder.Services.AddHttpClient<IOwnIdentityClient, KeycloakOwnIdentityClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(10)).RemoveAllLoggers();
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(builder.Configuration["Authz:Valkey"] ??
-        throw new InvalidOperationException("Authz:Valkey is required.")));
+var valkey = ConnectionMultiplexer.Connect(builder.Configuration["Authz:Valkey"] ??
+    throw new InvalidOperationException("Authz:Valkey is required."));
+builder.Services.AddSingleton<IConnectionMultiplexer>(valkey);
+builder.Services.AddExcelloreHealthChecks()
+    .AddAsyncCheck("postgres", async cancellationToken =>
+    {
+        await using var command = dataSource.CreateCommand("SELECT 1");
+        await command.ExecuteScalarAsync(cancellationToken);
+        return Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy();
+    })
+    .AddCheck("valkey", () => valkey.IsConnected
+        ? Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy()
+        : Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Unhealthy());
 builder.Services.AddExcelloreAuthz();
 builder.Services.AddValkeyAuthzResolver(builder.Configuration, "profile", localHttp);
 var broker = builder.Configuration["Authz:RabbitMq"];
@@ -35,6 +46,7 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
+app.MapExcelloreHealthChecks();
 
 var me = app.MapGroup("/v1/me").RequireAuthorization();
 me.MapGet("/profile", async (ICurrentUser user, ProfileRepository profiles,
