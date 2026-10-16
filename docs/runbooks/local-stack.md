@@ -110,3 +110,19 @@ pnpm --filter @excellore/shell dev
 Open `http://excellore.localhost:3000`. Shell signs in through Keycloak and stores its tokens in Valkey. `/` lists active memberships from Access; one membership redirects to `/t/{slug}`. The launcher shows only enabled apps backed by the member's app-access permission. The Shell's pending invitation banner reads Access's machine-protected internal contract. Its acceptance link opens the Access acceptance page delivered in WP-08; the one-time code is never in the link. Sign out from the shared header invalidates all BFF sessions through the shared Valkey marker and ends the Keycloak SSO session; verified backchannel logout remains active. A browser's last-used tenant preference is checked against the fresh tenant list before redirecting.
 
 For the automated Shell UI smoke test, leave port 5002 free and start both Shell and Profile BFFs. Run `node scripts/check-shell-login.mjs`. The script uses local Keycloak and Valkey, serves a temporary Access contract stub on port 5002, and checks sign-in, tenant and app visibility, single-tenant redirect, unknown tenant handling, and cross-app sign-out. It prints no credentials.
+
+## Access tenant console (WP-08)
+
+After `scripts/dev-up.sh` and the Access migrations, use separate terminals from the repository root:
+
+```sh
+pnpm exec node scripts/run-access-local.mjs
+pnpm exec node scripts/sync-dev-catalog.mjs
+pnpm exec node scripts/seed-dev-access.mjs
+pnpm exec node scripts/setup-next-local.mjs access
+pnpm --filter @excellore/access dev
+```
+
+Run the first command before catalog sync and seed; leave it running. The seed uses local Keycloak users and Mailpit to activate the `acme` owner through the Access API. It is safe to rerun when the owner is already active. No invitation code or token is printed. Open `http://access.excellore.localhost:3002/t/acme/my-access` and sign in as the development `olivia.owner` user. The password is `DEV_USER_PASSWORD` in ignored `.env`; the OTP is generated from `DEV_OTP_SECRET` (the ignored `.local/show-dev-otp.mjs` helper can display the current code). The browser holds only the opaque Access session cookie.
+
+With the API and BFF running, `pnpm exec node scripts/check-access-console.mjs` verifies real login, tenant isolation, read proxies, CSRF rejection, and that no tokens are rendered in the page. On its first run it invites the local `nora.nomember` identity, reads the one-time code from Mailpit without printing it, accepts the invitation, then checks custom role creation, assignment, and permission changes in the same browser session. It revokes the test assignment and deletes the test role; Nora remains a member for repeat runs. The Assignments read requires MFA because `access.assignment.manage` is privileged. The local Access BFF has its own `svc-access-authz` machine client; `scripts/dev-up.sh` reconciles it and Keycloak's `basic` subject scope for existing development realms.
