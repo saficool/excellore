@@ -28,6 +28,10 @@
           Link="002_worker_projections.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Profile.Infrastructure/Migrations/003_identity_mirror.sql"
           Link="003_identity_mirror.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Profile.Infrastructure/Migrations/004_tenant_erasure.sql"
+          Link="004_tenant_erasure.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Profile.Infrastructure/Migrations/005_tenant_audit_archive.sql"
+          Link="005_tenant_audit_archive.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

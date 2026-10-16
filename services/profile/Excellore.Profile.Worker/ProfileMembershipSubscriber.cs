@@ -5,6 +5,7 @@ namespace Excellore.Profile.Worker;
 
 public sealed class ProfileMembershipSubscriber(IEventBus eventBus,
     ProfileMembershipProjector projector, ProfileIdentityMirrorProjector identity,
+    ProfileTenantErasureProjector erasure,
     ILogger<ProfileMembershipSubscriber> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -18,6 +19,8 @@ public sealed class ProfileMembershipSubscriber(IEventBus eventBus,
             type => (PlatformEventHandler)((body, token) => projector.ApplyAsync(type, body, token)));
         handlers.Add(IdentityUserUpdatedV1.EventType,
             (body, token) => identity.ApplyAsync(body, token));
+        handlers.Add(TenantDeletedV1.EventType,
+            (body, token) => erasure.ApplyAsync(body, token));
         while (!stoppingToken.IsCancellationRequested)
         {
             try

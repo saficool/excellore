@@ -56,6 +56,21 @@ public sealed class ProfileMembershipProjector(ProfileWorkerDatabase database, P
         await using var connection = await database.Source.OpenConnectionAsync(cancellationToken);
         return await inbox.RunOnceAsync(connection, eventId, tenantId, async (transaction, token) =>
         {
+            await using (var serial = new NpgsqlCommand(
+                "SELECT pg_advisory_xact_lock(hashtextextended(@tenant::text,0))",
+                connection, (NpgsqlTransaction)transaction))
+            {
+                serial.Parameters.AddWithValue("tenant", tenantId);
+                await serial.ExecuteNonQueryAsync(token);
+            }
+            await using (var tombstone = new NpgsqlCommand(
+                "SELECT 1 FROM profile_tenant_tombstones WHERE tenant_id=@tenant",
+                connection, (NpgsqlTransaction)transaction))
+            {
+                tombstone.Parameters.AddWithValue("tenant", tenantId);
+                if (await tombstone.ExecuteScalarAsync(token) is not null)
+                    return;
+            }
             var sql = action switch
             {
                 "removed" => "DELETE FROM tenant_member_profiles WHERE tenant_id=@tenant AND user_id=@user",

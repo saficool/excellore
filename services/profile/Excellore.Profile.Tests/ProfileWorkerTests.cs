@@ -32,7 +32,8 @@ public sealed class ProfileWorkerTests
             postgres.GetConnectionString()) { Username = "profile_migrator", Password = adminPassword }.ConnectionString);
         await migrator.OpenAsync();
         foreach (var migration in new[] { "001_initial.sql", "002_worker_projections.sql",
-            "003_identity_mirror.sql" })
+            "003_identity_mirror.sql", "004_tenant_erasure.sql",
+            "005_tenant_audit_archive.sql" })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, migration)));
 
@@ -111,6 +112,80 @@ public sealed class ProfileWorkerTests
         }
         Assert.False(await ScalarBoolAsync(source,
             "SELECT has_column_privilege(current_user,'user_profiles','avatar_object_key','SELECT')"));
+        Assert.False(await ScalarBoolAsync(source,
+            "SELECT has_table_privilege(current_user,'profile_audit_archive','SELECT')"));
+
+        var erasedTenant = Guid.NewGuid();
+        var retainedTenant = Guid.NewGuid();
+        Assert.True(await projector.ApplyAsync(TenantMemberAddedV1.EventType,
+            Event(TenantMemberAddedV1.EventType, erasedTenant, userId, true)));
+        Assert.True(await projector.ApplyAsync(TenantMemberAddedV1.EventType,
+            Event(TenantMemberAddedV1.EventType, retainedTenant, userId, true)));
+        await using (var seedAudit = new NpgsqlCommand("""
+            INSERT INTO profile_audit_events(id,tenant_id,actor_sub,target_sub,action)
+            VALUES (gen_random_uuid(),@erased,@user,@user,'profile.member.updated'),
+                   (gen_random_uuid(),@retained,@user,@user,'profile.member.updated')
+            """, admin))
+        {
+            seedAudit.Parameters.AddWithValue("erased", erasedTenant);
+            seedAudit.Parameters.AddWithValue("retained", retainedTenant);
+            seedAudit.Parameters.AddWithValue("user", userId);
+            await seedAudit.ExecuteNonQueryAsync();
+        }
+        var deletionEvent = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            specversion = "1.0", id = Guid.NewGuid(), type = TenantDeletedV1.EventType,
+            source = TenantDeletedV1.EventSource, time = DateTimeOffset.UtcNow,
+            tenantid = erasedTenant, correlationid = Guid.NewGuid(),
+            actor = new { sub = Guid.NewGuid().ToString("D"), type = "machine" },
+            data = new { tenantId = erasedTenant }
+        });
+        var erasure = new ProfileTenantErasureProjector(
+            new ProfileWorkerDatabase(source), new PostgresEventInbox());
+        Assert.True(await erasure.ApplyAsync(deletionEvent));
+        Assert.False(await erasure.ApplyAsync(deletionEvent));
+        Assert.Equal(0L, await CountAsync(admin, erasedTenant));
+        Assert.Equal(1L, await CountAsync(admin, retainedTenant));
+        await using (var verify = await migrator.BeginTransactionAsync())
+        {
+            await using (var scope = new NpgsqlCommand(
+                "SELECT set_config('app.tenant_id',@tenant,true)", migrator, verify))
+            {
+                scope.Parameters.AddWithValue("tenant", erasedTenant.ToString("D"));
+                await scope.ExecuteNonQueryAsync();
+            }
+            await using var count = new NpgsqlCommand(
+                "SELECT count(*) FROM tenant_member_profiles WHERE tenant_id=@tenant",
+                migrator, verify);
+            count.Parameters.AddWithValue("tenant", erasedTenant);
+            Assert.Equal(0L, (long)(await count.ExecuteScalarAsync())!);
+            await verify.CommitAsync();
+        }
+        await using (var activeAudit = new NpgsqlCommand(
+            "SELECT count(*) FROM profile_audit_events WHERE tenant_id=@tenant", admin))
+        {
+            activeAudit.Parameters.AddWithValue("tenant", erasedTenant);
+            Assert.Equal(0L, (long)(await activeAudit.ExecuteScalarAsync())!);
+        }
+        await using (var archive = new NpgsqlCommand(
+            "SELECT count(*) FROM profile_audit_archive WHERE tenant_id=@tenant", migrator))
+        {
+            archive.Parameters.AddWithValue("tenant", erasedTenant);
+            Assert.Equal(1L, (long)(await archive.ExecuteScalarAsync())!);
+        }
+        Assert.Equal(1L, await ScalarAsync(admin,
+            "SELECT count(*) FROM profile_tenant_tombstones"));
+        Assert.True(await projector.ApplyAsync(TenantMemberAddedV1.EventType,
+            Event(TenantMemberAddedV1.EventType, erasedTenant, userId, true)));
+        Assert.Equal(0L, await CountAsync(admin, erasedTenant));
+        await using (var confirm = new NpgsqlCommand(
+            "SELECT payload::text FROM outbox WHERE type=@type", admin))
+        {
+            confirm.Parameters.AddWithValue("type", ProfileErasureConfirmedV1.EventType);
+            var payload = (string)(await confirm.ExecuteScalarAsync())!;
+            Assert.Equal(erasedTenant, ProfileErasureConfirmedV1.Parse(
+                Encoding.UTF8.GetBytes(payload)).Data!.TenantId);
+        }
 
         var outboxId = Guid.NewGuid();
         var globalEvent = JsonSerializer.Serialize(new
@@ -134,12 +209,15 @@ public sealed class ProfileWorkerTests
             postgres.GetConnectionString()) { Username = "profile_publisher", Password = adminPassword }.ConnectionString);
         await using var publisherConnection = await publisherSource.OpenConnectionAsync();
         var publisher = new CapturePublisher();
-        var dispatcher = new PostgresOutboxDispatcher(globalEventsOnly: true);
+        var dispatcher = new PostgresOutboxDispatcher();
         Assert.True(await dispatcher.DispatchOnceAsync(publisherConnection, publisher));
+        Assert.Equal(ProfileErasureConfirmedV1.EventType, publisher.Type);
+        Assert.True(await dispatcher.DispatchOnceAsync(publisherConnection, publisher));
+        Assert.Equal(ProfileUpdatedV1.EventType, publisher.Type);
         Assert.False(await dispatcher.DispatchOnceAsync(publisherConnection, publisher));
         Assert.Equal(outboxId, publisher.Id);
         Assert.Equal(userId, ProfileUpdatedV1.Parse(publisher.Body).Data!.UserId);
-        Assert.Equal(1L, await ScalarAsync(admin,
+        Assert.Equal(2L, await ScalarAsync(admin,
             "SELECT count(*) FROM outbox WHERE published_at IS NOT NULL"));
     }
 
@@ -195,11 +273,12 @@ public sealed class ProfileWorkerTests
     private sealed class CapturePublisher : IEventPublisher
     {
         public Guid Id { get; private set; }
+        public string Type { get; private set; } = string.Empty;
         public byte[] Body { get; private set; } = [];
         public Task PublishAsync(Guid eventId, string eventType, ReadOnlyMemory<byte> body,
             CancellationToken cancellationToken = default)
         {
-            Assert.Equal(ProfileUpdatedV1.EventType, eventType);
+            Type = eventType;
             Id = eventId;
             Body = body.ToArray();
             return Task.CompletedTask;

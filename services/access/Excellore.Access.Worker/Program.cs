@@ -13,6 +13,9 @@ if (!Uri.TryCreate(brokerAddress, UriKind.Absolute, out var brokerUri))
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddSingleton<IEventBus>(new RabbitMqEventBus(brokerUri));
 builder.Services.AddSingleton<PostgresOutboxDispatcher>();
+builder.Services.AddSingleton<PostgresEventInbox>();
+builder.Services.AddSingleton<ProfileErasureConfirmationProjector>();
+builder.Services.AddHostedService<AccessLifecycleSubscriber>();
 builder.Services.AddHostedService<Worker>();
 var workerConnectionString = builder.Configuration.GetConnectionString("AccessWorker")
     ?? throw new InvalidOperationException("ConnectionStrings:AccessWorker is required.");
@@ -27,6 +30,13 @@ builder.Services.AddScoped(provider => new AuditExportBuilder(
     provider.GetRequiredService<ITenantIdAccessor>(),
     provider.GetRequiredService<IAuditExportObjectStore>()));
 builder.Services.AddScoped<AccessTenantMaintenanceJob>();
+builder.Services.AddScoped(provider => new TenantDeletionDispatchService(
+    provider.GetRequiredService<AccessWorkerDatabase>().Source,
+    provider.GetRequiredService<ITenantIdAccessor>()));
+builder.Services.AddScoped(provider => new TenantErasureFinalizer(
+    provider.GetRequiredService<AccessWorkerDatabase>().Source,
+    provider.GetRequiredService<ITenantIdAccessor>(),
+    provider.GetRequiredService<IAuditExportObjectStore>()));
 builder.Services.AddScoped(provider => new RoleAssignmentBatchProcessor(
     provider.GetRequiredService<AccessWorkerDatabase>().Source,
     provider.GetRequiredService<ITenantIdAccessor>()));

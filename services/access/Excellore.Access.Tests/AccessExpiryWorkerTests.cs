@@ -180,6 +180,11 @@ public sealed class AccessExpiryWorkerTests
         }
         public Task<byte[]?> GetAsync(string key, CancellationToken cancellationToken) =>
             Task.FromResult<byte[]?>(Data);
+        public Task DeleteAsync(string key, CancellationToken cancellationToken)
+        {
+            Data = [];
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeDirectory(Guid active, Guid disabled) : IKeycloakDirectory
