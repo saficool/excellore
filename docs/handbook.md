@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.10 |
+| **Document version** | 5.11 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.11 | WP-12 personal exports use opaque-ID events and private object staging for Access and Profile contributions; Profile assembles the authenticated 24-hour download (ADR-0071 proposed). |
 | 5.10 | WP-12 personal-data exports exclude restricted audit originals because they can contain other people's data. Live account, preference, membership, and user-linked service data remain in scope (ADR-0070 proposed). |
 | 5.9 | WP-12 owner-requested tenant exports are limited to one request per tenant per UTC calendar day, enforced in the tenant database (ADR-0069 proposed). |
 | 5.8 | WP-12 tenant deletion retains audit history in restricted, forced-RLS archives and opaque tombstones; active tenant rows and objects are erased only after service confirmations (ADR-0067 proposed). Profile outbox now carries nullable tenant routing metadata for erasure confirmations. Keycloak user deletion remains deferred under INV-11; restricted hash-chained audit originals are preserved with an appended erasure marker (ADR-0068 proposed). |
@@ -1359,6 +1360,8 @@ My access · Members (search, filters, detail drawer) · Invitations · Roles (l
 | `access.supportgrant.created.v1` / `revoked.v1` | Access | Security, notifications | Support access visibility |
 | `profile.updated.v1` | Profile | Interested services | Global profile fields changed |
 | `profile.deletion.requested.v1` | Profile | Access | Start account deletion flow |
+| `profile.export.requested.v1` | Profile | Access, Profile | Build private service contributions; IDs only |
+| `access.user-export.ready.v1` | Access | Profile | Access contribution is staged; IDs only |
 | `profile.export.ready.v1` | Profile | Notifications | Export available |
 | `access.erasure.confirmed.v1` / `profile.erasure.confirmed.v1` | Respective service | Access | Confirms erasure of a tenant or identity |
 
@@ -1749,7 +1752,7 @@ Prefer events and local read models. If unavoidable, use token exchange (RFC 869
 
 **User erasure**: every service removes global application data and **anonymizes** live user references inside tenant data that must be kept (for example `created_by` becomes a tombstone ID), then confirms. Restricted hash-chained audit originals are preserved with an appended erasure marker (ADR-0068). Keycloak identity deletion is deferred under INV-11 because its Admin API puts the user ID in a server-to-server URL. Until an approved design deletes the Keycloak identity, the overall deletion request remains pending and `identity.user.deleted.v1` MUST NOT be published.
 
-**Personal-data export:** includes the requester's live global account, preferences, memberships, tenant profile fields, and other user-linked application data. Restricted audit originals are excluded because a single record can contain personal data about other people. Their disclosure and redaction policy remains a compliance decision; the export must not expose the restricted archive through the application path (ADR-0070 proposed).
+**Personal-data export:** includes the requester's live global account, preferences, memberships, tenant profile fields, and other user-linked application data. Profile emits an ID-only request; Access and Profile stage user-bounded JSON contributions in a private export bucket under an opaque export ID. Profile assembles the result after Access confirms its contribution and exposes it for 24 hours only through the authenticated Profile API. Events never contain export content, object keys, or download links (ADR-0071 proposed). Restricted audit originals are excluded because a single record can contain personal data about other people. Their disclosure and redaction policy remains a compliance decision; the export must not expose the restricted archive through the application path (ADR-0070 proposed).
 
 **Tenant export:** a tenant owner with recent MFA can request an export of tenant data (Access exports its data; other services contribute through events). The first-release limit is **one request per tenant per UTC calendar day**, enforced by a database uniqueness constraint, independent of plan (ADR-0069 proposed). A request records a pending job; authenticated download is available only after all service contributions are ready.
 
@@ -3047,6 +3050,7 @@ All events use the envelope in [16.2](#162-envelope). Only `data` is listed. Sch
 | `access.supportgrant.created.v1` / `revoked.v1` | `tenantId`, `grantId`, `staffUserId`, `expiresAt` |
 | `profile.updated.v1` | `userId`, `changed: ["displayName","timeZone","avatar","preferences"]` (field names only, no values) |
 | `profile.deletion.requested.v1` | `userId` |
+| `profile.export.requested.v1` / `access.user-export.ready.v1` | `userId`, `exportId` (opaque IDs only; no content, key, or link) |
 | `profile.export.ready.v1` | `userId`, `exportId` |
 | `access.erasure.confirmed.v1` / `profile.erasure.confirmed.v1` | `scope: "tenant"\|"user"`, `service` (matches event type); tenant scope: `tenantId` matching envelope `tenantid`; user scope: `userId` and no tenant ID |
 

@@ -23,4 +23,21 @@ docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postg
 docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-profile \
   sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U profile_migrator -d profile' \
   < services/profile/Excellore.Profile.Infrastructure/Migrations/003_identity_mirror.sql
+apply_once() {
+  local migration="$1" condition="$2" applied
+  applied="$(docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-profile \
+    sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -A -t -v ON_ERROR_STOP=1 -U profile_migrator -d profile -c "$1"' \
+    sh "$condition" | tr -d '\r\n')"
+  if [ "$applied" = f ]; then
+    docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-profile \
+      sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U profile_migrator -d profile' \
+      < "services/profile/Excellore.Profile.Infrastructure/Migrations/$migration"
+  elif [ "$applied" != t ]; then
+    echo "Could not determine Profile migration state for $migration." >&2
+    exit 1
+  fi
+}
+apply_once 004_tenant_erasure.sql "SELECT to_regclass('public.profile_tenant_tombstones') IS NOT NULL"
+apply_once 005_tenant_audit_archive.sql "SELECT to_regclass('public.profile_audit_archive') IS NOT NULL"
+apply_once 006_personal_exports.sql "SELECT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='tenant_member_profiles' AND policyname='profile_worker_personal_export')"
 echo 'Profile database migration applied.'

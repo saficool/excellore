@@ -15,6 +15,8 @@ builder.Services.AddSingleton<IEventBus>(new RabbitMqEventBus(brokerUri));
 builder.Services.AddSingleton<PostgresOutboxDispatcher>();
 builder.Services.AddSingleton<PostgresEventInbox>();
 builder.Services.AddSingleton<ProfileErasureConfirmationProjector>();
+builder.Services.AddSingleton<IPrivateExportStore, S3PrivateExportStore>();
+builder.Services.AddSingleton<PersonalExportContributor>();
 builder.Services.AddHostedService<AccessLifecycleSubscriber>();
 builder.Services.AddHostedService<Worker>();
 var workerConnectionString = builder.Configuration.GetConnectionString("AccessWorker")

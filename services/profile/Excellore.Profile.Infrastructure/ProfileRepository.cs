@@ -247,6 +247,19 @@ public sealed class ProfileRepository(NpgsqlDataSource db)
             command.Parameters.AddWithValue("user", userId);
             await command.ExecuteNonQueryAsync(ct);
         }
+        await using (var outbox = new NpgsqlCommand("""
+            INSERT INTO outbox(id,type,payload)
+            VALUES (@id,'profile.export.requested.v1',jsonb_build_object(
+              'specversion','1.0','id',@id,'type','profile.export.requested.v1',
+              'source','excellore/profile','time',now(),'correlationid',@id,
+              'actor',jsonb_build_object('sub',@user,'type','human'),
+              'data',jsonb_build_object('userId',@user,'exportId',@id)))
+            """, connection, tx))
+        {
+            outbox.Parameters.AddWithValue("id", id);
+            outbox.Parameters.AddWithValue("user", userId);
+            await outbox.ExecuteNonQueryAsync(ct);
+        }
         await AuditAsync(connection, tx, null, userId, userId, "profile.export.requested", null, ct);
         await tx.CommitAsync(ct);
         return id;
@@ -391,6 +404,20 @@ public sealed class ProfileRepository(NpgsqlDataSource db)
         command.Parameters.AddWithValue("id", jobId);
         command.Parameters.AddWithValue("user", userId);
         return (string?)await command.ExecuteScalarAsync(ct);
+    }
+
+    public async Task<byte[]?> DownloadExportAsync(Guid userId, Guid jobId,
+        Excellore.Platform.IPrivateExportStore objects, CancellationToken ct = default)
+    {
+        await using var connection = await db.OpenConnectionAsync(ct);
+        await using var command = new NpgsqlCommand("""
+            SELECT 1 FROM data_export_jobs
+            WHERE id=@id AND user_id=@user AND status='ready' AND expires_at > now()
+            """, connection);
+        command.Parameters.AddWithValue("id", jobId);
+        command.Parameters.AddWithValue("user", userId);
+        return await command.ExecuteScalarAsync(ct) is null ? null :
+            await objects.GetAsync(jobId, "complete", ct);
     }
 
     public async Task<Guid> RequestDeletionAsync(Guid userId, CancellationToken ct = default)

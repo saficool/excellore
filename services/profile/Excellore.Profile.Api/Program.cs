@@ -3,6 +3,7 @@ using Excellore.Authz;
 using Excellore.Profile.Application;
 using Excellore.Profile.Infrastructure;
 using Npgsql;
+using Excellore.Platform;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,7 @@ var connectionString = builder.Configuration.GetConnectionString("Profile")
 builder.Services.AddSingleton(NpgsqlDataSource.Create(connectionString));
 builder.Services.AddScoped<ProfileRepository>();
 builder.Services.AddSingleton<IAvatarObjectStore, S3AvatarObjectStore>();
+builder.Services.AddSingleton<IPrivateExportStore, S3PrivateExportStore>();
 builder.Services.AddScoped<OwnIdentityService>();
 builder.Services.AddHttpClient<IOwnIdentityClient, KeycloakOwnIdentityClient>(client =>
     client.Timeout = TimeSpan.FromSeconds(10)).RemoveAllLoggers();
@@ -113,6 +115,16 @@ me.MapGet("/data-exports/{id:guid}", async (Guid id, ICurrentUser user,
 {
     var status = await profiles.GetExportStatusAsync(user.UserId, id, ct);
     return status is null ? Results.NotFound() : Results.Ok(new { id, status });
+});
+me.MapGet("/data-exports/{id:guid}/download", async (Guid id, ICurrentUser user,
+    ProfileRepository profiles, IPrivateExportStore objects, HttpContext context,
+    CancellationToken ct) =>
+{
+    var export = await profiles.DownloadExportAsync(user.UserId, id, objects, ct);
+    if (export is null) return Results.NotFound();
+    context.Response.Headers.CacheControl = "private, no-store";
+    context.Response.Headers.XContentTypeOptions = "nosniff";
+    return Results.File(export, "application/json", "excellore-personal-data.json");
 });
 me.MapPost("/deletion-requests", async (ICurrentUser user, ProfileRepository profiles, CancellationToken ct) =>
     user.HasRecentMfa

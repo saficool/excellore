@@ -1,0 +1,13 @@
+{
+  "specversion": "1.0",
+  "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee5",
+  "type": "access.user-export.ready.v1",
+  "source": "excellore/access",
+  "time": "2026-01-01T12:00:00Z",
+  "correlationid": "33333333-3333-4333-8333-333333333333",
+  "actor": { "sub": "77777777-7777-4777-8777-777777777777", "type": "machine" },
+  "data": {
+    "userId": "55555555-5555-4555-8555-555555555555",
+    "exportId": "66666666-6666-4666-8666-666666666666"
+  }
+}

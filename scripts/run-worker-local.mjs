@@ -45,6 +45,9 @@ const workerEnv = {
     connection(`${service}_publisher`, env[`${prefix}_PUBLISHER_PASSWORD`]),
   [`ConnectionStrings__${service === 'access' ? 'Access' : 'Profile'}Worker`]:
     connection(`${service}_worker`, env[`${prefix}_WORKER_PASSWORD`]),
+  ExportStore__Endpoint: 'http://127.0.0.1:8333',
+  ExportStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
+  ExportStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,
 };
 if (service === 'access') {
   assert.match(env.ACCESS_WORKER_ACTOR_ID ?? '', /^[0-9a-f-]{36}$/i);

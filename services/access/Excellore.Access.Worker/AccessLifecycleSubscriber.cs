@@ -5,6 +5,7 @@ namespace Excellore.Access.Worker;
 
 public sealed class AccessLifecycleSubscriber(IEventBus eventBus,
     ProfileErasureConfirmationProjector confirmations,
+    PersonalExportContributor exports,
     ILogger<AccessLifecycleSubscriber> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -12,7 +13,9 @@ public sealed class AccessLifecycleSubscriber(IEventBus eventBus,
         var handlers = new Dictionary<string, PlatformEventHandler>
         {
             [ProfileErasureConfirmedV1.EventType] =
-                (body, token) => confirmations.ApplyAsync(body, token)
+                (body, token) => confirmations.ApplyAsync(body, token),
+            [ProfileExportRequestedV1.EventType] =
+                (body, token) => exports.ApplyAsync(body, token)
         };
         while (!stoppingToken.IsCancellationRequested)
         {

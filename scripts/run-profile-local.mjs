@@ -55,6 +55,9 @@ const child = spawn(
       AvatarStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
       AvatarStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,
       AvatarStore__Bucket: 'excellore-avatars',
+      ExportStore__Endpoint: 'http://127.0.0.1:8333',
+      ExportStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
+      ExportStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,
     },
   },
 );

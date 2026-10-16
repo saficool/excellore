@@ -78,4 +78,8 @@ docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postg
   sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U access_migrator -d access' \
   < services/access/Excellore.Access.Infrastructure/Migrations/014_worker_identity_drift.sql
 apply_once 015_role_assignment_batches.sql "SELECT to_regclass('public.role_assignment_batches') IS NOT NULL"
+apply_once 016_tenant_deletion_dispatch.sql "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='tenants' AND column_name='deletion_started_at')"
+apply_once 017_tenant_erasure_receipts.sql "SELECT to_regclass('public.tenant_tombstones') IS NOT NULL"
+apply_once 018_tenant_erasure_finalization.sql "SELECT to_regclass('public.audit_events_archive') IS NOT NULL"
+apply_once 019_tenant_export_requests.sql "SELECT to_regclass('public.tenant_exports') IS NOT NULL"
 echo 'Access database migrations applied.'

@@ -128,6 +128,16 @@ for (const file of schemaFiles) {
       },
     );
   }
+  if (eventType.includes('export')) {
+    invalidExamples.push(
+      { ...example, data: { ...example.data, email: 'personal@example.test' } },
+      {
+        ...example,
+        data: { ...example.data, objectKey: 'exports/private.json' },
+      },
+      { ...example, data: { ...example.data, token: 'secret' } },
+    );
+  }
   if (eventType.endsWith('.erasure.confirmed.v1')) {
     const userExample = JSON.parse(
       readFileSync(join(examplesDir, `${eventType}.user.example.json`), 'utf8'),
