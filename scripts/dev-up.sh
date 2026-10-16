@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 export MSYS_NO_PATHCONV=1
+export KEYCLOAK_IMPORT_GID="${KEYCLOAK_IMPORT_GID:-$(id -g)}"
 
 mode="${1:-full}"
 if [ "$mode" != full ] && [ "$mode" != --identity-only ]; then

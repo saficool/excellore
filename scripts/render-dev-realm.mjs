@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const source = new URL('../infra/keycloak/realm-dev.json', import.meta.url);
 const destination = new URL(
@@ -29,5 +29,6 @@ if (rendered.includes('${')) {
 }
 JSON.parse(rendered);
 mkdirSync(new URL('../.local/keycloak/', import.meta.url), { recursive: true });
-writeFileSync(destination, rendered, { mode: 0o600 });
+writeFileSync(destination, rendered, { mode: 0o640 });
+chmodSync(destination, 0o640);
 console.log('Rendered ignored local Keycloak realm.');
