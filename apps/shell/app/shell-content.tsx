@@ -3,7 +3,9 @@ import type { PendingInvitation } from '@excellore/auth';
 import { platformNotices } from '../lib/notices';
 
 const messages = {
+  skipToContent: 'Skip to content',
   primaryNavigation: 'Navigation',
+  workspaces: 'Workspaces',
   switchTenant: 'Switch tenant',
   switchApp: 'Switch app',
   userMenu: 'Account menu',
@@ -19,7 +21,12 @@ export function ShellHeader({
 }: {
   accountHref: string;
   tenants: readonly { id: string; name: string; href: string }[];
-  apps?: readonly { id: string; name: string; href: string }[];
+  apps?: readonly {
+    id: string;
+    name: string;
+    description: string;
+    href: string;
+  }[];
   currentTenant?: { slug: string; name: string };
 }) {
   return (

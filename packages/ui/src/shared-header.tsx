@@ -5,7 +5,9 @@ export interface HeaderNavigationItem {
 }
 
 export interface HeaderMessages {
+  skipToContent: string;
   primaryNavigation: string;
+  workspaces: string;
   switchTenant: string;
   switchApp: string;
   userMenu: string;
@@ -80,80 +82,91 @@ export function SharedHeader({
   messages,
 }: SharedHeaderProps) {
   return (
-    <header className="ex-header">
-      <div className="ex-header__inner">
-        <a className="ex-header__brand" href={checkedHref(homeHref)}>
-          Excellore
-        </a>
-        {currentTenant && (
-          <span className="ex-header__context">{currentTenant.name}</span>
-        )}
-        <nav className="ex-header__nav" aria-label={messages.primaryNavigation}>
+    <>
+      <a className="ex-skip-link" href="#main-content">
+        {messages.skipToContent}
+      </a>
+      <header className="ex-header">
+        <div className="ex-header__inner">
+          <a className="ex-header__brand" href={checkedHref(homeHref)}>
+            Excellore
+          </a>
           {currentTenant && (
-            <details className="ex-menu">
-              <summary>{messages.switchTenant}</summary>
-              <ul className="ex-menu__items">
-                {tenants.map((tenant) => (
-                  <li key={tenant.id}>
-                    <a
-                      href={checkedHref(tenant.href)}
-                      aria-current={
-                        tenant.id === currentTenant.slug ? 'page' : undefined
-                      }
-                    >
-                      {tenant.name}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </details>
+            <span className="ex-header__context">{currentTenant.name}</span>
           )}
-          {currentTenant && (
-            <details className="ex-menu">
-              <summary>{messages.switchApp}</summary>
-              <ul className="ex-menu__items">
-                {apps.map((app) => (
-                  <li key={app.id}>
-                    <a
-                      href={checkedHref(app.href)}
-                      aria-current={
-                        app.id === currentAppId ? 'page' : undefined
-                      }
-                    >
-                      {app.name}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </nav>
-        <details className="ex-menu ex-header__user">
-          <summary aria-label={messages.userMenu}>
-            {avatarSrc && (
-              <img
-                key={avatarRevision}
-                className="ex-header__avatar"
-                src={checkedAvatarSrc(avatarSrc)}
-                alt=""
-                width={32}
-                height={32}
-              />
+          <nav
+            className="ex-header__nav"
+            aria-label={messages.primaryNavigation}
+          >
+            <a className="ex-header__workspaces" href={checkedHref(homeHref)}>
+              {messages.workspaces}
+            </a>
+            {currentTenant && (
+              <details className="ex-menu">
+                <summary>{messages.switchTenant}</summary>
+                <ul className="ex-menu__items">
+                  {tenants.map((tenant) => (
+                    <li key={tenant.id}>
+                      <a
+                        href={checkedHref(tenant.href)}
+                        aria-current={
+                          tenant.id === currentTenant.slug ? 'page' : undefined
+                        }
+                      >
+                        {tenant.name}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </details>
             )}
-            {userLabel}
-          </summary>
-          <ul className="ex-menu__items">
-            <li>
-              <a href={checkedHref(accountHref)}>{messages.myAccount}</a>
-            </li>
-            <li>
-              <form method="post" action="/auth/logout">
-                <button type="submit">{messages.signOut}</button>
-              </form>
-            </li>
-          </ul>
-        </details>
-      </div>
-    </header>
+            {currentTenant && (
+              <details className="ex-menu">
+                <summary>{messages.switchApp}</summary>
+                <ul className="ex-menu__items">
+                  {apps.map((app) => (
+                    <li key={app.id}>
+                      <a
+                        href={checkedHref(app.href)}
+                        aria-current={
+                          app.id === currentAppId ? 'page' : undefined
+                        }
+                      >
+                        {app.name}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </nav>
+          <details className="ex-menu ex-header__user">
+            <summary aria-label={messages.userMenu}>
+              {avatarSrc && (
+                <img
+                  key={avatarRevision}
+                  className="ex-header__avatar"
+                  src={checkedAvatarSrc(avatarSrc)}
+                  alt=""
+                  width={32}
+                  height={32}
+                />
+              )}
+              {userLabel}
+            </summary>
+            <ul className="ex-menu__items">
+              <li>
+                <a href={checkedHref(accountHref)}>{messages.myAccount}</a>
+              </li>
+              <li>
+                <form method="post" action="/auth/logout">
+                  <button type="submit">{messages.signOut}</button>
+                </form>
+              </li>
+            </ul>
+          </details>
+        </div>
+      </header>
+    </>
   );
 }

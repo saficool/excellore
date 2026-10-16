@@ -26,6 +26,16 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
   gap: 1.25rem;
 }
+.profile-page__heading {
+  margin-bottom: 1.5rem;
+}
+.profile-page__heading h1 {
+  margin-bottom: 0.35rem;
+}
+.profile-page__heading p {
+  color: var(--ex-color-muted);
+  margin-top: 0;
+}
 .profile-form {
   display: grid;
   gap: 0.9rem;
@@ -74,5 +84,23 @@ a {
   margin-top: 1rem;
 }
 .profile-status {
-  grid-column: 1 / -1;
+  background: var(--ex-color-surface);
+  border-inline-start: 4px solid var(--ex-color-accent);
+  margin-bottom: 1rem;
+  padding: 0.8rem 1rem;
+}
+.profile-confirmation {
+  border: 1px solid #b91c1c;
+  border-radius: var(--ex-radius-medium);
+  margin-top: 1rem;
+  padding: 1rem;
+}
+.ex-card .profile-danger-button {
+  background: #b91c1c;
+  color: #fff;
+}
+.ex-card .profile-secondary-button {
+  background: transparent;
+  border: 1px solid var(--ex-color-border);
+  color: var(--ex-color-text);
 }

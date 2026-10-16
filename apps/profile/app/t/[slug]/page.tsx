@@ -23,15 +23,17 @@ export default async function TenantPage({
   return (
     <>
       <ProfileHeader
-        homeHref="/"
+        homeHref={data.homeHref}
         currentTenant={{ slug, name: data.tenant.name }}
         tenants={data.tenants}
         apps={data.apps}
         currentAppId="profile"
-        accountHref="/account"
+        accountHref={data.accountHref}
         userLabel="Account"
         messages={{
+          skipToContent: 'Skip to content',
           primaryNavigation: 'Navigation',
+          workspaces: 'Workspaces',
           switchTenant: 'Switch tenant',
           switchApp: 'Switch app',
           userMenu: 'Account menu',
@@ -39,7 +41,7 @@ export default async function TenantPage({
           signOut: 'Sign out',
         }}
       />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <h1>{data.tenant.name} profiles</h1>
         <TenantProfile
           slug={slug}

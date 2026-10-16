@@ -131,15 +131,24 @@ function ReasonField({
 }) {
   return (
     <label>
-      Reason code
-      <input
+      Reason for change
+      <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        pattern="[a-z][a-z0-9._-]{0,63}"
-        maxLength={64}
         required
-        title="Lowercase letters, digits, dots, underscores, or hyphens"
-      />
+      >
+        <option value="administrative_change">Administrative change</option>
+        <option value="member_invitation">Member invitation</option>
+        <option value="member_request">Member request</option>
+        <option value="role_assignment">Role assignment</option>
+        <option value="access_review">Access review</option>
+        <option value="security_response">Security response</option>
+        <option value="support_review">Support review</option>
+        <option value="tenant_settings">Tenant settings change</option>
+        <option value="ownership_transfer">Ownership transfer</option>
+        <option value="tenant_deletion">Tenant deletion</option>
+      </select>
+      <small>This reason is recorded in the audit log.</small>
     </label>
   );
 }
@@ -171,14 +180,14 @@ function MyAccess({ slug }: { slug: string }) {
               ))}
             </ul>
           </div>
-          <div>
-            <h3>Permissions</h3>
+          <details>
+            <summary>Technical permission details</summary>
             <ul>
               {data.permissions.map((key) => (
                 <li key={key}>{key}</li>
               ))}
             </ul>
-          </div>
+          </details>
         </div>
       )}
     </Card>
@@ -1169,7 +1178,7 @@ export function ConsoleSection({
 }) {
   return (
     <>
-      <p className="access-eyebrow">{tenantName} · Access</p>
+      <h1 className="access-eyebrow">{tenantName} · Access</h1>
       {section === 'my-access' && <MyAccess slug={slug} />}
       {section === 'members' && (
         <Members slug={slug} permissions={permissions} />

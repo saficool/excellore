@@ -68,7 +68,9 @@ a {
 }
 .access-eyebrow {
   color: var(--ex-color-accent);
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
 }
 .access-stack {
   display: grid;

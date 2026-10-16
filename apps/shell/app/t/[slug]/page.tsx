@@ -29,7 +29,7 @@ export default async function TenantLauncher({
         apps={data.apps}
         currentTenant={{ slug, name: data.tenant.name }}
       />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <ShellBanners
           invitations={data.invitations}
           invitationBase={data.invitationBase}
@@ -41,7 +41,8 @@ export default async function TenantLauncher({
             {data.apps.map((app) => (
               <li key={app.id}>
                 <a className="ex-tile" href={app.href}>
-                  {app.name}
+                  <strong>{app.name}</strong>
+                  <span>{app.description}</span>
                 </a>
               </li>
             ))}

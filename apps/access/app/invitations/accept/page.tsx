@@ -9,7 +9,7 @@ export default async function AcceptInvitationPage({
 }) {
   const { id } = await searchParams;
   return (
-    <main className="access-accept">
+    <main id="main-content" tabIndex={-1} className="access-accept">
       <InvitationAcceptance id={id ?? ''} />
     </main>
   );

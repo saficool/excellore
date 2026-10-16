@@ -13,6 +13,7 @@ data:
   SESSION_KEY_PREFIX: "shell:sess:"
   ACCESS_INTERNAL_URL: {{ .Values.platform.accessInternalUrl | quote }}
   AUTHZ_CLIENT_ID: svc-shell-authz
+  SHELL_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.shell | quote }}
   PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
   ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
 ---
@@ -32,6 +33,7 @@ data:
   ACCESS_INTERNAL_URL: {{ .Values.platform.accessInternalUrl | quote }}
   AUTHZ_CLIENT_ID: svc-profile-authz
   API_BASE_URL: http://excellore-profile-api:8080
+  SHELL_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.shell | quote }}
   PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
   ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
 ---
@@ -51,6 +53,7 @@ data:
   ACCESS_INTERNAL_URL: {{ .Values.platform.accessInternalUrl | quote }}
   AUTHZ_CLIENT_ID: svc-access-authz
   API_BASE_URL: http://excellore-access-api:8080
+  SHELL_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.shell | quote }}
   PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
   ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
 ---

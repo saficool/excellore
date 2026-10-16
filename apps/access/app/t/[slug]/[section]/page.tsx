@@ -26,15 +26,17 @@ export default async function SectionPage({
   return (
     <>
       <SharedHeader
-        homeHref="/"
+        homeHref={data.homeHref}
         currentTenant={{ slug, name: data.tenant.name }}
         tenants={data.tenants}
         apps={data.apps}
         currentAppId="access"
-        accountHref="/account"
+        accountHref={data.accountHref}
         userLabel="Account"
         messages={{
+          skipToContent: 'Skip to content',
           primaryNavigation: 'Navigation',
+          workspaces: 'Workspaces',
           switchTenant: 'Switch tenant',
           switchApp: 'Switch app',
           userMenu: 'Account menu',
@@ -54,7 +56,7 @@ export default async function SectionPage({
             </a>
           ))}
         </nav>
-        <main className="access-main">
+        <main id="main-content" tabIndex={-1} className="access-main">
           <ConsoleSection
             section={section}
             slug={slug}

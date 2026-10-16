@@ -18,7 +18,7 @@ export default async function Home() {
   return (
     <>
       <ShellHeader accountHref={data.accountHref} tenants={data.tenants} />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <ShellBanners
           invitations={data.invitations}
           invitationBase={data.invitationBase}

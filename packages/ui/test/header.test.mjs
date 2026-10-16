@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { SharedHeader } from '@excellore/ui';
+import { NotFound, SharedHeader } from '@excellore/ui';
 
 const messages = {
+  skipToContent: 'Skip to content',
   primaryNavigation: 'Main navigation',
+  workspaces: 'Workspaces',
   switchTenant: 'Switch tenant',
   switchApp: 'Switch app',
   userMenu: 'User menu',
@@ -35,6 +37,8 @@ const props = {
 test('header renders tenant and authorized app navigation with POST sign-out', () => {
   const html = renderToStaticMarkup(createElement(SharedHeader, props));
   assert.match(html, /aria-label="Main navigation"/);
+  assert.match(html, /href="#main-content">Skip to content/);
+  assert.match(html, /class="ex-header__workspaces" href="\/">Workspaces/);
   assert.match(html, /<summary>Switch tenant<\/summary>/);
   assert.match(html, /<summary>Switch app<\/summary>/);
   assert.match(html, /href="\/t\/another"/);
@@ -75,5 +79,19 @@ test('shared style sheet is exported for app layouts', () => {
   assert.match(
     import.meta.resolve('@excellore/ui/styles.css'),
     /packages\/ui\/src\/styles\.css$/,
+  );
+});
+
+test('not-found state gives a safe route without revealing access details', () => {
+  const html = renderToStaticMarkup(
+    createElement(NotFound, { homeHref: '/workspaces' }),
+  );
+  assert.match(html, /Page not found/);
+  assert.match(html, /does not exist, or you do not have access/);
+  assert.match(html, /href="\/workspaces"/);
+  assert.throws(() =>
+    renderToStaticMarkup(
+      createElement(NotFound, { homeHref: 'javascript:alert(1)' }),
+    ),
   );
 });

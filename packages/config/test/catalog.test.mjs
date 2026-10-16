@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import {
   parseAppCatalog,
+  suiteNavigation,
   tenantAppUrl,
   tenantLinksForApp,
   visibleTenantApps,
@@ -13,6 +14,7 @@ const path = fileURLToPath(
   new URL('../../../infra/platform/app-catalog.yaml', import.meta.url),
 );
 const production = {
+  SHELL_ORIGIN: 'https://example.test',
   PROFILE_ORIGIN: 'https://profile.example.test',
   ACCESS_ORIGIN: 'https://access.example.test',
   NODE_ENV: 'production',
@@ -41,9 +43,18 @@ test('catalog loads from YAML, resolves origins, and shows only allowed tenant a
     'example-co',
   );
   assert.deepEqual(
-    links.map((app) => app.id),
-    ['profile'],
+    links.map(({ id, description }) => ({ id, description })),
+    [
+      {
+        id: 'profile',
+        description: 'Your account and your profile in this organization',
+      },
+    ],
   );
+  assert.deepEqual(suiteNavigation(catalog, production), {
+    homeHref: 'https://example.test',
+    accountHref: 'https://profile.example.test/account',
+  });
   const tenantLinks = tenantLinksForApp(catalog, 'profile', [
     { slug: 'example-co', name: 'Example Co', status: 'active' },
     { slug: 'suspended-co', name: 'Suspended Co', status: 'suspended' },
@@ -62,6 +73,12 @@ test('catalog loads from YAML, resolves origins, and shows only allowed tenant a
     ['/t/example-co'],
   );
   assert.throws(() => tenantAppUrl(catalog.apps[0], '../other'));
+  assert.throws(() =>
+    suiteNavigation(catalog, {
+      ...production,
+      SHELL_ORIGIN: 'javascript:alert(1)',
+    }),
+  );
 });
 
 test('catalog rejects duplicate IDs, mismatched permissions, and unsafe origins', () => {

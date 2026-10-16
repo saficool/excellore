@@ -125,6 +125,15 @@ html = await response.text();
 assert.match(html, /My access/);
 assert.match(html, /Members/);
 assert.match(html, /Roles/);
+assert.match(html, />Workspaces</);
+assert.ok(
+  html.includes(`href="${env.SHELL_ORIGIN}/"`),
+  'Access did not link back to Shell',
+);
+assert.ok(
+  html.includes(`href="${env.PROFILE_ORIGIN}/account"`),
+  'Access did not link to the Profile account',
+);
 assert.doesNotMatch(html, /(?:access_token|refresh_token|id_token)/i);
 response = await browser.request(`${origin}/t/acme/roles`);
 assert.equal(response.status, 200, 'roles page');

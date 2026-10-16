@@ -13,13 +13,27 @@ import {
   requireTenant,
   ValkeySessionStore,
 } from '@excellore/auth';
-import { tenantLinksForApp, visibleTenantApps } from '@excellore/config';
+import {
+  suiteNavigation,
+  tenantLinksForApp,
+  visibleTenantApps,
+} from '@excellore/config';
 import { loadAppCatalog } from '@excellore/config/server';
 import { resolve } from 'node:path';
 
 const appId: string = 'access';
 let resources: Promise<Awaited<ReturnType<typeof createResources>>> | undefined;
 let accessPromise: ReturnType<typeof createAccessClient> | undefined;
+
+function catalog() {
+  return loadAppCatalog(
+    resolve(process.cwd(), '../../infra/platform/app-catalog.yaml'),
+  );
+}
+
+export function getSuiteNavigation() {
+  return suiteNavigation(catalog(), process.env);
+}
 
 async function createResources() {
   const config = loadAuthConfig();
@@ -147,12 +161,11 @@ export async function getTenantPageData(slug: string) {
   const allTenants = (await access.listTenants(session.sub)).filter(
     (item) => appId === 'shell' || item.apps.includes(appId),
   );
-  const catalog = loadAppCatalog(
-    resolve(process.cwd(), '../../infra/platform/app-catalog.yaml'),
-  );
+  const appCatalog = catalog();
   return {
     tenant,
-    tenants: tenantLinksForApp(catalog, appId, allTenants),
-    apps: visibleTenantApps(catalog, tenant, slug),
+    tenants: tenantLinksForApp(appCatalog, appId, allTenants),
+    apps: visibleTenantApps(appCatalog, tenant, slug),
+    ...suiteNavigation(appCatalog, process.env),
   };
 }

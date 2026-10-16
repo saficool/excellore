@@ -88,6 +88,7 @@ export interface AppCatalog {
 export interface AppLink {
   id: string;
   name: string;
+  description: string;
   icon: string;
   href: string;
 }
@@ -96,6 +97,11 @@ export interface TenantLink {
   id: string;
   name: string;
   href: string;
+}
+
+export interface SuiteNavigation {
+  homeHref: string;
+  accountHref: string;
 }
 
 function checkedOrigin(
@@ -179,9 +185,23 @@ export function visibleTenantApps(
     .map((app) => ({
       id: app.id,
       name: app.name,
+      description: app.description,
       icon: app.icon,
       href: tenantAppUrl(app, slug),
     }));
+}
+
+export function suiteNavigation(
+  catalog: AppCatalog,
+  env: Record<string, string | undefined>,
+): SuiteNavigation {
+  const profile = catalog.apps.find((app) => app.id === 'profile');
+  if (!profile?.userLevelUrl)
+    throw new Error('App catalog profile account URL is missing');
+  return {
+    homeHref: checkedOrigin(env.SHELL_ORIGIN, env),
+    accountHref: profile.userLevelUrl,
+  };
 }
 
 export function tenantLinksForApp(

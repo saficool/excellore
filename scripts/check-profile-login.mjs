@@ -108,6 +108,11 @@ response = await browser.request(`${appOrigin}/account`);
 assert.equal(response.status, 200, 'Signed-in account page unavailable');
 const accountHtml = await response.text();
 assert.match(accountHtml, /Loading account|My account/);
+assert.match(accountHtml, />Workspaces</);
+assert.ok(
+  accountHtml.includes(`href="${env.SHELL_ORIGIN}/"`),
+  'Profile did not link back to Shell',
+);
 assert.equal(
   /(?:access_token|refresh_token|id_token)/i.test(accountHtml),
   false,
@@ -136,7 +141,14 @@ response = await browser.request(`${appOrigin}/api/me/sessions`);
 assert.equal(response.status, 200, 'Own Keycloak sessions failed');
 assert.ok(Array.isArray(await response.json()), 'Session list is not an array');
 response = await browser.request(`${appOrigin}/api/avatar`);
-assert.equal(response.status, 404, 'An unset avatar should be hidden');
+assert.ok(
+  response.status === 200 || response.status === 404,
+  'Avatar stream returned an unexpected status',
+);
+const originalAvatar =
+  response.status === 200 ? Buffer.from(await response.arrayBuffer()) : null;
+if (originalAvatar)
+  assert.equal(response.headers.get('content-type'), 'image/webp');
 response = await browser.request(`${appOrigin}/t/acme`);
 assert.equal(response.status, 200, 'Profile tenant page unavailable');
 response = await browser.request(`${appOrigin}/api/t/acme/members/me`);
@@ -182,6 +194,39 @@ response = await browser.request(`${appOrigin}/api/me/avatar`, {
   headers: { Origin: appOrigin, 'X-Excellore-CSRF': '1' },
 });
 assert.equal(response.status, 204, 'Avatar cleanup failed');
+if (originalAvatar) {
+  response = await browser.request(`${appOrigin}/api/me/avatar/uploads`, {
+    method: 'POST',
+    headers: {
+      Origin: appOrigin,
+      'X-Excellore-CSRF': '1',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contentType: 'image/webp',
+      sizeBytes: originalAvatar.length,
+    }),
+  });
+  assert.equal(
+    response.status,
+    200,
+    'Existing avatar restore reservation failed',
+  );
+  const restore = await response.json();
+  response = await browser.request(
+    `${appOrigin}/api/me/avatar/uploads/${restore.id}/complete`,
+    {
+      method: 'POST',
+      headers: {
+        Origin: appOrigin,
+        'X-Excellore-CSRF': '1',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ base64Data: originalAvatar.toString('base64') }),
+    },
+  );
+  assert.equal(response.status, 204, 'Existing avatar restore failed');
+}
 response = await browser.request(`${appOrigin}/auth/logout`, {
   method: 'POST',
   headers: { Origin: appOrigin },

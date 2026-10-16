@@ -47,6 +47,7 @@ const values = {
   AUTHZ_CLIENT_SECRET: env[`SVC_${upper}_AUTHZ_SECRET`],
   API_BASE_URL:
     app === 'access' ? 'http://localhost:5002' : 'http://localhost:5001',
+  SHELL_ORIGIN: env.SHELL_ORIGIN,
   PROFILE_ORIGIN: env.PROFILE_ORIGIN,
   ACCESS_ORIGIN: env.ACCESS_ORIGIN,
 };

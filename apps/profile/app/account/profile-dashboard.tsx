@@ -54,6 +54,7 @@ export function ProfileDashboard() {
   const [avatarRevision, setAvatarRevision] = useState(0);
   const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false);
   const [avatarStatus, setAvatarStatus] = useState('');
+  const [confirmDeletion, setConfirmDeletion] = useState(false);
   useEffect(() => {
     void Promise.all([
       api<OwnProfile>('profile'),
@@ -146,6 +147,7 @@ export function ProfileDashboard() {
           ? 'Application data erased. External identity deletion is pending.'
           : 'Account deletion request submitted. Application erasure is pending.',
       );
+      setConfirmDeletion(false);
     } catch {
       setMessage('A fresh MFA sign-in is required before requesting deletion.');
     } finally {
@@ -195,6 +197,7 @@ export function ProfileDashboard() {
   }
 
   async function removeAvatar() {
+    if (!window.confirm('Remove your profile picture?')) return;
     setBusy(true);
     try {
       const response = await fetch('/api/me/avatar', {
@@ -216,243 +219,289 @@ export function ProfileDashboard() {
 
   if (!profile) return <p role="status">{message || 'Loading account…'}</p>;
   return (
-    <div className="profile-grid">
-      <section className="ex-card">
+    <div className="profile-page">
+      <header className="profile-page__heading">
         <h1>My account</h1>
-        <form
-          onSubmit={(event) => void saveAccount(event)}
-          className="profile-form"
-        >
-          <label>
-            First name
-            <input
-              value={profile.firstName ?? ''}
-              maxLength={80}
-              onChange={(event) =>
-                setProfile({ ...profile, firstName: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            Last name
-            <input
-              value={profile.lastName ?? ''}
-              maxLength={80}
-              onChange={(event) =>
-                setProfile({ ...profile, lastName: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            Display name
-            <input
-              value={profile.displayName ?? ''}
-              maxLength={120}
-              onChange={(event) =>
-                setProfile({ ...profile, displayName: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            Locale
-            <input
-              value={profile.locale ?? ''}
-              maxLength={35}
-              onChange={(event) =>
-                setProfile({ ...profile, locale: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            Time zone
-            <input
-              value={profile.timeZone}
-              maxLength={80}
-              onChange={(event) =>
-                setProfile({ ...profile, timeZone: event.target.value })
-              }
-            />
-          </label>
-          <button disabled={busy} type="submit">
-            Save account
-          </button>
-        </form>
-      </section>
-      <section className="ex-card">
-        <h2>Avatar</h2>
-        {profile.hasAvatar && (
-          <Image
-            key={avatarRevision}
-            src="/api/avatar"
-            alt="Your avatar"
-            width={128}
-            height={128}
-            unoptimized
-            onError={() => setAvatarPreviewFailed(true)}
-            onLoad={() => setAvatarPreviewFailed(false)}
-          />
-        )}
-        {!profile.hasAvatar && <p>No avatar uploaded yet.</p>}
-        {avatarPreviewFailed && (
-          <p role="status">
-            Avatar saved, but the preview could not load.{' '}
-            <button
-              type="button"
-              onClick={() => {
-                setAvatarPreviewFailed(false);
-                setAvatarRevision((current) => current + 1);
-              }}
-            >
-              Retry preview
-            </button>
-          </p>
-        )}
-        <label className="profile-file">
-          Upload image
-          <input
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            disabled={busy}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.currentTarget.value = '';
-              if (file) void uploadAvatar(file);
-            }}
-          />
-        </label>
-        <p className="profile-hint">
-          PNG, JPEG, or WebP, up to 10 MB. Large images are resized before
-          upload.
-        </p>
-        {avatarStatus && <p role="status">{avatarStatus}</p>}
-        {profile.hasAvatar && (
-          <button disabled={busy} onClick={() => void removeAvatar()}>
-            Remove avatar
-          </button>
-        )}
-      </section>
-      <section className="ex-card">
-        <h2>Preferences</h2>
-        <form
-          onSubmit={(event) => void savePreferences(event)}
-          className="profile-form"
-        >
-          <label>
-            Language
-            <input
-              value={String(preferences.language ?? '')}
-              maxLength={35}
-              onChange={(event) =>
-                setPreferences({ ...preferences, language: event.target.value })
-              }
-            />
-          </label>
-          <label>
-            Date format
-            <select
-              value={String(preferences.dateFormat ?? 'local')}
-              onChange={(event) =>
-                setPreferences({
-                  ...preferences,
-                  dateFormat: event.target.value,
-                })
-              }
-            >
-              <option value="local">Local</option>
-              <option value="iso">ISO</option>
-            </select>
-          </label>
-          <label>
-            Theme
-            <select
-              value={String(preferences.theme ?? 'system')}
-              onChange={(event) => {
-                const theme = event.target.value;
-                setPreferences({ ...preferences, theme });
-                applyTheme(theme);
-              }}
-            >
-              <option value="system">System</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </label>
-          <label className="profile-check">
-            <input
-              type="checkbox"
-              checked={preferences.notifications !== false}
-              onChange={(event) =>
-                setPreferences({
-                  ...preferences,
-                  notifications: event.target.checked,
-                })
-              }
-            />
-            Notifications
-          </label>
-          <button disabled={busy} type="submit">
-            Save preferences
-          </button>
-        </form>
-      </section>
-      <section className="ex-card">
-        <h2>Security</h2>
-        <p>Manage credentials in the identity provider.</p>
-        <div className="profile-actions">
-          <a href="/auth/account-action?action=UPDATE_PASSWORD&returnTo=%2Faccount">
-            Change password
-          </a>
-          <a href="/auth/account-action?action=CONFIGURE_TOTP&returnTo=%2Faccount">
-            Manage authenticator
-          </a>
-          <a href="/auth/account-action?action=UPDATE_EMAIL&returnTo=%2Faccount">
-            Change email
-          </a>
-        </div>
-      </section>
-      <section className="ex-card">
-        <h2>Active sessions</h2>
-        {sessions === null ? (
-          <p>Sessions are unavailable.</p>
-        ) : sessions.length === 0 ? (
-          <p>No active sessions found.</p>
-        ) : (
-          <ul>
-            {sessions.map((session) => (
-              <li key={session.id}>
-                {session.lastActiveAt
-                  ? `Last active ${new Date(session.lastActiveAt).toLocaleString()}`
-                  : 'Active session'}{' '}
-                <button
-                  disabled={busy}
-                  onClick={() => void revokeSession(session.id)}
-                >
-                  End session
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <section className="ex-card">
-        <h2>My data</h2>
-        <button disabled={busy} onClick={() => void requestExport()}>
-          Request data export
-        </button>
-        {exportJob && <p>Export request queued.</p>}
-        <p>Account deletion requires a fresh MFA sign-in.</p>
-        <a href="/auth/step-up?returnTo=%2Faccount">Verify with MFA</a>
-        <p>
-          <button disabled={busy} onClick={() => void requestDeletion()}>
-            Request account deletion
-          </button>
-        </p>
-      </section>
+        <p>Manage your personal details, preferences, security, and data.</p>
+      </header>
       {message && (
-        <p role="status" className="profile-status">
+        <p role="status" aria-live="polite" className="profile-status">
           {message}
         </p>
       )}
+      <div className="profile-grid">
+        <section className="ex-card">
+          <h2>Personal details</h2>
+          <form
+            onSubmit={(event) => void saveAccount(event)}
+            className="profile-form"
+          >
+            <label>
+              First name
+              <input
+                value={profile.firstName ?? ''}
+                maxLength={80}
+                onChange={(event) =>
+                  setProfile({ ...profile, firstName: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Last name
+              <input
+                value={profile.lastName ?? ''}
+                maxLength={80}
+                onChange={(event) =>
+                  setProfile({ ...profile, lastName: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Display name
+              <input
+                value={profile.displayName ?? ''}
+                maxLength={120}
+                onChange={(event) =>
+                  setProfile({ ...profile, displayName: event.target.value })
+                }
+              />
+            </label>
+            <label>
+              Locale
+              <input
+                value={profile.locale ?? ''}
+                maxLength={35}
+                onChange={(event) =>
+                  setProfile({ ...profile, locale: event.target.value })
+                }
+                placeholder="e.g. en-GB"
+              />
+            </label>
+            <label>
+              Time zone
+              <input
+                value={profile.timeZone}
+                maxLength={80}
+                onChange={(event) =>
+                  setProfile({ ...profile, timeZone: event.target.value })
+                }
+                placeholder="e.g. Asia/Kolkata"
+              />
+            </label>
+            <button disabled={busy} type="submit">
+              Save account
+            </button>
+          </form>
+        </section>
+        <section className="ex-card">
+          <h2>Avatar</h2>
+          {profile.hasAvatar && (
+            <Image
+              key={avatarRevision}
+              src="/api/avatar"
+              alt="Your avatar"
+              width={128}
+              height={128}
+              unoptimized
+              onError={() => setAvatarPreviewFailed(true)}
+              onLoad={() => setAvatarPreviewFailed(false)}
+            />
+          )}
+          {!profile.hasAvatar && <p>No avatar uploaded yet.</p>}
+          {avatarPreviewFailed && (
+            <p role="status">
+              Avatar saved, but the preview could not load.{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setAvatarPreviewFailed(false);
+                  setAvatarRevision((current) => current + 1);
+                }}
+              >
+                Retry preview
+              </button>
+            </p>
+          )}
+          <label className="profile-file">
+            Upload image
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              disabled={busy}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.currentTarget.value = '';
+                if (file) void uploadAvatar(file);
+              }}
+            />
+          </label>
+          <p className="profile-hint">
+            PNG, JPEG, or WebP, up to 10 MB. Large images are resized before
+            upload.
+          </p>
+          {avatarStatus && <p role="status">{avatarStatus}</p>}
+          {profile.hasAvatar && (
+            <button disabled={busy} onClick={() => void removeAvatar()}>
+              Remove avatar
+            </button>
+          )}
+        </section>
+        <section className="ex-card">
+          <h2>Preferences</h2>
+          <form
+            onSubmit={(event) => void savePreferences(event)}
+            className="profile-form"
+          >
+            <label>
+              Language
+              <input
+                value={String(preferences.language ?? '')}
+                maxLength={35}
+                onChange={(event) =>
+                  setPreferences({
+                    ...preferences,
+                    language: event.target.value,
+                  })
+                }
+              />
+            </label>
+            <label>
+              Date format
+              <select
+                value={String(preferences.dateFormat ?? 'local')}
+                onChange={(event) =>
+                  setPreferences({
+                    ...preferences,
+                    dateFormat: event.target.value,
+                  })
+                }
+              >
+                <option value="local">Local</option>
+                <option value="iso">ISO</option>
+              </select>
+            </label>
+            <label>
+              Theme
+              <select
+                value={String(preferences.theme ?? 'system')}
+                onChange={(event) => {
+                  const theme = event.target.value;
+                  setPreferences({ ...preferences, theme });
+                  applyTheme(theme);
+                }}
+              >
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </label>
+            <label className="profile-check">
+              <input
+                type="checkbox"
+                checked={preferences.notifications !== false}
+                onChange={(event) =>
+                  setPreferences({
+                    ...preferences,
+                    notifications: event.target.checked,
+                  })
+                }
+              />
+              Notifications
+            </label>
+            <button disabled={busy} type="submit">
+              Save preferences
+            </button>
+          </form>
+        </section>
+        <section className="ex-card">
+          <h2>Security</h2>
+          <p>Manage credentials in the identity provider.</p>
+          <div className="profile-actions">
+            <a href="/auth/account-action?action=UPDATE_PASSWORD&returnTo=%2Faccount">
+              Change password
+            </a>
+            <a href="/auth/account-action?action=CONFIGURE_TOTP&returnTo=%2Faccount">
+              Manage authenticator
+            </a>
+            <a href="/auth/account-action?action=UPDATE_EMAIL&returnTo=%2Faccount">
+              Change email
+            </a>
+          </div>
+        </section>
+        <section className="ex-card">
+          <h2>Active sessions</h2>
+          {sessions === null ? (
+            <p>Sessions are unavailable.</p>
+          ) : sessions.length === 0 ? (
+            <p>No active sessions found.</p>
+          ) : (
+            <ul>
+              {sessions.map((session) => (
+                <li key={session.id}>
+                  {session.lastActiveAt
+                    ? `Last active ${new Date(session.lastActiveAt).toLocaleString()}`
+                    : 'Active session'}{' '}
+                  <button
+                    disabled={busy}
+                    onClick={() => void revokeSession(session.id)}
+                  >
+                    End session
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="ex-card">
+          <h2>My data</h2>
+          <p>Download a private copy of the data Excellore stores about you.</p>
+          <button disabled={busy} onClick={() => void requestExport()}>
+            Request data export
+          </button>
+          {exportJob && <p>Export request queued.</p>}
+          <hr />
+          <h3>Delete account</h3>
+          <p>
+            This erases your Excellore application data. A fresh MFA sign-in is
+            required before the request can be accepted.
+          </p>
+          <a href="/auth/step-up?returnTo=%2Faccount">Verify with MFA</a>
+          {!confirmDeletion ? (
+            <p>
+              <button
+                className="profile-danger-button"
+                disabled={busy}
+                onClick={() => setConfirmDeletion(true)}
+              >
+                Delete my account
+              </button>
+            </p>
+          ) : (
+            <div className="profile-confirmation" role="alert">
+              <p>
+                <strong>Are you sure?</strong> This action starts permanent data
+                erasure and cannot be undone after processing.
+              </p>
+              <div className="profile-actions">
+                <button
+                  className="profile-danger-button"
+                  disabled={busy}
+                  onClick={() => void requestDeletion()}
+                >
+                  Confirm account deletion
+                </button>
+                <button
+                  className="profile-secondary-button"
+                  disabled={busy}
+                  onClick={() => setConfirmDeletion(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

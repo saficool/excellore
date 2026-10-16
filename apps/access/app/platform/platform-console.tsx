@@ -259,7 +259,11 @@ export function PlatformConsole({
           </button>
         ))}
       </nav>
-      <main className="access-main access-stack">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="access-main access-stack"
+      >
         <header>
           <p className="access-eyebrow">Excellore Access</p>
           <h1>Platform console</h1>

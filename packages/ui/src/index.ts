@@ -5,3 +5,4 @@ export type {
   HeaderNavigationItem,
   SharedHeaderProps,
 } from './shared-header.js';
+export { NotFound, UnexpectedError } from './page-state.js';

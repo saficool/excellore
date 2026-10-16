@@ -1,14 +1,15 @@
 import { redirect } from 'next/navigation';
 import { SessionRequiredError } from '@excellore/auth';
-import { getPageSession } from '../../lib/server';
+import { getAccountPageData } from '../../lib/server';
 import { ProfileHeader } from '../profile-header';
 import { ProfileDashboard } from './profile-dashboard';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AccountPage() {
+  let navigation;
   try {
-    await getPageSession('/account');
+    navigation = await getAccountPageData();
   } catch (error) {
     if (error instanceof SessionRequiredError)
       redirect('/auth/login?returnTo=%2Faccount');
@@ -17,13 +18,15 @@ export default async function AccountPage() {
   return (
     <>
       <ProfileHeader
-        homeHref="/"
+        homeHref={navigation.homeHref}
         tenants={[]}
         apps={[]}
-        accountHref="/account"
+        accountHref={navigation.accountHref}
         userLabel="Account"
         messages={{
+          skipToContent: 'Skip to content',
           primaryNavigation: 'Navigation',
+          workspaces: 'Workspaces',
           switchTenant: 'Switch tenant',
           switchApp: 'Switch app',
           userMenu: 'Account menu',
@@ -31,7 +34,7 @@ export default async function AccountPage() {
           signOut: 'Sign out',
         }}
       />
-      <main>
+      <main id="main-content" tabIndex={-1}>
         <ProfileDashboard />
       </main>
     </>
