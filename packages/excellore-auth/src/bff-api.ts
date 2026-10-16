@@ -15,6 +15,7 @@ const actionSegments = new Set([
   'members:lookup',
   'members:suspend',
   'members:reactivate',
+  'owner-invitation:resend',
 ]);
 const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -66,7 +67,7 @@ export interface BffApiOptions {
   access?: Pick<AccessInternalClient, 'resolveSlug' | 'resolve'>;
   app: string;
   apiBaseUrl: string;
-  scope: 'me' | 'tenant';
+  scope: 'me' | 'tenant' | 'platform';
   slug?: string;
   segments: readonly string[];
   request: Request;
@@ -128,6 +129,8 @@ export async function proxyBffApi(options: BffApiOptions): Promise<Response> {
         app,
       );
       path = `/v1/tenants/${tenant.tenantId}/${segments.join('/')}`;
+    } else if (scope === 'platform') {
+      path = `/v1/platform/${segments.join('/')}`;
     } else {
       path = `/v1/me/${segments.join('/')}`;
     }

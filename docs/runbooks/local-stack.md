@@ -133,6 +133,12 @@ Run the first command before catalog sync and seed; leave it running. The seed u
 
 With the API and BFF running, `pnpm exec node scripts/check-access-console.mjs` verifies real login, tenant isolation, read proxies, CSRF rejection, and that no tokens are rendered in the page. On its first run it invites the local `nora.nomember` identity, reads the one-time code from Mailpit without printing it, accepts the invitation, then checks custom role creation, assignment, and permission changes in the same browser session. It revokes the test assignment and deletes the test role; Nora remains a member for repeat runs. The Assignments read requires MFA because `access.assignment.manage` is privileged. The local Access BFF has its own `svc-access-authz` machine client; `scripts/dev-up.sh` reconciles it and Keycloak's `basic` subject scope for existing development realms.
 
+## Platform console (WP-11)
+
+With the Access API and BFF running as above, open `http://access.excellore.localhost:3002/platform` and sign in as the local `penny.platform` fixture. Use `DEV_USER_PASSWORD` and the OTP helper described above. The console lists tenant metadata, app status, permission catalog, and system roles. The operator can create or edit a tenant, suspend or reactivate it, enable or disable non-core apps, and request deletion with a reason code. The owner invitation is delivered through local Mailpit. `sam.support` can request an owner-approved, time-boxed read-only support grant; `sec.platform` can suspend a tenant. The auditor view is restricted to `platform-auditor` or `platform-admin` roles. These assignments are development fixtures from `infra/keycloak/platform-staff.yaml`, validated by CI. No emergency user sign-out or disable control is exposed pending an INV-11-compliant Keycloak design.
+
+The automated `PlatformTenantApiTests` use disposable PostgreSQL to exercise role gates, RLS, app authorization invalidation, lifecycle, and audit. The shared BFF tests verify the platform proxy keeps access tokens server-side and enforces CSRF. No manual test is required for WP-11 verification.
+
 ## Profile account and member UI (WP-09)
 
 Start the local stack and Access API, then run from the repository root:

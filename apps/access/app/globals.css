@@ -41,9 +41,22 @@ a {
   color: var(--ex-color-text);
   text-decoration: none;
 }
+.access-sidebar button {
+  border: 0;
+  background: transparent;
+  color: var(--ex-color-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--ex-radius-medium);
+}
 .access-sidebar a:hover,
 .access-sidebar a:focus-visible,
-.access-sidebar a[aria-current='page'] {
+.access-sidebar a[aria-current='page'],
+.access-sidebar button:hover,
+.access-sidebar button:focus-visible,
+.access-sidebar button[aria-current='page'] {
   background: var(--ex-color-surface);
   outline-offset: 2px;
 }

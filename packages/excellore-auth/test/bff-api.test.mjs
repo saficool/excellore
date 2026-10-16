@@ -100,6 +100,56 @@ test('tenant proxy uses only Access resolved tenant ID, never browser path', asy
   assert.equal(response.headers.get('cache-control'), 'no-store');
 });
 
+test('platform proxy forwards only through the server-held token and keeps CSRF', async () => {
+  let destination;
+  const request = new Request(
+    `${appOrigin}/api/platform/tenants/${tenantId}/suspend`,
+    {
+      method: 'POST',
+      headers: { ...cookie, Origin: appOrigin, 'X-Excellore-CSRF': '1' },
+      body: JSON.stringify({ reason: 'incident' }),
+    },
+  );
+  const response = await proxyBffApi({
+    config,
+    store,
+    oidcClient: {},
+    app: 'access',
+    apiBaseUrl: 'http://localhost:5002',
+    scope: 'platform',
+    segments: ['tenants', tenantId, 'suspend'],
+    request,
+    fetchImpl: async (url, options) => {
+      destination = String(url);
+      assert.equal(options.headers.Authorization, 'Bearer server-only-token');
+      return new Response(null, { status: 204 });
+    },
+  });
+  assert.equal(response.status, 204);
+  assert.equal(
+    destination,
+    `http://localhost:5002/v1/platform/tenants/${tenantId}/suspend`,
+  );
+  const denied = await proxyBffApi({
+    config,
+    store,
+    oidcClient: {},
+    app: 'access',
+    apiBaseUrl: 'http://localhost:5002',
+    scope: 'platform',
+    segments: ['tenants', tenantId, 'suspend'],
+    request: new Request(request.url, {
+      method: 'POST',
+      headers: cookie,
+      body: '{}',
+    }),
+    fetchImpl: async () => {
+      throw new Error('must not call API');
+    },
+  });
+  assert.equal(denied.status, 403);
+});
+
 test('proxy accepts an empty accepted response and rejects non-JSON content', async () => {
   const options = {
     config,
