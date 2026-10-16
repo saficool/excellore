@@ -11,9 +11,10 @@ const env = Object.fromEntries(
     }),
 );
 
+const browserProtocol = process.env.CI === 'true' ? 'http:' : 'https:';
 for (const name of ['SHELL_ORIGIN', 'PROFILE_ORIGIN', 'ACCESS_ORIGIN']) {
   const origin = new URL(env[name]);
-  assert.equal(origin.protocol, 'https:');
+  assert.equal(origin.protocol, browserProtocol);
   assert.equal(origin.hostname.endsWith('.localhost'), true);
   assert.equal(origin.pathname, '/');
   assert.equal(origin.search, '');
