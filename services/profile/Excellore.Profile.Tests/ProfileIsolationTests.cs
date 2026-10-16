@@ -28,13 +28,16 @@ public sealed class ProfileIsolationTests
         await Execute(admin, $"CREATE ROLE profile_migrator LOGIN PASSWORD '{migratorPassword}' NOSUPERUSER NOBYPASSRLS");
         await Execute(admin, $"CREATE ROLE profile_app LOGIN PASSWORD '{appPassword}' NOSUPERUSER NOBYPASSRLS");
         await Execute(admin, "CREATE ROLE profile_publisher LOGIN NOSUPERUSER NOBYPASSRLS");
+        await Execute(admin, "CREATE ROLE profile_worker LOGIN NOSUPERUSER NOBYPASSRLS");
         await Execute(admin, "GRANT USAGE,CREATE ON SCHEMA public TO profile_migrator");
-        await Execute(admin, "GRANT USAGE ON SCHEMA public TO profile_app,profile_publisher");
+        await Execute(admin, "GRANT USAGE ON SCHEMA public TO profile_app,profile_publisher,profile_worker");
         await using var migrator = new NpgsqlConnection(new NpgsqlConnectionStringBuilder(postgres.GetConnectionString())
         { Username = "profile_migrator", Password = migratorPassword }.ConnectionString);
         await migrator.OpenAsync();
         await Execute(migrator, await File.ReadAllTextAsync(
             Path.Combine(AppContext.BaseDirectory, "001_initial.sql")));
+        await Execute(migrator, await File.ReadAllTextAsync(
+            Path.Combine(AppContext.BaseDirectory, "007_user_erasure.sql")));
         var appString = new NpgsqlConnectionStringBuilder(postgres.GetConnectionString())
         { Username = "profile_app", Password = appPassword }.ConnectionString;
         await using var db = NpgsqlDataSource.Create(appString);

@@ -8,6 +8,7 @@ public sealed class ProfileMembershipSubscriber(IEventBus eventBus,
     ProfileTenantErasureProjector erasure,
     ProfilePersonalExportProjector exports,
     ProfileTenantExportProjector tenantExports,
+    ProfileUserErasureProjector userErasure,
     ILogger<ProfileMembershipSubscriber> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -29,6 +30,8 @@ public sealed class ProfileMembershipSubscriber(IEventBus eventBus,
             (body, token) => exports.CompleteAsync(body, token));
         handlers.Add(TenantExportRequestedV1.EventType,
             (body, token) => tenantExports.ApplyAsync(body, token));
+        handlers.Add(AccessErasureConfirmedV1.EventType,
+            (body, token) => userErasure.ApplyAsync(body, token));
         while (!stoppingToken.IsCancellationRequested)
         {
             try

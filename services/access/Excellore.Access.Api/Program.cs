@@ -92,6 +92,11 @@ app.Use(async (context, next) =>
         context.Response.StatusCode = StatusCodes.Status409Conflict;
         return;
     }
+    if (result == IdentityMirrorResult.Erased)
+    {
+        context.Response.StatusCode = StatusCodes.Status410Gone;
+        return;
+    }
     await next(context);
 });
 

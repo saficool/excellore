@@ -34,6 +34,8 @@
           Link="005_tenant_audit_archive.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Profile.Infrastructure/Migrations/006_personal_exports.sql"
           Link="006_personal_exports.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Profile.Infrastructure/Migrations/007_user_erasure.sql"
+          Link="007_user_erasure.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

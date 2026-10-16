@@ -44,7 +44,7 @@ public sealed class AccessMigrationTests
                      "014_worker_identity_drift.sql", "015_role_assignment_batches.sql",
                      "016_tenant_deletion_dispatch.sql", "017_tenant_erasure_receipts.sql",
                      "018_tenant_erasure_finalization.sql", "019_tenant_export_requests.sql",
-                     "020_tenant_export_worker.sql" })
+                     "020_tenant_export_worker.sql", "021_user_erasure.sql" })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, migration)));
 
@@ -71,7 +71,8 @@ public sealed class AccessMigrationTests
             ["tenant_settings"] = "T", ["invitations"] = "T", ["access_requests"] = "T",
             ["ownership_transfers"] = "T", ["audit_exports"] = "T",
             ["role_assignment_batches"] = "T", ["tenant_tombstones"] = "T",
-            ["audit_events_archive"] = "T", ["tenant_exports"] = "T"
+            ["audit_events_archive"] = "T", ["tenant_exports"] = "T",
+            ["user_erasure_requests"] = "P"
         };
         await using (var command = new NpgsqlCommand("""
             SELECT c.relname, obj_description(c.oid), c.relrowsecurity, c.relforcerowsecurity

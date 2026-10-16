@@ -6,7 +6,7 @@ namespace Excellore.Access.Infrastructure;
 public sealed record VerifiedIdentity(Guid UserId, string Email, bool EmailVerified,
     string? GivenName, string? FamilyName);
 
-public enum IdentityMirrorResult { Created, Updated, Unchanged, Conflict }
+public enum IdentityMirrorResult { Created, Updated, Unchanged, Conflict, Erased }
 
 public sealed class IdentityMirrorService(NpgsqlDataSource dataSource)
 {
@@ -20,6 +20,16 @@ public sealed class IdentityMirrorService(NpgsqlDataSource dataSource)
         {
             guard.Parameters.AddWithValue("user", identity.UserId);
             await guard.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await using (var erased = new NpgsqlCommand(
+            "SELECT 1 FROM identities WHERE user_id=@user AND status='deleted'", connection, transaction))
+        {
+            erased.Parameters.AddWithValue("user", identity.UserId);
+            if (await erased.ExecuteScalarAsync(cancellationToken) is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return IdentityMirrorResult.Erased;
+            }
         }
         string? oldEmail = null;
         bool oldVerified = false;

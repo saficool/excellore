@@ -20,6 +20,7 @@ public sealed class ProfileRepository(NpgsqlDataSource db)
               mirror_first_name=COALESCE(user_profiles.mirror_first_name,excluded.mirror_first_name),
               mirror_last_name=COALESCE(user_profiles.mirror_last_name,excluded.mirror_last_name),
               mirror_locale=COALESCE(user_profiles.mirror_locale,excluded.mirror_locale)
+            WHERE user_profiles.deleted_at IS NULL
             """, connection);
         command.Parameters.AddWithValue("user", userId);
         AddNullable(command, "first", Bounded(firstName, 80));
@@ -422,10 +423,30 @@ public sealed class ProfileRepository(NpgsqlDataSource db)
 
     public async Task<Guid> RequestDeletionAsync(Guid userId, CancellationToken ct = default)
     {
-        var id = Guid.NewGuid();
         await using var connection = await db.OpenConnectionAsync(ct);
         await using var tx = await connection.BeginTransactionAsync(ct);
         await SetLocalAsync(connection, "app.actor_sub", userId, ct);
+        await using (var existing = new NpgsqlCommand(
+            "SELECT request_id FROM profile_user_erasure_requests WHERE user_id=@user",
+            connection, tx))
+        {
+            existing.Parameters.AddWithValue("user", userId);
+            if (await existing.ExecuteScalarAsync(ct) is Guid requestId)
+            {
+                await tx.CommitAsync(ct);
+                return requestId;
+            }
+        }
+        var id = Guid.NewGuid();
+        await using (var request = new NpgsqlCommand("""
+            INSERT INTO profile_user_erasure_requests(request_id,user_id)
+            VALUES (@id,@user)
+            """, connection, tx))
+        {
+            request.Parameters.AddWithValue("id", id);
+            request.Parameters.AddWithValue("user", userId);
+            await request.ExecuteNonQueryAsync(ct);
+        }
         await using (var command = new NpgsqlCommand("""
             INSERT INTO outbox(id,type,payload)
             VALUES (@id,'profile.deletion.requested.v1',
@@ -443,6 +464,19 @@ public sealed class ProfileRepository(NpgsqlDataSource db)
         await AuditAsync(connection, tx, null, userId, userId, "profile.deletion.requested", null, ct);
         await tx.CommitAsync(ct);
         return id;
+    }
+
+    public async Task<string?> GetDeletionStatusAsync(Guid userId, Guid requestId,
+        CancellationToken ct = default)
+    {
+        await using var connection = await db.OpenConnectionAsync(ct);
+        await using var command = new NpgsqlCommand("""
+            SELECT status FROM profile_user_erasure_requests
+            WHERE request_id=@id AND user_id=@user
+            """, connection);
+        command.Parameters.AddWithValue("id", requestId);
+        command.Parameters.AddWithValue("user", userId);
+        return await command.ExecuteScalarAsync(ct) as string;
     }
 
     public async Task<bool> RecordInboxAsync(Guid eventId, CancellationToken ct = default)

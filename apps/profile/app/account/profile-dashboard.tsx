@@ -136,8 +136,16 @@ export function ProfileDashboard() {
   async function requestDeletion() {
     setBusy(true);
     try {
-      await api('deletion-requests', 'POST', {});
-      setMessage('Account deletion request submitted.');
+      const request = await api<{ id: string; status: string }>(
+        'deletion-requests',
+        'POST',
+        {},
+      );
+      setMessage(
+        request.status === 'pending_external_identity_deletion'
+          ? 'Application data erased. External identity deletion is pending.'
+          : 'Account deletion request submitted. Application erasure is pending.',
+      );
     } catch {
       setMessage('A fresh MFA sign-in is required before requesting deletion.');
     } finally {

@@ -13,8 +13,9 @@ public sealed class ProfileErasureConfirmationProjector(AccessWorkerDatabase dat
         CancellationToken cancellationToken = default)
     {
         var envelope = ProfileErasureConfirmedV1.Parse(body.Span);
-        if (envelope.Data!.Scope != "tenant")
-            throw new InvalidPlatformEventException();
+        if (envelope.Data!.Scope == "user")
+            return await ApplyUserAsync(envelope, cancellationToken);
+        if (envelope.Data.Scope != "tenant") throw new InvalidPlatformEventException();
         var tenantId = envelope.TenantId!.Value;
         await using var connection = await database.Source.OpenConnectionAsync(cancellationToken);
         return await inbox.RunOnceAsync(connection, envelope.Id, tenantId,
@@ -36,6 +37,27 @@ public sealed class ProfileErasureConfirmationProjector(AccessWorkerDatabase dat
                     """, connection, (NpgsqlTransaction)transaction);
                 receipt.Parameters.AddWithValue("tenant", tenantId);
                 await receipt.ExecuteNonQueryAsync(token);
+            }, cancellationToken);
+    }
+
+    private async Task<bool> ApplyUserAsync(PlatformEvent<ProfileErasureConfirmedV1> envelope,
+        CancellationToken cancellationToken)
+    {
+        var userId = envelope.Data!.UserId!.Value;
+        await using var connection = await database.Source.OpenConnectionAsync(cancellationToken);
+        return await inbox.RunOnceAsync(connection, envelope.Id, null,
+            async (transaction, token) =>
+            {
+                await using var update = new NpgsqlCommand("""
+                    UPDATE user_erasure_requests
+                    SET status='pending_external_identity_deletion',profile_confirmed_at=now(),
+                      updated_at=now()
+                    WHERE request_id=@request AND user_id=@user AND status='processing'
+                    """, connection, (NpgsqlTransaction)transaction);
+                update.Parameters.AddWithValue("request", envelope.CorrelationId);
+                update.Parameters.AddWithValue("user", userId);
+                if (await update.ExecuteNonQueryAsync(token) != 1)
+                    throw new InvalidPlatformEventException();
             }, cancellationToken);
     }
 }

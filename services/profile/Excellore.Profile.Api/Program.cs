@@ -127,10 +127,21 @@ me.MapGet("/data-exports/{id:guid}/download", async (Guid id, ICurrentUser user,
     return Results.File(export, "application/json", "excellore-personal-data.json");
 });
 me.MapPost("/deletion-requests", async (ICurrentUser user, ProfileRepository profiles, CancellationToken ct) =>
-    user.HasRecentMfa
-        ? Results.Accepted(value: new { id = await profiles.RequestDeletionAsync(user.UserId, ct) })
-        : Results.Problem(statusCode: 403, type: "urn:excellore:problem:step-up-required",
-            title: "Step-up authentication required"));
+{
+    if (!user.HasRecentMfa)
+        return Results.Problem(statusCode: 403,
+            type: "urn:excellore:problem:step-up-required",
+            title: "Step-up authentication required");
+    var id = await profiles.RequestDeletionAsync(user.UserId, ct);
+    var status = await profiles.GetDeletionStatusAsync(user.UserId, id, ct);
+    return Results.Accepted(value: new { id, status });
+});
+me.MapGet("/deletion-requests/{id:guid}", async (Guid id, ICurrentUser user,
+    ProfileRepository profiles, CancellationToken ct) =>
+{
+    var status = await profiles.GetDeletionStatusAsync(user.UserId, id, ct);
+    return status is null ? Results.NotFound() : Results.Ok(new { id, status });
+});
 
 var tenant = app.MapGroup("/v1/tenants/{tenantId:guid}").AddTenantGate();
 tenant.MapGet("/members/me", async (Guid tenantId, ICurrentUser user,

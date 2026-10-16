@@ -1,5 +1,6 @@
 using Excellore.Contracts;
 using Excellore.Platform;
+using Excellore.Access.Infrastructure;
 
 namespace Excellore.Access.Worker;
 
@@ -7,6 +8,7 @@ public sealed class AccessLifecycleSubscriber(IEventBus eventBus,
     ProfileErasureConfirmationProjector confirmations,
     PersonalExportContributor exports,
     TenantExportCoordinator tenantExports,
+    AccessUserErasureProjector userErasure,
     ILogger<AccessLifecycleSubscriber> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -20,7 +22,9 @@ public sealed class AccessLifecycleSubscriber(IEventBus eventBus,
             [TenantExportRequestedV1.EventType] =
                 (body, token) => tenantExports.BuildAccessAsync(body, token),
             [ProfileTenantExportReadyV1.EventType] =
-                (body, token) => tenantExports.CompleteAsync(body, token)
+                (body, token) => tenantExports.CompleteAsync(body, token),
+            [ProfileDeletionRequestedV1.EventType] =
+                (body, token) => userErasure.ApplyAsync(body, token)
         };
         while (!stoppingToken.IsCancellationRequested)
         {

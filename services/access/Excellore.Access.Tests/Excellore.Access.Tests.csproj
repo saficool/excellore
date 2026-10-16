@@ -44,6 +44,7 @@
     <None Include="../Excellore.Access.Infrastructure/Migrations/018_tenant_erasure_finalization.sql" Link="018_tenant_erasure_finalization.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/019_tenant_export_requests.sql" Link="019_tenant_export_requests.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/020_tenant_export_worker.sql" Link="020_tenant_export_worker.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Access.Infrastructure/Migrations/021_user_erasure.sql" Link="021_user_erasure.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../infra/db/rls-exempt.txt" Link="rls-exempt.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

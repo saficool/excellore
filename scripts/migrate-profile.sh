@@ -40,4 +40,5 @@ apply_once() {
 apply_once 004_tenant_erasure.sql "SELECT to_regclass('public.profile_tenant_tombstones') IS NOT NULL"
 apply_once 005_tenant_audit_archive.sql "SELECT to_regclass('public.profile_audit_archive') IS NOT NULL"
 apply_once 006_personal_exports.sql "SELECT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='tenant_member_profiles' AND policyname='profile_worker_personal_export')"
+apply_once 007_user_erasure.sql "SELECT to_regclass('public.profile_user_erasure_requests') IS NOT NULL"
 echo 'Profile database migration applied.'

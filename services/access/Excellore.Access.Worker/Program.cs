@@ -23,6 +23,11 @@ builder.Services.AddHostedService<Worker>();
 var workerConnectionString = builder.Configuration.GetConnectionString("AccessWorker")
     ?? throw new InvalidOperationException("ConnectionStrings:AccessWorker is required.");
 builder.Services.AddSingleton(new AccessWorkerDatabase(NpgsqlDataSource.Create(workerConnectionString)));
+if (!Guid.TryParse(builder.Configuration["Worker:ActorId"], out var userErasureActor) ||
+    userErasureActor == Guid.Empty)
+    throw new InvalidOperationException("Worker:ActorId must be a machine identity UUID.");
+builder.Services.AddSingleton(provider => new AccessUserErasureProjector(
+    provider.GetRequiredService<AccessWorkerDatabase>().Source, userErasureActor));
 builder.Services.AddExcelloreWorkerTenantScope();
 builder.Services.AddScoped(provider => new AccessExpiryService(
     provider.GetRequiredService<AccessWorkerDatabase>().Source,
