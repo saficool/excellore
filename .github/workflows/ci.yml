@@ -203,6 +203,13 @@ jobs:
           pnpm --filter @excellore/auth build
           pnpm --filter @excellore/config build
           pnpm --filter @excellore/ui build
+      - name: Configure isolated HTTP browser origins
+        run: |
+          cp .env.example .env
+          sed -i 's|^KEYCLOAK_ORIGIN=.*|KEYCLOAK_ORIGIN=http://auth.excellore.localhost:8080|' .env
+          sed -i 's|^SHELL_ORIGIN=.*|SHELL_ORIGIN=http://excellore.localhost:3000|' .env
+          sed -i 's|^PROFILE_ORIGIN=.*|PROFILE_ORIGIN=http://profile.excellore.localhost:3001|' .env
+          sed -i 's|^ACCESS_ORIGIN=.*|ACCESS_ORIGIN=http://access.excellore.localhost:3002|' .env
       - name: Start isolated identity stack
         run: bash scripts/dev-up.sh --identity-only
       - name: Prepare Shell and Profile BFFs

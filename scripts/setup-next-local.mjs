@@ -19,6 +19,8 @@ const env = Object.fromEntries(
     ]),
 );
 const upper = app.toUpperCase();
+const secureBrowserOrigin =
+  new URL(env[`${upper}_ORIGIN`]).protocol === 'https:';
 const existingPath = resolve('apps', app, '.env.local');
 let key;
 try {
@@ -37,7 +39,9 @@ const values = {
       ? 'openid profile email'
       : `openid profile email api-${app}`,
   APP_BASE_URL: env[`${upper}_ORIGIN`],
-  SESSION_COOKIE_NAME: `excellore-dev-${app}`,
+  SESSION_COOKIE_NAME: secureBrowserOrigin
+    ? `__Host-excellore-${app}`
+    : `excellore-dev-${app}`,
   SESSION_STORE_URL: 'redis://localhost:6379',
   SESSION_KEY_PREFIX: `${app}:sess:`,
   SESSION_ENCRYPTION_KEY: key,
