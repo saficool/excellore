@@ -95,6 +95,7 @@ const baseClient = (clientId, options = {}) => ({
   serviceAccountsEnabled: false,
   fullScopeAllowed: false,
   defaultClientScopes: [
+    'basic',
     'profile',
     'email',
     'acr',
@@ -115,6 +116,7 @@ const bff = (app, origin, apiScope) =>
     ],
     webOrigins: [],
     defaultClientScopes: [
+      'basic',
       'profile',
       'email',
       'acr',
@@ -151,7 +153,7 @@ const machine = (clientId, secretKey, apiScope) =>
   baseClient(clientId, {
     secret: `\${${secretKey}}`,
     serviceAccountsEnabled: true,
-    defaultClientScopes: ['acr', ...(apiScope ? [apiScope] : [])],
+    defaultClientScopes: ['basic', 'acr', ...(apiScope ? [apiScope] : [])],
   });
 
 const devUser = (username, firstName, lastName, realmRoles = []) => ({
@@ -301,6 +303,7 @@ const realm = {
       { client: 'worker-access', roles: ['access.worker'] },
       { client: 'svc-shell-authz', roles: ['access.authz.resolve'] },
       { client: 'svc-profile-authz', roles: ['access.authz.resolve'] },
+      { client: 'svc-access-authz', roles: ['access.authz.resolve'] },
       { client: 'svc-catalog-sync', roles: ['access.catalog.sync'] },
     ],
     'api-profile': [{ client: 'worker-profile', roles: ['profile.worker'] }],
@@ -316,6 +319,38 @@ const realm = {
     ],
   },
   clientScopes: [
+    {
+      name: 'basic',
+      protocol: 'openid-connect',
+      attributes: {
+        'include.in.token.scope': 'false',
+        'display.on.consent.screen': 'false',
+      },
+      protocolMappers: [
+        {
+          name: 'sub',
+          protocol: 'openid-connect',
+          protocolMapper: 'oidc-sub-mapper',
+          config: {
+            'introspection.token.claim': 'true',
+            'access.token.claim': 'true',
+          },
+        },
+        {
+          name: 'auth_time',
+          protocol: 'openid-connect',
+          protocolMapper: 'oidc-usersessionmodel-note-mapper',
+          config: {
+            'user.session.note': 'AUTH_TIME',
+            'id.token.claim': 'true',
+            'introspection.token.claim': 'true',
+            'access.token.claim': 'true',
+            'claim.name': 'auth_time',
+            'jsonType.label': 'long',
+          },
+        },
+      ],
+    },
     scope('profile', [
       userPropertyMapper('username', 'preferred_username'),
       userPropertyMapper('firstName', 'given_name'),
@@ -375,6 +410,7 @@ const realm = {
     machine('worker-access', 'WORKER_ACCESS_SECRET', 'api-access'),
     machine('svc-shell-authz', 'SVC_SHELL_AUTHZ_SECRET', 'api-access'),
     machine('svc-profile-authz', 'SVC_PROFILE_AUTHZ_SECRET', 'api-access'),
+    machine('svc-access-authz', 'SVC_ACCESS_AUTHZ_SECRET', 'api-access'),
     machine('svc-catalog-sync', 'SVC_CATALOG_SYNC_SECRET', 'api-access'),
     machine('svc-access-admin', 'SVC_ACCESS_ADMIN_SECRET'),
     machine('svc-profile-identity', 'SVC_PROFILE_IDENTITY_SECRET'),
@@ -393,6 +429,9 @@ const realm = {
     serviceUser('worker-access', { 'api-access': ['access.worker'] }),
     serviceUser('svc-shell-authz', { 'api-access': ['access.authz.resolve'] }),
     serviceUser('svc-profile-authz', {
+      'api-access': ['access.authz.resolve'],
+    }),
+    serviceUser('svc-access-authz', {
       'api-access': ['access.authz.resolve'],
     }),
     serviceUser('svc-catalog-sync', { 'api-access': ['access.catalog.sync'] }),

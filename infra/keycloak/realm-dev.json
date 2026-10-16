@@ -183,6 +183,7 @@
       { "client": "worker-access", "roles": ["access.worker"] },
       { "client": "svc-shell-authz", "roles": ["access.authz.resolve"] },
       { "client": "svc-profile-authz", "roles": ["access.authz.resolve"] },
+      { "client": "svc-access-authz", "roles": ["access.authz.resolve"] },
       { "client": "svc-catalog-sync", "roles": ["access.catalog.sync"] }
     ],
     "api-profile": [
@@ -200,6 +201,38 @@
     ]
   },
   "clientScopes": [
+    {
+      "name": "basic",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "sub",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-sub-mapper",
+          "config": {
+            "introspection.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "auth_time",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usersessionmodel-note-mapper",
+          "config": {
+            "user.session.note": "AUTH_TIME",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "auth_time",
+            "jsonType.label": "long"
+          }
+        }
+      ]
+    },
     {
       "name": "profile",
       "protocol": "openid-connect",
@@ -405,7 +438,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["profile", "email", "acr"],
+      "defaultClientScopes": ["basic", "profile", "email", "acr"],
       "optionalClientScopes": [],
       "secret": "${SHELL_BFF_SECRET}",
       "redirectUris": ["${SHELL_ORIGIN}/auth/callback"],
@@ -430,7 +463,13 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["profile", "email", "acr", "api-profile"],
+      "defaultClientScopes": [
+        "basic",
+        "profile",
+        "email",
+        "acr",
+        "api-profile"
+      ],
       "optionalClientScopes": [],
       "secret": "${PROFILE_BFF_SECRET}",
       "redirectUris": ["${PROFILE_ORIGIN}/auth/callback"],
@@ -455,7 +494,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["profile", "email", "acr", "api-access"],
+      "defaultClientScopes": ["basic", "profile", "email", "acr", "api-access"],
       "optionalClientScopes": [],
       "secret": "${ACCESS_BFF_SECRET}",
       "redirectUris": [
@@ -497,7 +536,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["profile", "email", "acr"],
+      "defaultClientScopes": ["basic", "profile", "email", "acr"],
       "optionalClientScopes": [],
       "bearerOnly": true
     },
@@ -512,7 +551,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["profile", "email", "acr"],
+      "defaultClientScopes": ["basic", "profile", "email", "acr"],
       "optionalClientScopes": [],
       "bearerOnly": true
     },
@@ -527,7 +566,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["acr", "api-profile"],
+      "defaultClientScopes": ["basic", "acr", "api-profile"],
       "optionalClientScopes": [],
       "secret": "${WORKER_PROFILE_SECRET}"
     },
@@ -542,7 +581,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["acr", "api-access"],
+      "defaultClientScopes": ["basic", "acr", "api-access"],
       "optionalClientScopes": [],
       "secret": "${WORKER_ACCESS_SECRET}"
     },
@@ -557,7 +596,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["acr", "api-access"],
+      "defaultClientScopes": ["basic", "acr", "api-access"],
       "optionalClientScopes": [],
       "secret": "${SVC_SHELL_AUTHZ_SECRET}"
     },
@@ -572,9 +611,24 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["acr", "api-access"],
+      "defaultClientScopes": ["basic", "acr", "api-access"],
       "optionalClientScopes": [],
       "secret": "${SVC_PROFILE_AUTHZ_SECRET}"
+    },
+    {
+      "clientId": "svc-access-authz",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "acr", "api-access"],
+      "optionalClientScopes": [],
+      "secret": "${SVC_ACCESS_AUTHZ_SECRET}"
     },
     {
       "clientId": "svc-catalog-sync",
@@ -587,7 +641,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["acr", "api-access"],
+      "defaultClientScopes": ["basic", "acr", "api-access"],
       "optionalClientScopes": [],
       "secret": "${SVC_CATALOG_SYNC_SECRET}"
     },
@@ -602,7 +656,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["acr"],
+      "defaultClientScopes": ["basic", "acr"],
       "optionalClientScopes": [],
       "secret": "${SVC_ACCESS_ADMIN_SECRET}"
     },
@@ -617,7 +671,7 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "fullScopeAllowed": false,
-      "defaultClientScopes": ["acr"],
+      "defaultClientScopes": ["basic", "acr"],
       "optionalClientScopes": [],
       "secret": "${SVC_PROFILE_IDENTITY_SECRET}"
     }
@@ -834,6 +888,12 @@
       "username": "service-account-svc-profile-authz",
       "enabled": true,
       "serviceAccountClientId": "svc-profile-authz",
+      "clientRoles": { "api-access": ["access.authz.resolve"] }
+    },
+    {
+      "username": "service-account-svc-access-authz",
+      "enabled": true,
+      "serviceAccountClientId": "svc-access-authz",
       "clientRoles": { "api-access": ["access.authz.resolve"] }
     },
     {

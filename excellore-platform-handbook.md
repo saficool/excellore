@@ -824,6 +824,7 @@ Because redirect URIs are exact and tenants live in the path (`/t/{slug}`), the 
 |---|---|---|---|
 | `svc-shell-authz` | Shell BFF | Call Access internal contracts | `api-access`: `access.authz.resolve` |
 | `svc-profile-authz` | Profile BFF and API | Call Access internal contracts | `api-access`: `access.authz.resolve` |
+| `svc-access-authz` | Access BFF | Resolve tenant context through Access internal contracts | `api-access`: `access.authz.resolve` |
 | `svc-catalog-sync` | CI/CD pipeline | Publish permission catalogs | `api-access`: `access.catalog.sync` |
 | `svc-access-admin` | Access API and Worker | Keycloak Admin REST: create users, send required-action emails, disable and enable users | realm-management: `query-users`, `view-users`, `manage-users` (nothing about roles or groups) |
 | `svc-profile-identity` | Profile API | Update **own** first name, last name, locale | realm-management: `view-users`, `manage-users` |
@@ -850,10 +851,12 @@ Platform staff assignment is managed in `infra/keycloak/platform-staff.yaml` and
 
 ### 10.5 Client scopes and mappers
 
+Every BFF and machine client has Keycloak's `basic` default client scope so its access token contains the standard opaque `sub` claim. APIs and internal contracts reject tokens without that subject; `sub` remains a global identity and carries no tenant authorization.
+
 | Client scope | Mappers | Assigned to |
 |---|---|---|
 | `api-profile` | Audience `api-profile`; client-role mapper (client `api-profile`) to claim `roles` | `excellore-profile`, `worker-profile` |
-| `api-access` | Audience `api-access`; client-role mapper (client `api-access`) to claim `roles`; **realm-role mapper limited to `platform-*`** to claim `platform_roles` | `excellore-access`, `worker-access`, `svc-shell-authz`, `svc-profile-authz`, `svc-catalog-sync` |
+| `api-access` | Audience `api-access`; client-role mapper (client `api-access`) to claim `roles`; **realm-role mapper limited to `platform-*`** to claim `platform_roles` | `excellore-access`, `worker-access`, `svc-shell-authz`, `svc-profile-authz`, `svc-access-authz`, `svc-catalog-sync` |
 
 Resulting tokens:
 
@@ -2531,7 +2534,7 @@ The handbook or an ADR is updated; Keycloak configuration, infrastructure, and t
 | `excellore-shell`, `excellore-profile`, `excellore-access` | Confidential, standard flow, PKCE S256 | BFFs |
 | `api-profile`, `api-access` | Resource server (audience and machine roles) | APIs |
 | `worker-profile`, `worker-access` | Confidential, service account | Workers |
-| `svc-shell-authz`, `svc-profile-authz` | Confidential, service account | Calls to Access internal contracts |
+| `svc-shell-authz`, `svc-profile-authz`, `svc-access-authz` | Confidential, service account | Calls to Access internal contracts |
 | `svc-catalog-sync` | Confidential, service account | CI publishes permission catalogs |
 | `svc-access-admin` | Confidential, service account | Keycloak Admin API (users only) |
 | `svc-profile-identity` | Confidential, service account | Own-identity update |
@@ -2541,7 +2544,7 @@ The handbook or an ADR is updated; Keycloak configuration, infrastructure, and t
 | Scope | Contents | Assigned to |
 |---|---|---|
 | `api-profile` | Audience, client-role mapper to `roles` | `excellore-profile`, `worker-profile` |
-| `api-access` | Audience, client-role mapper to `roles`, realm-role mapper (`platform-*` only) to `platform_roles` | `excellore-access`, `worker-access`, `svc-shell-authz`, `svc-profile-authz`, `svc-catalog-sync` |
+| `api-access` | Audience, client-role mapper to `roles`, realm-role mapper (`platform-*` only) to `platform_roles` | `excellore-access`, `worker-access`, `svc-shell-authz`, `svc-profile-authz`, `svc-access-authz`, `svc-catalog-sync` |
 
 ### C.3 Roles
 
@@ -2571,7 +2574,7 @@ SESSION_KEY_PREFIX=profile:sess:
 SESSION_ENCRYPTION_KEY=***
 API_BASE_URL=http://api-profile.internal:8080                 # none for Shell
 ACCESS_INTERNAL_URL=http://api-access.internal:8080           # internal contracts
-AUTHZ_CLIENT_ID=svc-profile-authz                             # svc-shell-authz for Shell
+AUTHZ_CLIENT_ID=svc-profile-authz                             # svc-shell-authz for Shell; svc-access-authz for Access
 AUTHZ_CLIENT_SECRET=***
 STEP_UP_ACR_VALUES=2                                          # Access only
 ALLOWED_KC_ACTIONS=UPDATE_PASSWORD,UPDATE_EMAIL,CONFIGURE_TOTP   # Profile only
@@ -3058,7 +3061,7 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `DELETE …/members` (`userId`, `reason` in body) | T `access.member.remove` | Remove; no user identifier in the URL (INV-11) |
 | `GET …/roles`, `GET …/roles/{roleId}`, `GET …/permissions` | T `access.role.read` | Roles and permission catalog (enabled apps only) |
 | `POST …/roles`, `PUT …/roles/{roleId}`, `DELETE …/roles/{roleId}` | T `access.role.manage` | Custom roles |
-| `POST …/role-assignments` (`userId`, `roleId`, optional `expiresAt`, and `reason` in body), `DELETE …/role-assignments/{id}` (`reason` in body) | T `access.assignment.manage` | Assignments; no user identifier in the URL (INV-11) |
+| `GET …/role-assignments`, `POST …/role-assignments` (`userId`, `roleId`, optional `expiresAt`, and `reason` in body), `DELETE …/role-assignments/{id}` (`reason` in body) | T `access.assignment.manage` | List active assignments, grant and revoke; no user identifier in the URL (INV-11) |
 | `GET/POST …/groups`, `PUT/DELETE …/groups/{id}/members` (`userId`, `reason` in body), `POST …/groups/{id}/role-assignments` (`roleId`, optional `expiresAt`, `reason` in body), `DELETE …/groups/{id}/role-assignments/{assignmentId}` (`reason` in body) | T `access.group.manage` | Groups; no user identifier in the URL (INV-11) |
 | `GET …/apps` | T `access.apps.read` | Enabled apps |
 | `POST …/access-requests` | T `access.request.create` | Request role access or record an app request for platform review |

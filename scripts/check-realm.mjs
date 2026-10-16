@@ -88,6 +88,7 @@ const secretKeys = {
   'worker-access': 'WORKER_ACCESS_SECRET',
   'svc-shell-authz': 'SVC_SHELL_AUTHZ_SECRET',
   'svc-profile-authz': 'SVC_PROFILE_AUTHZ_SECRET',
+  'svc-access-authz': 'SVC_ACCESS_AUTHZ_SECRET',
   'svc-catalog-sync': 'SVC_CATALOG_SYNC_SECRET',
   'svc-access-admin': 'SVC_ACCESS_ADMIN_SECRET',
   'svc-profile-identity': 'SVC_PROFILE_IDENTITY_SECRET',
@@ -102,6 +103,7 @@ const expected = [
   'worker-access',
   'svc-shell-authz',
   'svc-profile-authz',
+  'svc-access-authz',
   'svc-catalog-sync',
   'svc-access-admin',
   'svc-profile-identity',
@@ -117,6 +119,17 @@ for (const clientId of expected) {
   );
   assert.equal(client.implicitFlowEnabled, false, `${clientId} implicit grant`);
   assert.equal(client.standardFlowEnabled, clientId.startsWith('excellore-'));
+  if (
+    clientId.startsWith('excellore-') ||
+    clientId.startsWith('svc-') ||
+    clientId.startsWith('worker-')
+  )
+    assert.ok(
+      (await adminGet(`/clients/${client.id}/default-client-scopes`)).some(
+        (scope) => scope.name === 'basic',
+      ),
+      `${clientId} subject scope`,
+    );
   assert.deepEqual(client.webOrigins ?? [], [], `${clientId} web origins`);
   if (clientId.startsWith('excellore-')) {
     const app = clientId.slice('excellore-'.length).toUpperCase();
@@ -237,7 +250,18 @@ for (const client of clients.filter(
   );
 }
 assert.ok([machineClaims.aud].flat().includes('api-access'));
+assert.match(machineClaims.sub, /^[0-9a-f-]{36}$/i);
 assert.ok(machineClaims.roles?.includes('access.authz.resolve'));
+const accessMachine = await token({
+  client_id: 'svc-access-authz',
+  client_secret: env.SVC_ACCESS_AUTHZ_SECRET,
+  grant_type: 'client_credentials',
+});
+assert.equal(accessMachine.status, 200, 'svc-access-authz token');
+const accessMachineClaims = claims(accessMachine.data.access_token);
+assert.ok([accessMachineClaims.aud].flat().includes('api-access'));
+assert.match(accessMachineClaims.sub, /^[0-9a-f-]{36}$/i);
+assert.ok(accessMachineClaims.roles?.includes('access.authz.resolve'));
 assert.equal(machineClaims.platform_roles, undefined);
 assert.ok(!Object.keys(machineClaims).some((key) => /tenant/i.test(key)));
 
@@ -410,6 +434,7 @@ const access = await userToken(
   'mia.member',
 );
 assert.ok([access.claims.aud].flat().includes('api-access'));
+assert.match(access.claims.sub, /^[0-9a-f-]{36}$/i);
 assert.equal(access.claims.acr, '2');
 assert.equal(access.otpRequested, true);
 assert.deepEqual(access.claims.platform_roles, []);

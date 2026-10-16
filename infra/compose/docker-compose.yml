@@ -39,6 +39,7 @@ services:
       WORKER_ACCESS_SECRET: ${WORKER_ACCESS_SECRET:?Run scripts/dev-up.sh first}
       SVC_SHELL_AUTHZ_SECRET: ${SVC_SHELL_AUTHZ_SECRET:?Run scripts/dev-up.sh first}
       SVC_PROFILE_AUTHZ_SECRET: ${SVC_PROFILE_AUTHZ_SECRET:?Run scripts/dev-up.sh first}
+      SVC_ACCESS_AUTHZ_SECRET: ${SVC_ACCESS_AUTHZ_SECRET:?Run scripts/dev-up.sh first}
       SVC_CATALOG_SYNC_SECRET: ${SVC_CATALOG_SYNC_SECRET:?Run scripts/dev-up.sh first}
       SVC_ACCESS_ADMIN_SECRET: ${SVC_ACCESS_ADMIN_SECRET:?Run scripts/dev-up.sh first}
       SVC_PROFILE_IDENTITY_SECRET: ${SVC_PROFILE_IDENTITY_SECRET:?Run scripts/dev-up.sh first}
