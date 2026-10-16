@@ -27,6 +27,9 @@ builder.Services.AddScoped(provider => new AuditExportBuilder(
     provider.GetRequiredService<ITenantIdAccessor>(),
     provider.GetRequiredService<IAuditExportObjectStore>()));
 builder.Services.AddScoped<AccessTenantMaintenanceJob>();
+builder.Services.AddScoped(provider => new RoleAssignmentBatchProcessor(
+    provider.GetRequiredService<AccessWorkerDatabase>().Source,
+    provider.GetRequiredService<ITenantIdAccessor>()));
 builder.Services.AddHostedService<AccessExpiryScheduler>();
 builder.Services.AddKeycloakDirectory(builder.Configuration, "worker-access");
 builder.Services.AddHostedService<AccessIdentityDriftWorker>();

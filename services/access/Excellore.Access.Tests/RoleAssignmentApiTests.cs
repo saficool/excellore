@@ -9,6 +9,7 @@ using Excellore.Access.Api;
 using Excellore.Access.Application;
 using Excellore.Access.Infrastructure;
 using Excellore.Contracts;
+using Excellore.Platform;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -37,8 +38,9 @@ public sealed class RoleAssignmentApiTests
         await admin.OpenAsync();
         await ExecuteAsync(admin, $"CREATE ROLE access_migrator LOGIN PASSWORD '{migratorPassword}' NOSUPERUSER NOBYPASSRLS");
         await ExecuteAsync(admin, $"CREATE ROLE access_app LOGIN PASSWORD '{appPassword}' NOSUPERUSER NOBYPASSRLS");
+        await ExecuteAsync(admin, $"CREATE ROLE access_worker LOGIN PASSWORD '{appPassword}' NOSUPERUSER NOBYPASSRLS");
         await ExecuteAsync(admin, "GRANT USAGE, CREATE ON SCHEMA public TO access_migrator");
-        await ExecuteAsync(admin, "GRANT USAGE ON SCHEMA public TO access_app");
+        await ExecuteAsync(admin, "GRANT USAGE ON SCHEMA public TO access_app,access_worker");
         var migratorString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
         {
             Username = "access_migrator", Password = migratorPassword
@@ -47,7 +49,10 @@ public sealed class RoleAssignmentApiTests
         {
             await migrator.OpenAsync();
             foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql",
-                "003_membership_index.sql", "005_audit_append_only.sql", "006_custom_role_lifecycle.sql" })
+                "003_membership_index.sql", "005_audit_append_only.sql", "006_custom_role_lifecycle.sql",
+                "011_support_grants_rls.sql", "012_audit_export_requests.sql",
+                "013_worker_expiry.sql", "014_worker_identity_drift.sql",
+                "015_role_assignment_batches.sql" })
                 await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                     Path.Combine(AppContext.BaseDirectory, migration)));
         }
@@ -69,8 +74,9 @@ public sealed class RoleAssignmentApiTests
         var ownerTwo = Guid.NewGuid();
         var tenantAdmin = Guid.NewGuid();
         var recipient = Guid.NewGuid();
+        var batchRecipient = Guid.NewGuid();
         var mirror = new IdentityMirrorService(appDb);
-        foreach (var identity in new[] { ownerOne, ownerTwo, tenantAdmin, recipient })
+        foreach (var identity in new[] { ownerOne, ownerTwo, tenantAdmin, recipient, batchRecipient })
             Assert.Equal(IdentityMirrorResult.Created, await mirror.UpsertAsync(
                 new VerifiedIdentity(identity, Email(identity), true, null, null)));
         var provisioner = new TenantProvisioningService(appDb);
@@ -101,6 +107,8 @@ public sealed class RoleAssignmentApiTests
         }
         await ExecuteAsync(admin, "INSERT INTO tenant_members (tenant_id, user_id, status) VALUES (@tenant, @user, 'active')",
             ("tenant", tenantOne), ("user", recipient));
+        await ExecuteAsync(admin, "INSERT INTO tenant_members (tenant_id, user_id, status) VALUES (@tenant, @user, 'active')",
+            ("tenant", tenantOne), ("user", batchRecipient));
         var foreignAssignment = Guid.NewGuid();
         await ExecuteAsync(admin, "INSERT INTO role_assignments (id, tenant_id, user_id, role_id, granted_by) VALUES (@id, @tenant, @user, @role, @actor)",
             ("id", foreignAssignment), ("tenant", tenantTwo), ("user", ownerTwo),
@@ -125,6 +133,7 @@ public sealed class RoleAssignmentApiTests
 
         var previousConnection = Environment.GetEnvironmentVariable("ConnectionStrings__Access");
         var previousAuthority = Environment.GetEnvironmentVariable("Auth__Authority");
+        var batchId = Guid.Empty;
         Environment.SetEnvironmentVariable("ConnectionStrings__Access", appString);
         Environment.SetEnvironmentVariable("Auth__Authority", "https://issuer.example.invalid/realms/excellore");
         try
@@ -138,6 +147,34 @@ public sealed class RoleAssignmentApiTests
                     }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("Test", _ => { })));
             using var client = factory.CreateClient();
             var path = $"/v1/tenants/{tenantOne:D}/role-assignments";
+            var batchPath = $"/v1/tenants/{tenantOne:D}/role-assignment-batches";
+            var batchRequest = new { roleId = simpleRole,
+                targetUserIds = new[] { batchRecipient }, reason = "bulk-grant" };
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, ownerOne,
+                $"/v1/tenants/{tenantTwo:D}/role-assignment-batches", batchRequest);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, tenantAdmin,
+                batchPath, batchRequest);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, ownerOne,
+                batchPath, batchRequest, "1");
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, ownerOne,
+                batchPath, new { roleId = simpleRole, targetUserIds = new[] { ownerTwo },
+                    reason = "foreign-member" });
+            await ExpectAsync(HttpStatusCode.BadRequest, client, HttpMethod.Post, ownerOne,
+                batchPath, new { roleId = simpleRole,
+                    targetUserIds = new[] { batchRecipient, batchRecipient }, reason = "duplicate" });
+            using (var queued = await SendAsync(client, HttpMethod.Post, ownerOne,
+                       batchPath, batchRequest))
+            {
+                Assert.Equal(HttpStatusCode.Accepted, queued.StatusCode);
+                batchId = (await queued.Content.ReadFromJsonAsync<JsonElement>())
+                    .GetProperty("id").GetGuid();
+            }
+            await ExpectAsync(HttpStatusCode.Conflict, client, HttpMethod.Post, ownerOne,
+                batchPath, batchRequest);
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, ownerTwo,
+                $"/v1/tenants/{tenantTwo:D}/role-assignment-batches/{batchId:D}");
+            await ExpectAsync(HttpStatusCode.OK, client, HttpMethod.Get, ownerOne,
+                $"{batchPath}/{batchId:D}");
             var elevated = new { userId = recipient, roleId = elevatedRole,
                 reason = "support-access" };
             await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, ownerOne,
@@ -219,6 +256,58 @@ public sealed class RoleAssignmentApiTests
             "audit_events WHERE tenant_id = @tenant AND action LIKE 'access.assignment.%.denied'",
             ("tenant", tenantOne)) >= 11);
         await VerifyEventsAsync(admin, tenantOne);
+        await using var workerDb = NpgsqlDataSource.Create(new NpgsqlConnectionStringBuilder(
+            container.GetConnectionString()) { Username = "access_worker", Password = appPassword }
+            .ConnectionString);
+        await using (var worker = await workerDb.OpenConnectionAsync())
+        await using (var privilege = new NpgsqlCommand(
+            "SELECT has_table_privilege(current_user,'role_assignment_batches','INSERT')", worker))
+            Assert.False((bool)(await privilege.ExecuteScalarAsync())!);
+        Assert.False(await new RoleAssignmentBatchProcessor(workerDb, new FixedTenant(tenantTwo))
+            .ProcessOneAsync(Guid.NewGuid()));
+        var processor = new RoleAssignmentBatchProcessor(workerDb, new FixedTenant(tenantOne));
+        Assert.True(await processor.ProcessOneAsync(Guid.NewGuid()));
+        Assert.False(await processor.ProcessOneAsync(Guid.NewGuid()));
+        Assert.Equal(1L, await CountAsync(admin,
+            "role_assignments WHERE tenant_id=@tenant AND user_id=@user AND role_id=@role AND revoked_at IS NULL",
+            ("tenant", tenantOne), ("user", batchRecipient), ("role", simpleRole)));
+        Assert.Equal(0L, await CountAsync(admin,
+            "role_assignments WHERE tenant_id=@tenant AND user_id=@user AND role_id=@role AND revoked_at IS NULL",
+            ("tenant", tenantTwo), ("user", batchRecipient), ("role", simpleRole)));
+        Assert.Equal(1L, await CountAsync(admin,
+            "role_assignment_batches WHERE id=@id AND status='completed' AND cursor=1 AND succeeded=1 AND failed=0",
+            ("id", batchId)));
+        Assert.Equal(1L, await CountAsync(admin,
+            "audit_events WHERE tenant_id=@tenant AND target_id=@id AND action='access.assignment.batch.granted'",
+            ("tenant", tenantOne), ("id", batchId.ToString("D"))));
+        await using (var worker = await workerDb.OpenConnectionAsync())
+        await using (var transaction = await worker.BeginTransactionAsync())
+        {
+            await ExecuteAsync(worker, "SELECT set_config('app.tenant_id',@tenant,true)",
+                ("tenant", tenantTwo.ToString("D")));
+            Assert.Equal(0L, await CountAsync(worker,
+                "role_assignment_batches WHERE id=@id", ("id", batchId)));
+            await transaction.CommitAsync();
+        }
+        var revokedOwnerBatch = Guid.NewGuid();
+        await ExecuteAsync(admin, """
+            INSERT INTO role_assignment_batches
+              (id,tenant_id,requested_by,role_id,target_user_ids,reason)
+            VALUES (@id,@tenant,@actor,@role,ARRAY[@target]::uuid[],'owner-race')
+            """, ("id", revokedOwnerBatch), ("tenant", tenantOne),
+            ("actor", ownerOne), ("role", simpleRole), ("target", tenantAdmin));
+        await ExecuteAsync(admin,
+            "UPDATE role_assignments SET revoked_at=now() WHERE id=@id",
+            ("id", ownerAssignment));
+        Assert.True(await processor.ProcessOneAsync(Guid.NewGuid()));
+        Assert.Equal(1L, await CountAsync(admin,
+            "role_assignment_batches WHERE id=@id AND status='completed' AND cursor=1 AND succeeded=0 AND failed=1",
+            ("id", revokedOwnerBatch)));
+        Assert.Equal(0L, await CountAsync(admin,
+            "role_assignments WHERE tenant_id=@tenant AND user_id=@user AND role_id=@role AND revoked_at IS NULL",
+            ("tenant", tenantOne), ("user", tenantAdmin), ("role", simpleRole)));
+        Assert.Equal(6L, await ScalarAsync(admin,
+            "SELECT authz_version FROM tenants WHERE id=@tenant", ("tenant", tenantOne)));
     }
 
     private static async Task VerifyEventsAsync(NpgsqlConnection connection, Guid tenant)
@@ -258,6 +347,11 @@ public sealed class RoleAssignmentApiTests
     }
 
     private static string Email(Guid user) => $"user-{user:D}@example.invalid";
+
+    private sealed class FixedTenant(Guid tenantId) : ITenantIdAccessor
+    {
+        public Guid TenantId { get; } = tenantId;
+    }
 
     private static async Task ExpectAsync(HttpStatusCode expected, HttpClient client,
         HttpMethod method, Guid user, string path, object? body = null, string acr = "2")

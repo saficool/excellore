@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.5 |
+| **Document version** | 5.6 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.6 | WP-10 adds bounded, owner-approved bulk role assignment jobs with per-target worker rechecks, tenant RLS, and aggregate progress (ADR-0065 proposed). |
 | 5.5 | WP-10 keeps one-time invitation-code delivery synchronous under INV-11 and builds private Access audit exports. Complete cross-service personal-data export and erasure, including Profile export job processing, belong to WP-12; requests remain pending until then. |
 | 5.4 | Support grants become class T with forced RLS by owner decision. Support requests are limited to read-only system roles and tenant owner approval. Audit exports use private storage and authenticated BFF streaming, never signed URLs. |
 | 5.3 | Tenant settings write name and slug only; tenant-defined security policies remain deferred (Q-18). App access requests are recorded for platform review, while tenant approvers can approve role requests only (owner decision; ADR-0052 and ADR-0053 proposed). |
@@ -1231,7 +1232,7 @@ Full DDL in [Appendix F](#appendix-f-access-database-ddl). Tables by class:
 | P | `tenants` (includes `authz_version`), `apps`, `permissions`, `identities`, `inbox` |
 | P, RLS-exempt (tenant-keyed, see [8.2](#82-table-classes)) | `user_tenant_index`, `outbox` |
 | H | `roles`, `role_permissions`, `audit_events` |
-| T | `tenant_members`, `role_assignments`, `groups`, `group_members`, `group_role_assignments`, `tenant_apps`, `tenant_settings`, `invitations`, `access_requests`, `ownership_transfers`, `support_grants`, `audit_exports` |
+| T | `tenant_members`, `role_assignments`, `role_assignment_batches`, `groups`, `group_members`, `group_role_assignments`, `tenant_apps`, `tenant_settings`, `invitations`, `access_requests`, `ownership_transfers`, `support_grants`, `audit_exports` |
 
 `identities` is a mirror of Keycloak identities (user ID, email, names, status), populated on login and invitation and refreshed by events. It is **never listed directly**. Tenant queries reach it only through `tenant_members` joins; only platform-security endpoints may search it.
 
@@ -1296,7 +1297,7 @@ Tenant-scoped (`/v1/tenants/{tenantId}/…`, tenant gate + permission), user-lev
 |---|---|---|
 | Expire assignments and support grants | Every minute | Removes at `expires_at`, bumps `authz_version`, publishes change event |
 | Send emails | Events | Requests, approvals, and expiry warnings may be worker notifications. One-time invitation codes are delivered synchronously during issuance: only their hash is retained, and the code must never enter a broker event or worker log (INV-11). |
-| Bulk assignment | Admin job | Asynchronous with progress and audit, per-tenant concurrency limit |
+| Bulk assignment | Owner job | One active batch per tenant, 1–100 targets for one nonprivileged role; recent MFA, live owner/role/member rechecks, per-target atomic progress and audit (ADR-0065 proposed) |
 | Drift detection | Nightly | Identity mirror vs Keycloak |
 | Tenant deletion orchestration | Grace period elapsed | WP-12 publishes `tenant.deleted.v1`, awaits confirmations, and writes the tombstone |
 | Audit export | Request | Private object storage; authenticated, tenant-gated BFF download stream. No signed URL. The WP-06 endpoint records a pending job; WP-10 delivers the worker and stream. |
@@ -3065,6 +3066,7 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `GET …/roles`, `GET …/roles/{roleId}`, `GET …/permissions` | T `access.role.read` | Roles and permission catalog (enabled apps only) |
 | `POST …/roles`, `PUT …/roles/{roleId}`, `DELETE …/roles/{roleId}` | T `access.role.manage` | Custom roles |
 | `GET …/role-assignments`, `POST …/role-assignments` (`userId`, `roleId`, optional `expiresAt`, and `reason` in body), `DELETE …/role-assignments/{id}` (`reason` in body) | T `access.assignment.manage` | List active assignments, grant and revoke; no user identifier in the URL (INV-11) |
+| `POST …/role-assignment-batches`, `GET …/role-assignment-batches/{batchId}` | T `access.assignment.manage` | Owner submits a bounded member-ID list in the body; opaque batch ID and aggregate progress only (ADR-0065 proposed) |
 | `GET/POST …/groups`, `PUT/DELETE …/groups/{id}/members` (`userId`, `reason` in body), `POST …/groups/{id}/role-assignments` (`roleId`, optional `expiresAt`, `reason` in body), `DELETE …/groups/{id}/role-assignments/{assignmentId}` (`reason` in body) | T `access.group.manage` | Groups; no user identifier in the URL (INV-11) |
 | `GET …/apps` | T `access.apps.read` | Enabled apps |
 | `POST …/access-requests` | T `access.request.create` | Request role access or record an app request for platform review |

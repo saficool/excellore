@@ -38,6 +38,7 @@
     <None Include="../Excellore.Access.Infrastructure/Migrations/012_audit_export_requests.sql" Link="012_audit_export_requests.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/013_worker_expiry.sql" Link="013_worker_expiry.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Excellore.Access.Infrastructure/Migrations/014_worker_identity_drift.sql" Link="014_worker_identity_drift.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Excellore.Access.Infrastructure/Migrations/015_role_assignment_batches.sql" Link="015_role_assignment_batches.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../../infra/db/rls-exempt.txt" Link="rls-exempt.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

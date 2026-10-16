@@ -18,6 +18,7 @@ builder.Services.AddScoped<AccessResolutionService>();
 builder.Services.AddScoped<AccessRoleReader>();
 builder.Services.AddScoped<CustomRoleService>();
 builder.Services.AddScoped<RoleAssignmentService>();
+builder.Services.AddScoped<RoleAssignmentBatchService>();
 builder.Services.AddScoped<AccessGroupService>();
 builder.Services.AddScoped<InvitationAcceptanceService>();
 builder.Services.AddScoped<InvitationManagementService>();
@@ -404,6 +405,33 @@ tenantRoutes.MapDelete("/role-assignments/{assignmentId:guid}", async (Guid assi
     CancellationToken cancellationToken) =>
     RoleAssignmentResponses.Map(await service.RevokeAsync(assignmentId, request, cancellationToken)))
     .RequirePermission("access.assignment.manage");
+tenantRoutes.MapPost("/role-assignment-batches", async (
+    CreateRoleAssignmentBatchRequest request, RoleAssignmentBatchService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.CreateAsync(request, cancellationToken);
+    return result.Status switch
+    {
+        RoleAssignmentBatchStatus.Accepted => Results.Json(result.Batch,
+            statusCode: StatusCodes.Status202Accepted),
+        RoleAssignmentBatchStatus.Invalid => Results.Problem(statusCode: 400,
+            type: "urn:excellore:problem:invalid-assignment-batch", title: "Invalid assignment batch"),
+        RoleAssignmentBatchStatus.Forbidden => Results.Problem(statusCode: 403,
+            type: "urn:excellore:problem:assignment-batch-denied", title: "Assignment batch denied"),
+        RoleAssignmentBatchStatus.StepUpRequired => Results.Problem(statusCode: 403,
+            type: "urn:excellore:problem:step-up-required", title: "Step-up required"),
+        RoleAssignmentBatchStatus.NotFound => Results.NotFound(),
+        RoleAssignmentBatchStatus.Conflict => Results.Problem(statusCode: 409,
+            type: "urn:excellore:problem:assignment-batch-conflict", title: "Assignment batch already pending"),
+        _ => Results.StatusCode(500)
+    };
+}).RequirePermission("access.assignment.manage");
+tenantRoutes.MapGet("/role-assignment-batches/{batchId:guid}", async (
+    Guid batchId, RoleAssignmentBatchService service, CancellationToken cancellationToken) =>
+{
+    var batch = await service.GetAsync(batchId, cancellationToken);
+    return batch is null ? Results.NotFound() : Results.Json(batch);
+}).RequirePermission("access.assignment.manage");
 tenantRoutes.MapGet("/groups", async (AccessGroupService service,
     CancellationToken cancellationToken) => Results.Json(await service.ListAsync(cancellationToken)))
     .RequirePermission("access.group.manage");

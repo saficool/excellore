@@ -21,8 +21,9 @@ public sealed class AccessMigrationTests
         await admin.OpenAsync();
         await ExecuteAsync(admin, $"CREATE ROLE access_migrator LOGIN PASSWORD '{migratorPassword}' NOSUPERUSER NOBYPASSRLS;");
         await ExecuteAsync(admin, $"CREATE ROLE access_app LOGIN PASSWORD '{appPassword}' NOSUPERUSER NOBYPASSRLS;");
+        await ExecuteAsync(admin, $"CREATE ROLE access_worker LOGIN PASSWORD '{appPassword}' NOSUPERUSER NOBYPASSRLS;");
         await ExecuteAsync(admin, "GRANT USAGE, CREATE ON SCHEMA public TO access_migrator;");
-        await ExecuteAsync(admin, "GRANT USAGE ON SCHEMA public TO access_app;");
+        await ExecuteAsync(admin, "GRANT USAGE ON SCHEMA public TO access_app,access_worker;");
         await ExecuteAsync(admin, "ALTER DEFAULT PRIVILEGES FOR ROLE access_migrator IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO access_app;");
 
         var migratorConnectionString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
@@ -39,6 +40,10 @@ public sealed class AccessMigrationTests
             Path.Combine(AppContext.BaseDirectory, "011_support_grants_rls.sql")));
         await ExecuteAsync(migrator, await File.ReadAllTextAsync(
             Path.Combine(AppContext.BaseDirectory, "012_audit_export_requests.sql")));
+        foreach (var migration in new[] { "013_worker_expiry.sql",
+                     "014_worker_identity_drift.sql", "015_role_assignment_batches.sql" })
+            await ExecuteAsync(migrator, await File.ReadAllTextAsync(
+                Path.Combine(AppContext.BaseDirectory, migration)));
 
         var appConnectionString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
         {
@@ -61,7 +66,8 @@ public sealed class AccessMigrationTests
             ["tenant_members"] = "T", ["role_assignments"] = "T", ["groups"] = "T",
             ["group_members"] = "T", ["group_role_assignments"] = "T", ["tenant_apps"] = "T",
             ["tenant_settings"] = "T", ["invitations"] = "T", ["access_requests"] = "T",
-            ["ownership_transfers"] = "T", ["audit_exports"] = "T"
+            ["ownership_transfers"] = "T", ["audit_exports"] = "T",
+            ["role_assignment_batches"] = "T"
         };
         await using (var command = new NpgsqlCommand("""
             SELECT c.relname, obj_description(c.oid), c.relrowsecurity, c.relforcerowsecurity
@@ -90,6 +96,8 @@ public sealed class AccessMigrationTests
         Assert.True(await HasTablePrivilegeAsync(app, "support_grants", "INSERT"));
         Assert.True(await HasTablePrivilegeAsync(app, "ownership_transfers", "INSERT"));
         Assert.True(await HasTablePrivilegeAsync(app, "audit_exports", "INSERT"));
+        Assert.True(await HasTablePrivilegeAsync(app, "role_assignment_batches", "INSERT"));
+        Assert.False(await HasTablePrivilegeAsync(app, "role_assignment_batches", "UPDATE"));
 
         var tenantOne = Guid.NewGuid();
         var tenantTwo = Guid.NewGuid();
@@ -98,6 +106,7 @@ public sealed class AccessMigrationTests
         await VerifyTenantWriteBoundariesAsync(app, tenantOne, tenantTwo, ids);
         Assert.Equal(0L, await CountAsync(app, "ownership_transfers"));
         Assert.Equal(0L, await CountAsync(app, "audit_exports"));
+        Assert.Equal(0L, await CountAsync(app, "role_assignment_batches"));
         Assert.Equal(0L, await CountAsync(app, "support_grants"));
         await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
             "INSERT INTO ownership_transfers (id, tenant_id, from_user_id, to_user_id, reason, status, expires_at) VALUES (@id, @tenant, @user, @other, 'fixture', 'pending', now() + interval '1 day')",
@@ -110,6 +119,10 @@ public sealed class AccessMigrationTests
             "INSERT INTO support_grants (id, tenant_id, staff_user_id, role_id, reason, status, expires_at) VALUES (@id, @tenant, @user, @role, 'fixture', 'requested', now() + interval '1 hour')",
             ("id", Guid.NewGuid()), ("tenant", tenantTwo),
             ("user", ids["u2"]), ("role", ids["system_role"]));
+        await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
+            "INSERT INTO role_assignment_batches (id, tenant_id, requested_by, role_id, target_user_ids, reason) VALUES (@id, @tenant, @user, @role, ARRAY[@user]::uuid[], 'fixture')",
+            ("id", Guid.NewGuid()), ("tenant", tenantTwo),
+            ("user", ids["u2"]), ("role", ids["r2"]));
 
         await ExecuteAsync(migrator, "CREATE TABLE default_grant_probe (id integer);");
         Assert.False(await HasTablePrivilegeAsync(app, "default_grant_probe", "SELECT"));
@@ -155,6 +168,9 @@ public sealed class AccessMigrationTests
             INSERT INTO access_requests (id, tenant_id, requester_id, target_type, target_key, reason, status) VALUES
               (@q1, @t1, @u1, 'role', 'member', 'fixture', 'pending'),
               (@q2, @t2, @u2, 'role', 'member', 'fixture', 'pending');
+            INSERT INTO role_assignment_batches (id, tenant_id, requested_by, role_id, target_user_ids, reason) VALUES
+              (@b1, @t1, @u1, @r1, ARRAY[@u1]::uuid[], 'fixture'),
+              (@b2, @t2, @u2, @r2, ARRAY[@u2]::uuid[], 'fixture');
             INSERT INTO audit_events (id, tenant_id, actor_type, action, hash) VALUES
               (@e0, NULL, 'system', 'fixture', decode('00','hex')),
               (@e1, @t1, 'system', 'fixture', decode('01','hex')),
@@ -163,7 +179,7 @@ public sealed class AccessMigrationTests
         command.Parameters.AddWithValue("t1", tenantOne);
         command.Parameters.AddWithValue("t2", tenantTwo);
         var ids = new Dictionary<string, Guid>(StringComparer.Ordinal);
-        foreach (var name in new[] { "u1", "u2", "system_role", "r1", "r2", "a1", "a2", "g1", "g2", "ga1", "ga2", "i1", "i2", "q1", "q2", "e0", "e1", "e2" })
+        foreach (var name in new[] { "u1", "u2", "system_role", "r1", "r2", "a1", "a2", "g1", "g2", "ga1", "ga2", "i1", "i2", "q1", "q2", "b1", "b2", "e0", "e1", "e2" })
         {
             ids[name] = Guid.NewGuid();
             command.Parameters.AddWithValue(name, ids[name]);
@@ -181,6 +197,7 @@ public sealed class AccessMigrationTests
             "access_requests"
         ];
         foreach (var table in tenantTables) Assert.Equal(0L, await CountAsync(app, table));
+        Assert.Equal(0L, await CountAsync(app, "role_assignment_batches"));
         Assert.Equal(1L, await CountAsync(app, "roles"));
         Assert.Equal(1L, await CountAsync(app, "role_permissions"));
         Assert.Equal(0L, await CountAsync(app, "audit_events"));
@@ -200,12 +217,14 @@ public sealed class AccessMigrationTests
                 update.Parameters.AddWithValue("other", other);
                 Assert.Equal(0, await update.ExecuteNonQueryAsync());
             }
+            Assert.Equal(1L, await CountAsync(app, "role_assignment_batches"));
             Assert.Equal(2L, await CountAsync(app, "roles"));
             Assert.Equal(2L, await CountAsync(app, "role_permissions"));
             Assert.Equal(1L, await CountAsync(app, "audit_events"));
             await transaction.CommitAsync();
         }
         foreach (var table in tenantTables) Assert.Equal(0L, await CountAsync(app, table));
+        Assert.Equal(0L, await CountAsync(app, "role_assignment_batches"));
         Assert.Equal(1L, await CountAsync(app, "roles"));
         Assert.Equal(1L, await CountAsync(app, "role_permissions"));
         Assert.Equal(0L, await CountAsync(app, "audit_events"));
@@ -233,7 +252,8 @@ public sealed class AccessMigrationTests
             "INSERT INTO tenant_apps (tenant_id, app_id, status) VALUES (@tenant, 'profile', 'enabled')",
             "INSERT INTO tenant_settings (tenant_id) VALUES (@tenant)",
             "INSERT INTO invitations (id, tenant_id, email, token_hash, status, invited_by, expires_at) VALUES (@id, @tenant, 'foreign@example.invalid', decode('03','hex'), 'pending', @user, now() + interval '1 day')",
-            "INSERT INTO access_requests (id, tenant_id, requester_id, target_type, target_key, reason, status) VALUES (@id, @tenant, @user, 'role', 'member', 'fixture', 'pending')"
+            "INSERT INTO access_requests (id, tenant_id, requester_id, target_type, target_key, reason, status) VALUES (@id, @tenant, @user, 'role', 'member', 'fixture', 'pending')",
+            "INSERT INTO role_assignment_batches (id, tenant_id, requested_by, role_id, target_user_ids, reason) VALUES (@id, @tenant, @user, @role, ARRAY[@user]::uuid[], 'fixture')"
         };
         foreach (var insert in foreignTenantInserts)
         {
