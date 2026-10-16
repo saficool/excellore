@@ -10,7 +10,11 @@ app.AssertTenantRoutesProtected();
 
 Call `AssertTenantRoutesProtected()` after mapping all routes and before starting the app. It rejects tenant routes missing authentication, the gate, or permission metadata. Use `AllowAnyMember()` only for an endpoint intentionally available to every active tenant member.
 
+Chain `AddTenantRateLimit()` after `AddTenantGate()` on every tenant route group. The shared fixed-window policy allows 60 requests per minute per user and 600 per minute per tenant on each API instance and returns RFC 9457 `429` before handler code. WP-14 adds the deployment-wide ingress quota for replicated services.
+
 The gate reads the user from the validated JWT and the tenant ID from the route. It resolves Access authorization before the handler, checks every required permission, and sets a scoped tenant context for the handler. The context is cleared afterward. A denied or suspended membership returns `404`; a missing permission or missing MFA returns `403`; authority unavailability returns `503`. All errors use RFC 9457 problem details.
+
+Repeated tenant-gate `404` decisions are tracked per actor only in bounded process memory. The `Excellore.Authz` meter exports anonymous denial, probing-alert, and rate-limit counters without user IDs, IP addresses, or untrusted tenant IDs. Register that meter with the host's OpenTelemetry provider in WP-14.
 
 After a successful gate decision, the gate tags the HTTP request activity and opens a structured log scope with the validated opaque `tenant.id` for handler logs. Denied requests are never attributed to a tenant from their untrusted route. The log scope and tenant context close when the handler returns or throws. Hosts must collect ASP.NET Core request activities and enable logging scopes for these attributes to appear in exported telemetry.
 

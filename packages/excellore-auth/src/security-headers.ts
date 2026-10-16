@@ -25,7 +25,11 @@ export function createBffSecurityHeaders(
   forwarded.set('Content-Security-Policy', policy);
   const response = new Headers({
     'Content-Security-Policy': policy,
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin',
     'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
     'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   });

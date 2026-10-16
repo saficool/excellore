@@ -1,0 +1,107 @@
+groups:
+  - name: excellore-security
+    rules:
+      - alert: TenantProbingDetected
+        expr: increase(excellore_security_probing_alerts_total[5m]) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations: { summary: 'Repeated cross-tenant probing detected' }
+      - alert: ElevatedUnauthorizedRate
+        expr: sum by (service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code="401"}[5m])) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: 'Elevated HTTP 401 rate' }
+      - alert: ElevatedForbiddenRate
+        expr: sum by (service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code="403"}[5m])) > 1
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: 'Elevated HTTP 403 rate' }
+      - alert: ElevatedNotFoundRate
+        expr: sum by (service_name) (rate(http_server_request_duration_seconds_count{http_response_status_code="404"}[5m])) > 5
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: 'Elevated HTTP 404 rate' }
+      - alert: PlatformAdminUsed
+        expr: increase(excellore_privileged_identity_uses_total{identity="platform-admin"}[5m]) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations: { summary: 'platform-admin identity used' }
+      - alert: SupportGrantCreated
+        expr: increase(excellore_support_grants_total{action="created"}[5m]) > 0
+        for: 0m
+        labels: { severity: warning }
+        annotations: { summary: 'A support grant was created' }
+      - alert: UnexpectedServiceTokenHost
+        expr: increase(excellore_service_token_unexpected_host_total[5m]) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations: { summary: 'Service token used from an unexpected host' }
+      - alert: AuditHashChainFailure
+        expr: excellore_audit_hash_chain_valid == 0
+        for: 0m
+        labels: { severity: critical }
+        annotations: { summary: 'Audit hash-chain verification failed' }
+      - alert: ForcedRlsCheckFailed
+        expr: excellore_database_tables_missing_forced_rls > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations: { summary: 'A tenant table is missing forced RLS' }
+
+  - name: excellore-reliability
+    rules:
+      - alert: FailedLoginSpike
+        expr: increase(keycloak_user_events_total{event="LOGIN_ERROR"}[5m]) > 20
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: 'Keycloak login failures spiked' }
+      - alert: RefreshFailures
+        expr: increase(excellore_bff_refresh_failures_total[5m]) > 5
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: 'BFF refresh failures elevated' }
+      - alert: AccessResolveErrors
+        expr: sum(rate(http_client_request_duration_seconds_count{server_address=~".*access.*",http_response_status_code=~"5.."}[5m])) > 0.1
+        for: 5m
+        labels: { severity: critical }
+        annotations: { summary: 'Access resolve errors elevated' }
+      - alert: AccessResolveLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(excellore_authz_resolve_duration_seconds_bucket[5m]))) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: 'Access resolve p95 exceeds 50 ms' }
+      - alert: AuthorizationInvalidationLag
+        expr: excellore_authz_invalidation_lag_seconds > 60
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          { summary: 'Authorization invalidation exceeds 60 seconds' }
+      - alert: KeycloakLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(keycloak_request_duration_seconds_bucket[5m]))) > 0.3
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: 'Keycloak token p95 exceeds 300 ms' }
+      - alert: KeycloakNodeLoss
+        expr: up{job="keycloak"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: 'Keycloak node unavailable' }
+      - alert: RabbitQueueBacklog
+        expr: rabbitmq_queue_messages_ready > 1000
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: 'RabbitMQ queue backlog elevated' }
+      - alert: RabbitDeadLetterGrowth
+        expr: increase(rabbitmq_queue_messages_published_total{queue=~".*dead.*"}[5m]) > 0
+        for: 0m
+        labels: { severity: critical }
+        annotations: { summary: 'Dead-letter queue is growing' }
+      - alert: CertificateExpiring
+        expr: probe_ssl_earliest_cert_expiry - time() < 1814400
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: 'Certificate expires within 21 days' }
+      - alert: SecretRotationOverdue
+        expr: excellore_secret_age_days > 90
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: 'A managed secret exceeds rotation policy' }

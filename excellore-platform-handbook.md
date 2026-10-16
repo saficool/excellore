@@ -1899,6 +1899,8 @@ Then, for each class T table: with context `T2`, `SELECT` returns zero `T1` rows
 14. Logout in any app ends the session in all apps.
 15. Authority unavailable: writes `503`, reads served from cache ≤ 5 min, then denied.
 
+The code-owned evidence map is `infra/security/wp13-scenarios.json`. CI validates that all 15 entries still point to executable tests, then runs those JavaScript, .NET, and local-stack end-to-end suites. `infra/security/fault-injection.json` similarly tracks the Keycloak, Access authority, Valkey, and RabbitMQ failure boundaries.
+
 ---
 
 ## 26. CI/CD and Release
@@ -1998,8 +2000,10 @@ BFFs and APIs are stateless and scale horizontally. Workers scale by queue depth
 
 - **Tracing:** OpenTelemetry end to end; propagate `traceparent` BFF → API → broker → worker.
 - **Tenant attribution:** every span and log record in tenant context carries `tenant.id` (opaque ID). Metrics use `tenant.id` only for bounded sets (top-N tenants) to avoid cardinality explosions.
-- **Logs:** structured (Serilog, pino) into Loki with `traceId`, `userId` (`sub`), `tenant.id`, `correlationId`. Never tokens, secrets, cookies.
+- **Logs:** structured (Serilog, pino) into Loki with `traceId`, opaque `tenant.id` after a successful tenant gate, and `correlationId`. Never user IDs, IP addresses, personal data, tokens, secrets, or cookies; actor IDs belong only in the restricted security audit store (INV-11, INV-12).
 - **Dashboards:** per app; platform identity (logins, failures, refresh errors); **authorization** (resolve latency, cache hit rate, denial rates, change-event lag); per-tenant top talkers.
+- **Privacy-preserving probing detection:** APIs keep short-lived actor denial windows in process memory and export only an anonymous probing counter. User IDs and IP addresses are never metric labels or log fields (ADR-0074, INV-11).
+- Code-owned dashboards and alert rules live under `infra/observability/`; CI validates their required panels and the minimum alert catalog.
 
 ### 28.2 Proposed SLOs (tune after measuring)
 
@@ -2094,6 +2098,8 @@ Failed-login spikes; refresh failures; elevated `401`/`403`/`404` rates per API;
 | Message tampering or replay | Forged event | Authenticated broker, idempotent consumers, schema validation |
 | Account takeover | Credential stuffing | MFA, brute-force detection, breached-password checks |
 | Supply chain | Malicious dependency | Pinned versions, audits, SBOM, signed images |
+
+The current application threat-model review and its automated evidence are recorded in `docs/security/threat-model-review.md`. Deployment residuals such as a cross-replica ingress rate-limit boundary, HA, recovery drills, and network policy remain WP-14 infrastructure work.
 
 ### 29.3 Secrets and keys
 

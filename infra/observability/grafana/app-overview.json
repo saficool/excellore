@@ -1,0 +1,56 @@
+{
+  "title": "Excellore application overview",
+  "uid": "excellore-app-overview",
+  "schemaVersion": 41,
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "query": "label_values(http_server_request_duration_seconds_count, service_name)"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[5m])) by (service_name)"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "p95 server latency",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[5m])) by (le, service_name))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "5xx rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\",http_response_status_code=~\"5..\"}[5m])) by (service_name)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Bounded tenant top talkers",
+      "type": "table",
+      "targets": [
+        {
+          "expr": "topk(20, sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[5m])) by (tenant_id))"
+        }
+      ]
+    }
+  ]
+}

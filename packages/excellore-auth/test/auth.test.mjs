@@ -5,11 +5,66 @@ import { after, before, test } from 'node:test';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 import {
   createAuthHandlers,
+  createBffSecurityHeaders,
   createOidcClient,
   getAccessToken,
   loadAuthConfig,
   ValkeySessionStore,
 } from '../dist/index.js';
+
+test('BFF security headers use a per-response nonce and strict production policy', () => {
+  const first = createBffSecurityHeaders(new Headers(), {
+    development: false,
+    secureOrigin: true,
+  });
+  const second = createBffSecurityHeaders(new Headers(), {
+    development: false,
+    secureOrigin: true,
+  });
+  const policy = first.responseHeaders.get('content-security-policy');
+  assert.ok(policy);
+  for (const directive of [
+    "default-src 'none'",
+    "script-src 'self' 'nonce-",
+    "style-src 'self'",
+    "form-action 'self'",
+    "base-uri 'none'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+  ])
+    assert.match(
+      policy,
+      new RegExp(directive.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    );
+  assert.equal(first.responseHeaders.get('x-content-type-options'), 'nosniff');
+  assert.equal(first.responseHeaders.get('x-frame-options'), 'DENY');
+  assert.equal(
+    first.responseHeaders.get('cross-origin-embedder-policy'),
+    'require-corp',
+  );
+  assert.equal(
+    first.responseHeaders.get('cross-origin-opener-policy'),
+    'same-origin',
+  );
+  assert.equal(
+    first.responseHeaders.get('cross-origin-resource-policy'),
+    'same-origin',
+  );
+  assert.equal(
+    first.responseHeaders.get('referrer-policy'),
+    'strict-origin-when-cross-origin',
+  );
+  assert.equal(
+    first.responseHeaders.get('strict-transport-security'),
+    'max-age=31536000; includeSubDomains',
+  );
+  assert.equal(policy, first.requestHeaders.get('content-security-policy'));
+  assert.notEqual(
+    first.requestHeaders.get('x-nonce'),
+    second.requestHeaders.get('x-nonce'),
+  );
+  assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
+});
 
 class FakeValkey {
   strings = new Map();

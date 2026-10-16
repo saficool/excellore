@@ -34,7 +34,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapExcelloreHealthChecks();
 
-var tenant = app.MapGroup("/v1/tenants/{tenantId:guid}").AddTenantGate();
+var tenant = app.MapGroup("/v1/tenants/{tenantId:guid}")
+    .AddTenantGate().AddTenantRateLimit();
 tenant.MapGet("/items/{itemId:guid}", async (Guid itemId, HttpContext http, SampleDbContext db,
     TenantUnitOfWork<SampleDbContext> unitOfWork, CancellationToken cancellationToken) =>
 {

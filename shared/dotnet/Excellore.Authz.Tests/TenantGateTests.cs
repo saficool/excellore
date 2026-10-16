@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Security.Claims;
 using Excellore.Auth;
 using Excellore.Authz;
@@ -188,6 +189,40 @@ public class TenantGateTests
 
         Assert.Null(resolver.LastTenantId);
         AssertProblem(result, 404, "not-found");
+    }
+
+    [Fact]
+    public async Task Repeated_cross_tenant_not_found_responses_fire_anonymous_probing_alert()
+    {
+        var measurements = new List<KeyValuePair<string, object?>[]>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, current) =>
+            {
+                if (instrument.Meter.Name == TenantSecurityTelemetry.MeterName &&
+                    instrument.Name == "excellore.security.probing_alerts")
+                    current.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+            measurements.Add(tags.ToArray()));
+        listener.Start();
+
+        var filter = new TenantGateFilter(
+            new StubResolver(new AuthzSnapshot(TenantOne, AuthzDecision.Deny,
+                "active", null, EmptyPermissions())),
+            new StubUser(true), new TenantContextAccessor(), new StubClassifier(false),
+            NullLogger<TenantGateFilter>.Instance,
+            new TenantProbingDetector(new TenantProbingOptions(DenialThreshold: 3)));
+
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var result = await filter.InvokeAsync(Invocation(TenantOne), _ =>
+                ValueTask.FromResult<object?>("leaked"));
+            AssertProblem(result, 404, "not-found");
+        }
+
+        Assert.Contains(measurements, tags => tags.Length == 0);
     }
 
     private static EndpointFilterInvocationContext Invocation(Guid tenantId, string? permission = "profile.member.read")

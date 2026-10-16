@@ -11,7 +11,8 @@ public sealed class TenantGateFilter(
     ICurrentUser user,
     ITenantContextAccessor tenantContext,
     IPrivilegeClassifier privilegeClassifier,
-    ILogger<TenantGateFilter> logger) : IEndpointFilter
+    ILogger<TenantGateFilter> logger,
+    TenantProbingDetector? probingDetector = null) : IEndpointFilter
 {
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
@@ -24,7 +25,7 @@ public sealed class TenantGateFilter(
         if (!Guid.TryParse(http.Request.RouteValues["tenantId"]?.ToString(), out var tenantId) ||
             tenantId == Guid.Empty)
         {
-            return ExcelloreProblems.NotFound(http);
+            return NotFound(http, null, "invalid-tenant");
         }
 
         var metadata = http.GetEndpoint()?.Metadata;
@@ -59,7 +60,7 @@ public sealed class TenantGateFilter(
 
         if (snapshot.TenantId != tenantId || !snapshot.IsActiveMember || snapshot.Permissions is null)
         {
-            return ExcelloreProblems.NotFound(http);
+            return NotFound(http, userId, "tenant-gate");
         }
 
         if (requirements.Any(permission => !snapshot.Permissions.Contains(permission)))
@@ -97,5 +98,12 @@ public sealed class TenantGateFilter(
         {
             tenantContext.Clear();
         }
+    }
+
+    private IResult NotFound(HttpContext http, Guid? userId, string reason)
+    {
+        TenantSecurityTelemetry.RecordTenantGateDenial(reason);
+        probingDetector?.Observe(userId, http.Connection.RemoteIpAddress);
+        return ExcelloreProblems.NotFound(http);
     }
 }

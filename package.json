@@ -12,8 +12,10 @@
     "contracts:check": "node scripts/check-event-schemas.mjs",
     "permissions:check": "node scripts/check-permissions.mjs",
     "permissions:test": "node --test scripts/check-permissions.test.mjs",
-    "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"*.{json,mjs,yaml}\"",
-    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"*.{json,mjs,yaml}\""
+    "security:scenarios": "node scripts/check-security-scenarios.mjs",
+    "observability:check": "node scripts/check-observability.mjs",
+    "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"infra/observability/**/*.{json,yml}\" \"infra/security/*.json\" \"tests/load/*.{js,md}\" \"*.{json,mjs,yaml}\"",
+    "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"infra/observability/**/*.{json,yml}\" \"infra/security/*.json\" \"tests/load/*.{js,md}\" \"*.{json,mjs,yaml}\""
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

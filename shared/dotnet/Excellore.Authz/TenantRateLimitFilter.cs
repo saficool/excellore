@@ -48,8 +48,11 @@ public sealed class TenantRateLimitFilter(ICurrentUser user,
         using var lease = await policy.AcquireAsync(user.UserId, tenant.TenantId,
             context.HttpContext.RequestAborted);
         if (!lease.IsAcquired)
+        {
+            TenantSecurityTelemetry.RecordRateLimitRejection();
             return Results.Problem(statusCode: StatusCodes.Status429TooManyRequests,
                 type: "urn:excellore:problem:rate-limited", title: "Too many requests");
+        }
         return await next(context);
     }
 }

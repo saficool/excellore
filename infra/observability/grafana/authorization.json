@@ -1,0 +1,65 @@
+{
+  "title": "Excellore authorization",
+  "uid": "excellore-authorization",
+  "schemaVersion": 41,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Resolve p95",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(excellore_authz_resolve_duration_seconds_bucket[5m])) by (le))"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Cache hit rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(excellore_authz_cache_operations_total{result=\"hit\"}[5m])) / sum(rate(excellore_authz_cache_operations_total[5m]))"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Tenant gate denials",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(excellore_tenant_gate_denials_total[5m])) by (reason)"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Probing alerts",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "increase(excellore_security_probing_alerts_total[5m])" }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Invalidation lag",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "max(excellore_authz_invalidation_lag_seconds) by (service_name)"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Rate-limit rejections",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "sum(rate(excellore_rate_limit_rejections_total[5m])) by (service_name)"
+        }
+      ]
+    }
+  ]
+}

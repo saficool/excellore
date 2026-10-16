@@ -33,6 +33,8 @@ public static class TenantRouteExtensions
         services.TryAddSingleton<IPrivilegeClassifier, ConservativePrivilegeClassifier>();
         services.TryAddSingleton(new TenantRateLimitOptions());
         services.TryAddSingleton<TenantRateLimitPolicy>();
+        services.TryAddSingleton(new TenantProbingOptions());
+        services.TryAddSingleton<TenantProbingDetector>();
         return services;
     }
 

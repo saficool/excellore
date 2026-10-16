@@ -143,7 +143,8 @@ me.MapGet("/deletion-requests/{id:guid}", async (Guid id, ICurrentUser user,
     return status is null ? Results.NotFound() : Results.Ok(new { id, status });
 });
 
-var tenant = app.MapGroup("/v1/tenants/{tenantId:guid}").AddTenantGate();
+var tenant = app.MapGroup("/v1/tenants/{tenantId:guid}")
+    .AddTenantGate().AddTenantRateLimit();
 tenant.MapGet("/members/me", async (Guid tenantId, ICurrentUser user,
     ProfileRepository profiles, CancellationToken ct) =>
     Results.Ok(await profiles.GetMemberAsync(tenantId, user.UserId, true, ct)))

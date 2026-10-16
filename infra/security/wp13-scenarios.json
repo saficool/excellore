@@ -1,0 +1,193 @@
+[
+  {
+    "id": 1,
+    "name": "Cross-app SSO",
+    "evidence": [
+      {
+        "path": "scripts/check-shell-login.mjs",
+        "contains": "Keycloak SSO did not authorize Profile"
+      }
+    ]
+  },
+  {
+    "id": 2,
+    "name": "Per-API audience rejection",
+    "evidence": [
+      {
+        "path": "shared/dotnet/Excellore.Auth.Tests/AuthenticationTests.cs",
+        "contains": "Profile_validation_rejects_an_access_api_token"
+      }
+    ]
+  },
+  {
+    "id": 3,
+    "name": "Multi-tenant role and app isolation",
+    "evidence": [
+      {
+        "path": "services/access/Excellore.Access.Tests/AccessResolutionTests.cs",
+        "contains": "Internal_resolution_rechecks_tenant_membership_and_enabled_apps"
+      }
+    ]
+  },
+  {
+    "id": 4,
+    "name": "Authorization change propagation",
+    "evidence": [
+      {
+        "path": "shared/dotnet/Excellore.Authz.Tests/ValkeyAuthzInvalidationFanoutTests.cs",
+        "contains": "Event_on_one_replica_invalidates_other_replica_without_cross_tenant_leakage"
+      },
+      {
+        "path": "services/access/Excellore.Access.Tests/AccessExpiryWorkerTests.cs",
+        "contains": "invalidates_authority"
+      }
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Custom role safeguards",
+    "evidence": [
+      {
+        "path": "services/access/Excellore.Access.Tests/CustomRoleApiTests.cs",
+        "contains": "Custom_roles_enforce_boundaries_content_limits_step_up_and_audited_lifecycle"
+      },
+      {
+        "path": "services/access/Excellore.Access.Tests/RoleAssignmentApiTests.cs",
+        "contains": "Assignments_enforce_tenant_escalation_self_owner_expiry_and_audit_rules"
+      }
+    ]
+  },
+  {
+    "id": 6,
+    "name": "Step-up enforcement",
+    "evidence": [
+      {
+        "path": "shared/dotnet/Excellore.Authz.Tests/TenantGateTests.cs",
+        "contains": "Privileged_permission_succeeds_after_mfa"
+      },
+      {
+        "path": "packages/excellore-auth/test/auth.test.mjs",
+        "contains": "step-up binds the same subject"
+      }
+    ]
+  },
+  {
+    "id": 7,
+    "name": "Disabled app gate",
+    "evidence": [
+      {
+        "path": "services/access/Excellore.Access.Tests/EffectivePermissionCalculatorTests.cs",
+        "contains": "Effective_permissions_follow_tenant_member_grant_and_app_gates"
+      },
+      { "path": "scripts/check-shell-login.mjs", "contains": "Open Access" }
+    ]
+  },
+  {
+    "id": 8,
+    "name": "Invitation abuse cases",
+    "evidence": [
+      {
+        "path": "services/access/Excellore.Access.Tests/InvitationAcceptanceTests.cs",
+        "contains": "Acceptance_requires_verified_matching_identity_and_is_single_use_and_tenant_isolated"
+      }
+    ]
+  },
+  {
+    "id": 9,
+    "name": "Suspended and pending-deletion tenant denial",
+    "evidence": [
+      {
+        "path": "services/access/Excellore.Access.Tests/EffectivePermissionCalculatorTests.cs",
+        "contains": "suspended tenant"
+      },
+      {
+        "path": "services/access/Excellore.Access.Tests/TenantDeletionDispatchTests.cs",
+        "contains": "pending_deletion"
+      }
+    ]
+  },
+  {
+    "id": 10,
+    "name": "Tenant deletion and confirmations",
+    "evidence": [
+      {
+        "path": "services/access/Excellore.Access.Tests/TenantDeletionDispatchTests.cs",
+        "contains": "tenant.deleted.v1"
+      },
+      {
+        "path": "services/profile/Excellore.Profile.Tests/ProfileWorkerTests.cs",
+        "contains": "TenantDeletedV1"
+      }
+    ]
+  },
+  {
+    "id": 11,
+    "name": "Cross-tenant user erasure",
+    "evidence": [
+      {
+        "path": "services/access/Excellore.Access.Tests/UserErasureWorkerTests.cs",
+        "contains": "Erasure_revokes_only_target_user_preserves_audits_and_is_idempotent"
+      },
+      {
+        "path": "services/profile/Excellore.Profile.Tests/UserErasureWorkerTests.cs",
+        "contains": "Erasure_removes_user_data_and_objects_but_preserves_restricted_audit"
+      }
+    ]
+  },
+  {
+    "id": 12,
+    "name": "Worker tenant isolation",
+    "evidence": [
+      {
+        "path": "shared/dotnet/Excellore.Platform.Tests/TenantWorkerScopeTests.cs",
+        "contains": "EachJobGetsItsOwnTenantBoundScope"
+      },
+      {
+        "path": "services/profile/Excellore.Profile.Tests/ProfileWorkerTests.cs",
+        "contains": "tenant_bound_atomic_and_idempotent"
+      }
+    ]
+  },
+  {
+    "id": 13,
+    "name": "Support grant lifecycle",
+    "evidence": [
+      {
+        "path": "services/access/Excellore.Access.Tests/MemberLifecycleApiTests.cs",
+        "contains": "access.supportgrant.revoked.v1"
+      },
+      {
+        "path": "services/access/Excellore.Access.Tests/AccessExpiryWorkerTests.cs",
+        "contains": "support_grants"
+      }
+    ]
+  },
+  {
+    "id": 14,
+    "name": "Cross-app logout",
+    "evidence": [
+      {
+        "path": "scripts/check-shell-login.mjs",
+        "contains": "Shell logout did not close Profile BFF session"
+      },
+      {
+        "path": "packages/excellore-auth/test/auth.test.mjs",
+        "contains": "back-channel logout rejects wrong audience"
+      }
+    ]
+  },
+  {
+    "id": 15,
+    "name": "Authority outage policy",
+    "evidence": [
+      {
+        "path": "shared/dotnet/Excellore.Authz.Tests/CachedAuthzResolverTests.cs",
+        "contains": "Expired_snapshot_is_not_served_when_authority_is_unavailable"
+      },
+      {
+        "path": "shared/dotnet/Excellore.Authz.Tests/TenantGateTests.cs",
+        "contains": "Unavailable_authority_fails_closed"
+      }
+    ]
+  }
+]
