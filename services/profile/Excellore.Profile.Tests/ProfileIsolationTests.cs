@@ -123,6 +123,8 @@ public sealed class ProfileIsolationTests
         Assert.NotNull(decoded);
         Assert.Equal(SKEncodedImageFormat.Webp, decoded.EncodedFormat);
         Assert.Equal(24, decoded.Info.Width);
+        using var sourceWebp = image.Encode(SKEncodedImageFormat.Webp, 85);
+        Assert.NotNull(AvatarProcessor.Reencode(sourceWebp.ToArray(), "image/webp"));
         var sample = Convert.FromBase64String(
             "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABHNCSVQICAgIfAhkiAAAAChJREFUSIlj/F8f8J+BhoCJloaPWjBqwagFoxaMWjBqwagFoxZQDwAAVi0C/U9K/LQAAAAASUVORK5CYII=");
         Assert.NotNull(AvatarProcessor.Reencode(sample, "image/png"));

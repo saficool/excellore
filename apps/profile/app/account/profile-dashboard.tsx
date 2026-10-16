@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { applyTheme } from '../theme';
+import { AvatarInputError, prepareAvatar } from './prepare-avatar';
 
 type OwnProfile = {
   firstName: string | null;
@@ -52,6 +53,7 @@ export function ProfileDashboard() {
   const [exportJob, setExportJob] = useState<string | null>(null);
   const [avatarRevision, setAvatarRevision] = useState(0);
   const [avatarPreviewFailed, setAvatarPreviewFailed] = useState(false);
+  const [avatarStatus, setAvatarStatus] = useState('');
   useEffect(() => {
     void Promise.all([
       api<OwnProfile>('profile'),
@@ -144,34 +146,41 @@ export function ProfileDashboard() {
   }
 
   async function uploadAvatar(file: File) {
-    if (
-      file.size > 700 * 1024 ||
-      !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)
-    ) {
-      setMessage('Choose a PNG, JPEG, or WebP image under 700 KB.');
-      return;
-    }
     setBusy(true);
+    setAvatarStatus('Preparing image…');
+    let stage: 'prepare' | 'upload' | 'process' = 'prepare';
     try {
+      const prepared = await prepareAvatar(file);
+      setAvatarStatus('Uploading image…');
+      stage = 'upload';
       const upload = await api<{ id: string }>('avatar/uploads', 'POST', {
-        contentType: file.type,
-        sizeBytes: file.size,
+        contentType: prepared.type,
+        sizeBytes: prepared.size,
       });
       const base64Data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onerror = () => reject(new Error('Read failed'));
         reader.onload = () =>
           resolve(String(reader.result).split(',')[1] ?? '');
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(prepared);
       });
+      stage = 'process';
       await api(`avatar/uploads/${upload.id}/complete`, 'POST', { base64Data });
       setProfile((current) => current && { ...current, hasAvatar: true });
       setAvatarPreviewFailed(false);
       setAvatarRevision((current) => current + 1);
       window.dispatchEvent(new Event('profile-avatar-changed'));
-      setMessage('Avatar updated.');
-    } catch {
-      setMessage('Could not process the avatar.');
+      setAvatarStatus('Avatar updated.');
+    } catch (error) {
+      const status =
+        error instanceof Error
+          ? /^Request failed \((\d{3})\)$/.exec(error.message)?.[1]
+          : undefined;
+      setAvatarStatus(
+        error instanceof AvatarInputError
+          ? error.message
+          : `Could not ${stage === 'process' ? 'process' : 'upload'} the image${status ? ` (status ${status})` : ''}. Please try again.`,
+      );
     } finally {
       setBusy(false);
     }
@@ -189,9 +198,9 @@ export function ProfileDashboard() {
       setProfile((current) => current && { ...current, hasAvatar: false });
       setAvatarPreviewFailed(false);
       window.dispatchEvent(new Event('profile-avatar-changed'));
-      setMessage('Avatar removed.');
+      setAvatarStatus('Avatar removed.');
     } catch {
-      setMessage('Could not remove the avatar.');
+      setAvatarStatus('Could not remove the avatar. Please try again.');
     } finally {
       setBusy(false);
     }
@@ -298,10 +307,16 @@ export function ProfileDashboard() {
             disabled={busy}
             onChange={(event) => {
               const file = event.target.files?.[0];
+              event.currentTarget.value = '';
               if (file) void uploadAvatar(file);
             }}
           />
         </label>
+        <p className="profile-hint">
+          PNG, JPEG, or WebP, up to 10 MB. Large images are resized before
+          upload.
+        </p>
+        {avatarStatus && <p role="status">{avatarStatus}</p>}
         {profile.hasAvatar && (
           <button disabled={busy} onClick={() => void removeAvatar()}>
             Remove avatar
