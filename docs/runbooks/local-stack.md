@@ -126,3 +126,20 @@ pnpm --filter @excellore/access dev
 Run the first command before catalog sync and seed; leave it running. The seed uses local Keycloak users and Mailpit to activate the `acme` owner through the Access API. It is safe to rerun when the owner is already active. No invitation code or token is printed. Open `http://access.excellore.localhost:3002/t/acme/my-access` and sign in as the development `olivia.owner` user. The password is `DEV_USER_PASSWORD` in ignored `.env`; the OTP is generated from `DEV_OTP_SECRET` (the ignored `.local/show-dev-otp.mjs` helper can display the current code). The browser holds only the opaque Access session cookie.
 
 With the API and BFF running, `pnpm exec node scripts/check-access-console.mjs` verifies real login, tenant isolation, read proxies, CSRF rejection, and that no tokens are rendered in the page. On its first run it invites the local `nora.nomember` identity, reads the one-time code from Mailpit without printing it, accepts the invitation, then checks custom role creation, assignment, and permission changes in the same browser session. It revokes the test assignment and deletes the test role; Nora remains a member for repeat runs. The Assignments read requires MFA because `access.assignment.manage` is privileged. The local Access BFF has its own `svc-access-authz` machine client; `scripts/dev-up.sh` reconciles it and Keycloak's `basic` subject scope for existing development realms.
+
+## Profile account and member UI (WP-09)
+
+Start the local stack and Access API, then run from the repository root:
+
+```sh
+bash scripts/migrate-profile.sh
+pnpm exec node scripts/sync-dev-catalog.mjs
+pnpm exec node scripts/run-profile-local.mjs
+pnpm exec node scripts/setup-next-local.mjs profile
+pnpm --filter @excellore/profile dev
+```
+
+Leave the Profile API and BFF commands running in separate terminals. Open `http://profile.excellore.localhost:3001/account` and sign in with the local development user. Account details, preferences, Keycloak security actions, sessions, avatar, export request, and deletion request are available there. The export job remains queued until the Profile worker is implemented in WP-10. The tenant page at `/t/acme` offers the member profile and active visible directory; the Access seed must have activated the `acme` tenant and owner first. Admin edits require `profile.member.manage` and a reason. Avatars are re-encoded as WebP before object storage and served through the authenticated `/api/avatar` BFF route. The browser receives no object-store credential or token.
+
+Profile API configuration is loaded by `scripts/run-profile-local.mjs` from ignored local credentials. Its `api-profile` bearer token gate uses `svc-profile-authz` to resolve tenant permissions in Access and consumes Access invalidation events through RabbitMQ. Run `dotnet test services/profile/Excellore.Profile.Tests` for the disposable PostgreSQL isolation, outbox, and avatar processing tests.
+With the Profile API and BFF running, `pnpm exec node scripts/check-profile-login.mjs` exercises OIDC login, authenticated Profile reads, tenant membership and directory, avatar processing and cleanup, CSP, and logout. It uses the ignored local development account and prints no credentials.

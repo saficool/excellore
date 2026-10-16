@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import { SharedHeader } from '@excellore/ui';
 import { SessionRequiredError, TenantAccessError } from '@excellore/auth';
 import { getTenantPageData } from '../../../lib/server';
+import { TenantProfile } from './tenant-profile';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,10 +40,11 @@ export default async function TenantPage({
         }}
       />
       <main>
-        <div className="ex-card">
-          <h1 className="text-3xl font-semibold">{data.tenant.name}</h1>
-          <p className="mt-4">Profile workspace</p>
-        </div>
+        <h1>{data.tenant.name} profiles</h1>
+        <TenantProfile
+          slug={slug}
+          canManage={data.tenant.permissions.includes('profile.member.manage')}
+        />
       </main>
     </>
   );

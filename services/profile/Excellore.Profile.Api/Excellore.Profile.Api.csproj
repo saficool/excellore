@@ -6,4 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../Excellore.Profile.Application/Excellore.Profile.Application.csproj" />
+    <ProjectReference Include="../Excellore.Profile.Infrastructure/Excellore.Profile.Infrastructure.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Auth/Excellore.Auth.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Authz/Excellore.Authz.csproj" />
+  </ItemGroup>
+
 </Project>

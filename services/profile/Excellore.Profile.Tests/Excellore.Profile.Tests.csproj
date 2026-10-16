@@ -8,6 +8,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../Excellore.Profile.Application/Excellore.Profile.Application.csproj" />
+    <ProjectReference Include="../Excellore.Profile.Infrastructure/Excellore.Profile.Infrastructure.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Contracts/Excellore.Contracts.csproj" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -16,6 +20,8 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <None Include="../Excellore.Profile.Infrastructure/Migrations/001_initial.sql"
+          Link="001_initial.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

@@ -717,7 +717,7 @@ Facts the agent MUST respect:
 | Store | Isolation rule |
 |---|---|
 | Valkey | Keys for tenant data include `t:{tenantId}`. Never cache tenant data under a user-only key. Separate key prefix per app. |
-| Object storage | Keys under `tenants/{tenantId}/…`; user-level files under `users/{userId}/…`. Signed URLs scoped to one key. |
+| Object storage | Tenant files use `tenants/{tenantId}/…`; Profile avatars use opaque `avatars/{uploadId}.webp` keys. Authenticated BFF streams serve avatars and exports without URL tokens. |
 | RabbitMQ | Envelope carries `tenantId`; consumers set tenant context before touching data. Queues are per service, not per tenant (first release). |
 | Search or analytics (future) | Must carry `tenant_id` and enforce it at query time. |
 | Logs and traces | `tenant.id` attribute on every record in tenant context. Per-tenant log access is a platform-security function. |
@@ -1085,7 +1085,7 @@ Two levels of "this is me":
 | Module | Level | What it does | Data lives in |
 |---|---|---|---|
 | **Account details** | Global | Name, display name, locale, time zone | Names and locale in Keycloak (narrow update), rest in Profile DB |
-| **Avatar** | Global | Upload, replace, remove | Object storage `users/{userId}/…`, metadata in Profile DB |
+| **Avatar** | Global | Upload, replace, remove | Object storage under opaque `avatars/{uploadId}.webp` keys, metadata in Profile DB |
 | **Preferences** | Global | Language, time zone, date format, notification preferences, theme | Profile DB |
 | **Security** | Global | Password, authenticators, passkeys, recent sign-ins | Keycloak via `kc_action` ([11.7](#117-account-actions-profile)) |
 | **Sessions** | Global | List sessions, sign out others | Keycloak sessions (own `sub` only) |
@@ -1126,8 +1126,8 @@ User-level endpoints need a valid token only (any signed-in person, own data onl
 | `GET /v1/tenants/{tenantId}/members/me` | `profile.app.access` | Own member profile |
 | `PATCH /v1/tenants/{tenantId}/members/me` | `profile.app.access` | Edit own member profile |
 | `GET /v1/tenants/{tenantId}/members` | `profile.member.read` | Directory (active members, cursor pagination) |
-| `GET /v1/tenants/{tenantId}/members/{userId}` | `profile.member.read` | One member |
-| `PATCH /v1/tenants/{tenantId}/members/{userId}` | `profile.member.manage` | Admin edit (audited) |
+| `POST /v1/tenants/{tenantId}/members:lookup` | `profile.member.read` | One member; `userId` in JSON body |
+| `PATCH /v1/tenants/{tenantId}/members` | `profile.member.manage` | Admin edit; `userId` and reason in JSON body (audited) |
 
 ### 14.5 Data model (Profile database)
 
@@ -1159,7 +1159,7 @@ inbox [P]   event_id PK, received_at                                    -- consu
 
 | Job | Trigger | Notes |
 |---|---|---|
-| Process avatar | Upload completed | Validate type and size, re-encode, strip EXIF, generate sizes |
+| Process avatar | Upload completed | WP-09 API validates type and size, re-encodes to a bounded WebP image, and strips metadata before storage; WP-10 worker may generate additional sizes |
 | Build data export | Export requested | Gather the user's data across tenants the user belongs to (Profile data; other apps contribute through events), archive, store with expiry, notify |
 | Purge expired exports | Daily | Delete past `expires_at` |
 | Create member profile | `tenant.member.added.v1` | Seed row in tenant context |
@@ -1171,7 +1171,7 @@ inbox [P]   event_id PK, received_at                                    -- consu
 
 ### 14.7 Security notes
 
-- Avatar uploads are untrusted: type allow-list, size limits, server-side re-encoding, never serve raw bytes, serve from a separate host or signed URLs.
+- Avatar uploads are untrusted: type allow-list, size limits, server-side re-encoding, never serve raw bytes. Serve processed images through an authenticated Profile BFF stream; signed URLs would put a token in a URL (INV-11).
 - Directory visibility respects tenant settings; members never see members of other tenants.
 - Admin edits of other members' profiles require `profile.member.manage` and are audited with a reason.
 - Account deletion requires step-up and SHOULD have a cooling-off period.
@@ -1563,7 +1563,7 @@ var tenant = app.MapGroup("/v1/tenants/{tenantId:guid}")
                 .AddEndpointFilter<TenantGateFilter>();      // MANDATORY for any route with {tenantId}
 
 tenant.MapGet("/members", ListMembers).RequirePermission("profile.member.read");
-tenant.MapPatch("/members/{userId:guid}", UpdateMember).RequirePermission("profile.member.manage");
+tenant.MapPatch("/members", UpdateMember).RequirePermission("profile.member.manage");
 ```
 
 ```csharp
@@ -1969,7 +1969,7 @@ Runtime roles never receive superuser, `BYPASSRLS`, or ownership. Break-glass da
 | PostgreSQL `profile`, `access` | Respective service and worker | RLS; `audit_events` append-only |
 | Valkey | BFFs and PEP caches | Separate key prefixes per app; replication per availability needs |
 | RabbitMQ | Profile, Access | Exchange `excellore.events`; per-service queues and vhosts |
-| Object storage | Profile, Access | Private buckets; keys by tenant and user; signed URLs |
+| Object storage | Profile, Access | Private buckets; Profile avatars use opaque keys and authenticated BFF streams |
 
 ### 27.6 Scaling
 
@@ -2373,6 +2373,8 @@ Verify at adoption and on major upgrades.
 | MediatR, AutoMapper | Commercial in newer versions **(verify)** | Avoid or pin knowingly |
 | Duende IdentityModel / AccessTokenManagement | Check each package | Some Duende products are commercial |
 | SeaweedFS | Apache 2.0 | |
+| AWSSDK.S3 | Apache 2.0 | Profile object-store client |
+| SkiaSharp | MIT | Profile avatar re-encoding; native assets for Windows and Linux |
 | MinIO | AGPL-3.0 | Review AGPL obligations |
 | Zitadel (alternative IdP) | AGPL-3.0 | Relevant if modified and hosted |
 

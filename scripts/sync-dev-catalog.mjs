@@ -24,7 +24,7 @@ const tokenResponse = await fetch(`${issuer}/protocol/openid-connect/token`, {
 });
 assert.equal(tokenResponse.status, 200, 'local catalog machine token');
 const { access_token: token } = await tokenResponse.json();
-for (const app of ['access']) {
+for (const app of ['access', 'profile']) {
   const document = parse(
     await readFile(
       new URL(`../services/${app}/permissions.yaml`, import.meta.url),

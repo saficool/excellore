@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { SharedHeader } from '@excellore/ui';
 import { SessionRequiredError } from '@excellore/auth';
 import { getPageSession } from '../../lib/server';
+import { ProfileDashboard } from './profile-dashboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,13 +32,7 @@ export default async function AccountPage() {
         }}
       />
       <main>
-        <div className="ex-card">
-          <h1 className="text-3xl font-semibold">Signed in</h1>
-          <p className="mt-4">
-            Your server-side session is active. Tenant workspaces will appear
-            when the Access service is available.
-          </p>
-        </div>
+        <ProfileDashboard />
       </main>
     </>
   );

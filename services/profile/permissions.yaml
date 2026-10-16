@@ -1,0 +1,17 @@
+app: profile
+permissions:
+  - {
+      key: profile.app.access,
+      description: Open the Profile app in a tenant,
+      systemRoles: [owner, admin, member, viewer, auditor],
+    }
+  - {
+      key: profile.member.read,
+      description: View the member directory and member profiles,
+      systemRoles: [owner, admin, member, viewer],
+    }
+  - {
+      key: profile.member.manage,
+      description: Edit other members' member profile fields,
+      systemRoles: [owner, admin],
+    }

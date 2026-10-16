@@ -107,7 +107,7 @@ assert.equal(response.headers.get('location'), `${appOrigin}/account`);
 response = await browser.request(`${appOrigin}/account`);
 assert.equal(response.status, 200, 'Signed-in account page unavailable');
 const accountHtml = await response.text();
-assert.match(accountHtml, /Signed in/);
+assert.match(accountHtml, /Loading account|My account/);
 assert.equal(
   /(?:access_token|refresh_token|id_token)/i.test(accountHtml),
   false,
@@ -122,6 +122,66 @@ assert.deepEqual(Object.keys(await response.json()).sort(), [
   'acr',
   'authenticated',
 ]);
+response = await browser.request(`${appOrigin}/api/me/profile`);
+assert.equal(response.status, 200, 'Profile BFF account read failed');
+assert.ok(
+  (await response.json()).userId,
+  'Profile API did not return own user',
+);
+response = await browser.request(`${appOrigin}/api/me/preferences`);
+assert.equal(response.status, 200, 'Profile BFF preferences read failed');
+response = await browser.request(`${appOrigin}/api/me/security`);
+assert.equal(response.status, 200, 'Profile security summary failed');
+response = await browser.request(`${appOrigin}/api/me/sessions`);
+assert.equal(response.status, 200, 'Own Keycloak sessions failed');
+assert.ok(Array.isArray(await response.json()), 'Session list is not an array');
+response = await browser.request(`${appOrigin}/api/avatar`);
+assert.equal(response.status, 404, 'An unset avatar should be hidden');
+response = await browser.request(`${appOrigin}/t/acme`);
+assert.equal(response.status, 200, 'Profile tenant page unavailable');
+response = await browser.request(`${appOrigin}/api/t/acme/members/me`);
+assert.equal(response.status, 200, 'Own tenant member profile unavailable');
+response = await browser.request(`${appOrigin}/api/t/acme/members`);
+assert.equal(response.status, 200, 'Member directory unavailable');
+const avatarBytes = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABHNCSVQICAgIfAhkiAAAAChJREFUSIlj/F8f8J+BhoCJloaPWjBqwagFoxaMWjBqwagFoxZQDwAAVi0C/U9K/LQAAAAASUVORK5CYII=',
+  'base64',
+);
+response = await browser.request(`${appOrigin}/api/me/avatar/uploads`, {
+  method: 'POST',
+  headers: {
+    Origin: appOrigin,
+    'X-Excellore-CSRF': '1',
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    contentType: 'image/png',
+    sizeBytes: avatarBytes.length,
+  }),
+});
+assert.equal(response.status, 200, 'Avatar upload reservation failed');
+const upload = await response.json();
+response = await browser.request(
+  `${appOrigin}/api/me/avatar/uploads/${upload.id}/complete`,
+  {
+    method: 'POST',
+    headers: {
+      Origin: appOrigin,
+      'X-Excellore-CSRF': '1',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ base64Data: avatarBytes.toString('base64') }),
+  },
+);
+assert.equal(response.status, 204, 'Avatar processing failed');
+response = await browser.request(`${appOrigin}/api/avatar`);
+assert.equal(response.status, 200, 'Processed avatar stream failed');
+assert.equal(response.headers.get('content-type'), 'image/webp');
+response = await browser.request(`${appOrigin}/api/me/avatar`, {
+  method: 'DELETE',
+  headers: { Origin: appOrigin, 'X-Excellore-CSRF': '1' },
+});
+assert.equal(response.status, 204, 'Avatar cleanup failed');
 response = await browser.request(`${appOrigin}/auth/logout`, {
   method: 'POST',
   headers: { Origin: appOrigin },
@@ -130,5 +190,5 @@ assert.equal(response.status, 303, 'RP logout failed');
 response = await browser.request(`${appOrigin}/auth/session`);
 assert.deepEqual(await response.json(), { authenticated: false });
 process.stdout.write(
-  'Generated Profile app login, session, CSP, and logout passed.\n',
+  'Profile login, API proxy, tenant page, avatar, session, CSP, and logout passed.\n',
 );
