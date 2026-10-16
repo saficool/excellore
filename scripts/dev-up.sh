@@ -109,7 +109,11 @@ compose=(docker compose --env-file .env -f infra/compose/docker-compose.yml)
 "${compose[@]}" config --quiet
 
 if [ "$mode" = --identity-only ]; then
-  "${compose[@]}" up -d --wait --wait-timeout 300 keycloak valkey
+  if ! "${compose[@]}" up -d --wait --wait-timeout 300 keycloak valkey; then
+    "${compose[@]}" ps --all >&2
+    "${compose[@]}" logs --no-color keycloak keycloak-db valkey >&2
+    exit 1
+  fi
   curl --silent --show-error --fail --max-time 10 \
     http://127.0.0.1:9000/health/ready >/dev/null
   node scripts/sync-dev-access-redirect.mjs
