@@ -7,8 +7,9 @@
 
 WP-14 requires managed PostgreSQL with point-in-time recovery, private Kubernetes networking,
 object storage, secrets management, DNS, and backup drills. The handbook does not select AWS,
-Azure, Google Cloud, or another provider. Selecting one affects cost, security boundaries,
-operating procedures, and public contracts.
+Azure, Google Cloud, or another provider. The owner has deferred that selection; Azure is the
+likely future choice and AWS remains an acceptable alternative. Selecting either affects cost,
+security boundaries, operating procedures, and public contracts.
 
 ## Proposed decision
 
@@ -22,6 +23,9 @@ the chart's private Keycloak HTTP authority is accepted only for its exact clust
 No production or shared environment is created by this ADR. The staging and production roots stay
 incomplete until the provider, region, domains, secret manager, and remote-state backend are
 approved.
+
+Until then, use the local Docker rehearsal to test only portable recovery mechanics. Its evidence
+must identify itself as local and must never be presented as staging or production acceptance.
 
 ## Consequences
 

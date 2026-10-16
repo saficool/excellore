@@ -9,6 +9,7 @@
 | Certificate expiry                                                                                                                                 | [Certificate expiry](certificate-expiry.md)                                       |
 | Application onboarding                                                                                                                             | [Onboard application](onboard-application.md)                                     |
 | Deployment, rollback, restore and rotation drills                                                                                                  | [Production deployment](production-deployment.md)                                 |
+| Local backup, restore, RLS, port-boundary, and credential-rotation rehearsal                                                                       | [Local Docker production rehearsal](local-docker-rehearsal.md)                    |
 
 For every incident, assign an incident commander, preserve restricted evidence, and record only
 opaque resource IDs and trace IDs in general tooling. Hold the post-incident review within five
