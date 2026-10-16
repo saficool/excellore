@@ -336,6 +336,7 @@ test('step-up binds the same subject and account actions are allow-listed', asyn
   const stepUrl = new URL(step.headers.get('location'));
   assert.equal(stepUrl.searchParams.get('acr_values'), '2');
   assert.equal(stepUrl.searchParams.get('prompt'), 'login');
+  assert.equal(stepUrl.searchParams.get('max_age'), '0');
   challenge = stepUrl.searchParams.get('code_challenge');
   nonce = stepUrl.searchParams.get('nonce');
   code = randomBytes(32).toString('base64url');

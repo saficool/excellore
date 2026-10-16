@@ -11,12 +11,15 @@ const env = Object.fromEntries(
     }),
 );
 
-const origin = new URL(env.ACCESS_ORIGIN);
-assert.equal(origin.hostname.endsWith('.localhost'), true);
-assert.equal(origin.pathname, '/');
-assert.equal(origin.search, '');
-assert.equal(origin.hash, '');
-const base = 'http://auth.excellore.localhost:8080';
+for (const name of ['SHELL_ORIGIN', 'PROFILE_ORIGIN', 'ACCESS_ORIGIN']) {
+  const origin = new URL(env[name]);
+  assert.equal(origin.protocol, 'https:');
+  assert.equal(origin.hostname.endsWith('.localhost'), true);
+  assert.equal(origin.pathname, '/');
+  assert.equal(origin.search, '');
+  assert.equal(origin.hash, '');
+}
+const base = env.KEYCLOAK_ADMIN_ORIGIN;
 const login = await fetch(
   `${base}/realms/master/protocol/openid-connect/token`,
   {
@@ -37,26 +40,41 @@ const clientsResponse = await fetch(endpoint, {
   headers: { authorization: `Bearer ${token}` },
 });
 assert.equal(clientsResponse.status, 200, 'local Keycloak client list');
-const client = (await clientsResponse.json()).find(
-  (candidate) => candidate.clientId === 'excellore-access',
-);
-assert.ok(client?.id, 'local Access BFF client');
-const expected = [
-  `${env.ACCESS_ORIGIN}/auth/callback`,
-  `${env.ACCESS_ORIGIN}/invitations/accept`,
-];
-if (JSON.stringify(client.redirectUris) !== JSON.stringify(expected)) {
-  const update = await fetch(`${endpoint}/${client.id}`, {
-    method: 'PUT',
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({ ...client, redirectUris: expected }),
-  });
-  assert.equal(update.status, 204, 'local Access redirect update');
+const clients = await clientsResponse.json();
+for (const app of ['shell', 'profile', 'access']) {
+  const client = clients.find(
+    (candidate) => candidate.clientId === `excellore-${app}`,
+  );
+  assert.ok(client?.id, `local ${app} BFF client`);
+  const origin = env[`${app.toUpperCase()}_ORIGIN`];
+  const expected = [
+    `${origin}/auth/callback`,
+    ...(app === 'access' ? [`${origin}/invitations/accept`] : []),
+  ];
+  const attributes = {
+    ...client.attributes,
+    'post.logout.redirect.uris': `${origin}/`,
+    'backchannel.logout.url': `${origin}/auth/backchannel-logout`,
+  };
+  if (
+    JSON.stringify(client.redirectUris) !== JSON.stringify(expected) ||
+    client.attributes?.['post.logout.redirect.uris'] !==
+      attributes['post.logout.redirect.uris'] ||
+    client.attributes?.['backchannel.logout.url'] !==
+      attributes['backchannel.logout.url']
+  ) {
+    const update = await fetch(`${endpoint}/${client.id}`, {
+      method: 'PUT',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ ...client, redirectUris: expected, attributes }),
+    });
+    assert.equal(update.status, 204, `local ${app} redirect update`);
+  }
 }
-console.log('Local Access invitation redirect matches the generated realm.');
+console.log('Local BFF redirects match the generated realm.');
 
 // Realm import does not modify an already imported development realm. Reconcile
 // the Access BFF's dedicated machine identity without resetting local users.
@@ -244,3 +262,35 @@ for (const candidate of (
   }
 }
 console.log('Local client access tokens include the standard subject scope.');
+
+const authentication = `${base}/admin/realms/excellore/authentication`;
+const executionResponse = await fetch(
+  `${authentication}/flows/${encodeURIComponent('excellore-level-2')}/executions`,
+  { headers: { authorization: `Bearer ${token}` } },
+);
+assert.equal(executionResponse.status, 200, 'local level 2 flow');
+const condition = (await executionResponse.json()).find(
+  (item) => item.providerId === 'conditional-level-of-authentication',
+);
+assert.ok(condition?.authenticationConfig, 'local level 2 condition');
+const conditionEndpoint = `${authentication}/config/${condition.authenticationConfig}`;
+const conditionResponse = await fetch(conditionEndpoint, {
+  headers: { authorization: `Bearer ${token}` },
+});
+assert.equal(conditionResponse.status, 200, 'local level 2 configuration');
+const conditionConfig = await conditionResponse.json();
+if (conditionConfig.config?.['loa-max-age'] !== '36000') {
+  const updated = await fetch(conditionEndpoint, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...conditionConfig,
+      config: { ...conditionConfig.config, 'loa-max-age': '36000' },
+    }),
+  });
+  assert.equal(updated.status, 204, 'local level 2 configuration update');
+}
+console.log('Local MFA SSO freshness matches the generated realm.');

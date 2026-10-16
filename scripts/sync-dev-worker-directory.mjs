@@ -11,7 +11,7 @@ const env = Object.fromEntries(
       line.slice(line.indexOf('=') + 1),
     ]),
 );
-const base = 'http://auth.excellore.localhost:8080';
+const base = env.KEYCLOAK_ADMIN_ORIGIN;
 const login = await fetch(
   `${base}/realms/master/protocol/openid-connect/token`,
   {

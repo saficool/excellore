@@ -7,6 +7,9 @@ Install Docker Desktop and start its engine. On Windows, run these commands in G
 ```sh
 bash scripts/dev-up.sh
 bash scripts/check-dev-stack.sh
+mkcert -install
+pnpm local:https:setup
+pnpm local:web
 ```
 
 The first run creates an ignored `.env` with random local credentials and an ignored SeaweedFS S3 configuration. Keep both local. The script starts Keycloak, its PostgreSQL database, separate Access and Profile PostgreSQL databases, Valkey, RabbitMQ, SeaweedFS, and Mailpit. It also creates the `<app>_migrator`, `<app>_app`, and `<app>_publisher` roles in each service database. Re-running is safe. The app and publisher roles own no objects and cannot bypass RLS (INV-03). Migrations start in later work packages.
@@ -26,7 +29,8 @@ The endpoints bind to `127.0.0.1` only:
 
 | Service               | Local endpoint                              |
 | --------------------- | ------------------------------------------- |
-| Keycloak              | `http://auth.excellore.localhost:8080`      |
+| Keycloak (browser)    | `https://auth.excellore.localhost`          |
+| Keycloak (host admin) | `http://auth.excellore.localhost:8080`      |
 | Keycloak readiness    | `http://127.0.0.1:9000/health/ready`        |
 | Access PostgreSQL     | `127.0.0.1:5434`                            |
 | Profile PostgreSQL    | `127.0.0.1:5433`                            |
@@ -43,7 +47,7 @@ The Keycloak bootstrap admin username is `admin`; its password is in your local 
 
 ```powershell
 Resolve-DnsName auth.excellore.localhost -Type A
-curl.exe --fail --silent --show-error --output NUL --write-out '%{http_code}' http://auth.excellore.localhost:8080/realms/master/.well-known/openid-configuration
+curl.exe --fail --silent --show-error --output NUL --write-out '%{http_code}' https://auth.excellore.localhost/realms/master/.well-known/openid-configuration
 ```
 
 If the name does not resolve on your machine, add this line to the Windows hosts file (`C:\Windows\System32\drivers\etc\hosts`, edit as Administrator), or `/etc/hosts` on Linux or macOS:
@@ -52,18 +56,24 @@ If the name does not resolve on your machine, add this line to the Windows hosts
 127.0.0.1  excellore.localhost  profile.excellore.localhost  access.excellore.localhost  auth.excellore.localhost
 ```
 
-## Local HTTPS for later browser flows
+## Local HTTPS for browser flows
 
-WP-01 serves Keycloak over HTTP. No certificate is needed to start or verify this stack. Before testing `__Host-` cookies and OIDC browser flows in WP-02/WP-04, install [mkcert](https://github.com/FiloSottile/mkcert#installation) and generate a certificate:
+Install [mkcert](https://github.com/FiloSottile/mkcert#installation), then trust its machine-local CA once:
 
 ```sh
 mkcert -install
-mkdir -p .local/certs
-mkcert -cert-file .local/certs/excellore.pem -key-file .local/certs/excellore-key.pem \
-  excellore.localhost profile.excellore.localhost access.excellore.localhost auth.excellore.localhost
+pnpm local:https:setup
 ```
 
-The certificates stay in ignored `.local/certs`. `mkcert -install` adds a local CA to your machine's trust store; keep its private CA key on your machine and never commit or share it. The certificate does not turn on HTTPS by itself. Connect it to a local HTTPS proxy when the browser flows are built, then register the exact HTTPS redirect URLs in the development realm. Node.js does not automatically trust the system CA; set `NODE_EXTRA_CA_CERTS` to the `rootCA.pem` file reported by `mkcert -CAROOT` when a Node process calls a locally secured endpoint.
+The setup command creates an ignored certificate for all four Excellore hostnames, switches the ignored local configuration to HTTPS, prepares every BFF, updates Keycloak when Docker is running, and reconciles the existing realm's redirect and logout URLs. It never prints credentials. The certificate and private key remain in ignored `.local/certs`; keep the mkcert private CA key on this machine and never commit or share it.
+
+Start the HTTPS gateway and all three Next.js apps in one terminal:
+
+```sh
+pnpm local:web
+```
+
+The gateway binds only to `127.0.0.1:443`, accepts only the four exact local hostnames, replaces forwarded headers, and proxies to the loopback-only HTTP development ports. It supports Next.js hot reload. Keycloak reuses the active MFA SSO session when moving between apps; an explicit privileged step-up still forces fresh authentication. Node acceptance scripts need the local CA explicitly; run them through `node scripts/with-local-ca.mjs <script>`.
 
 ## Stop
 
@@ -75,16 +85,15 @@ This keeps named database and broker volumes. Removing those volumes deletes loc
 
 ## Profile BFF login (WP-04)
 
-After `scripts/dev-up.sh`, run from the repository root:
+After `scripts/dev-up.sh`, `pnpm local:https:setup`, and `pnpm local:web`, open the Profile app:
 
 ```sh
-node scripts/setup-next-local.mjs profile
-pnpm --filter @excellore/profile dev
+start https://profile.excellore.localhost/account
 ```
 
-Open `http://profile.excellore.localhost:3001`, choose **Sign in**, and use the local `olivia.owner` account. Its password is `DEV_USER_PASSWORD` in ignored `.env`; the current OTP comes from the `DEV_OTP_SECRET` seed. The login completes at `/account`. The browser receives an opaque `excellore-dev-profile` cookie; tokens stay in Valkey. The local HTTP cookie name and insecure OIDC transport work only with `EXCELLORE_INSECURE_LOCAL_DEV=true`. Production requires HTTPS and a `__Host-` cookie.
+Choose **Sign in** and use the local `olivia.owner` account. Its password is `DEV_USER_PASSWORD` in ignored `.env`; the current OTP comes from the `DEV_OTP_SECRET` seed. The login completes at `/account`. The browser receives an opaque secure session cookie; tokens stay in Valkey.
 
-For WP-05 Access database work, run `bash scripts/migrate-access.sh` after `scripts/dev-up.sh`. It applies the reviewed schema, registers the Access and Profile apps, installs the membership index trigger, installs the append-only audit guard and custom-role archive column, and grants `access_publisher` only outbox read and publication-state update rights; reruns are safe. Run it before starting an updated Access API, because role reads use the archive column. Configure the Access API with `Auth__Authority`, `ConnectionStrings__Access` (the `access_app` connection), and `EXCELLORE_INSECURE_LOCAL_DEV=true` for this HTTP-only local stack. A catalog deployment uses a `svc-catalog-sync` machine token with the `api-access` audience and `access.catalog.sync` client role; never use a browser token. The three internal authorization and tenant lookup routes require a `svc-*-authz` machine token with the `access.authz.resolve` role.
+For WP-05 Access database work, run `bash scripts/migrate-access.sh` after `scripts/dev-up.sh`. It applies the reviewed schema, registers the Access and Profile apps, installs the membership index trigger, installs the append-only audit guard and custom-role archive column, and grants `access_publisher` only outbox read and publication-state update rights; reruns are safe. Run it before starting an updated Access API, because role reads use the archive column. Configure the Access API with `Auth__Authority` and `ConnectionStrings__Access` (the `access_app` connection). A catalog deployment uses a `svc-catalog-sync` machine token with the `api-access` audience and `access.catalog.sync` client role; never use a browser token. The three internal authorization and tenant lookup routes require a `svc-*-authz` machine token with the `access.authz.resolve` role.
 
 The Access outbox worker requires `ConnectionStrings__AccessPublisher` for the `access_publisher` login and `Messaging__RabbitMqUri` for RabbitMQ. Use the generated credentials in ignored `.env` and keep them out of command arguments and logs. The worker retries pending events until the broker confirms routing to a bound consumer queue. The current local stack does not provision a consumer queue for `access.authz.changed.v1`; that event stays pending until a consumer starts. The disposable integration test verifies publication and retry without changing the local databases.
 
@@ -106,16 +115,15 @@ The generated tenant route and API proxy call the Access authority. The Access r
 
 ## Shell app (WP-07)
 
-Start the migrated Access API on `http://localhost:5002` and the local stack, then prepare Shell's ignored configuration and run it:
+Start the migrated Access API on `http://localhost:5002`, then run the shared web command:
 
 ```sh
-node scripts/setup-next-local.mjs shell
-pnpm --filter @excellore/shell dev
+pnpm local:web
 ```
 
-Open `http://excellore.localhost:3000`. Shell signs in through Keycloak and stores its tokens in Valkey. `/` lists active memberships from Access; one membership redirects to `/t/{slug}`. The launcher shows only enabled apps backed by the member's app-access permission. The Shell's pending invitation banner reads Access's machine-protected internal contract. Its acceptance link opens the Access acceptance page delivered in WP-08; the one-time code is never in the link. Sign out from the shared header invalidates all BFF sessions through the shared Valkey marker and ends the Keycloak SSO session; verified backchannel logout remains active. A browser's last-used tenant preference is checked against the fresh tenant list before redirecting.
+Open `https://excellore.localhost`. Shell signs in through Keycloak and stores its tokens in Valkey. `/` lists active memberships from Access; one membership redirects to `/t/{slug}`. The launcher shows only enabled apps backed by the member's app-access permission. The Shell's pending invitation banner reads Access's machine-protected internal contract. Its acceptance link opens the Access acceptance page delivered in WP-08; the one-time code is never in the link. Sign out from the shared header invalidates all BFF sessions through the shared Valkey marker and ends the Keycloak SSO session; verified backchannel logout remains active. A browser's last-used tenant preference is checked against the fresh tenant list before redirecting.
 
-For the automated Shell UI smoke test, leave port 5002 free and start both Shell and Profile BFFs. Run `node scripts/check-shell-login.mjs`. The script uses local Keycloak and Valkey, serves a temporary Access contract stub on port 5002, and checks sign-in, tenant and app visibility, single-tenant redirect, unknown tenant handling, and cross-app sign-out. It prints no credentials.
+For the automated Shell UI smoke test, leave port 5002 free and run `node scripts/with-local-ca.mjs scripts/check-shell-login.mjs`. The script uses local Keycloak and Valkey, serves a temporary Access contract stub on port 5002, and checks sign-in, tenant and app visibility, single-tenant redirect, unknown tenant handling, and cross-app sign-out. It prints no credentials.
 
 ## Access tenant console (WP-08)
 
@@ -125,17 +133,16 @@ After `scripts/dev-up.sh` and the Access migrations, use separate terminals from
 pnpm exec node scripts/run-access-local.mjs
 pnpm exec node scripts/sync-dev-catalog.mjs
 pnpm exec node scripts/seed-dev-access.mjs
-pnpm exec node scripts/setup-next-local.mjs access
-pnpm --filter @excellore/access dev
+pnpm local:web
 ```
 
-Run the first command before catalog sync and seed; leave it running. The seed uses local Keycloak users and Mailpit to activate the `acme` owner through the Access API. It is safe to rerun when the owner is already active. No invitation code or token is printed. Open `http://access.excellore.localhost:3002/t/acme/my-access` and sign in as the development `olivia.owner` user. The password is `DEV_USER_PASSWORD` in ignored `.env`; the OTP is generated from `DEV_OTP_SECRET` (the ignored `.local/show-dev-otp.mjs` helper can display the current code). The browser holds only the opaque Access session cookie.
+Run the first command before catalog sync and seed; leave it running. The seed uses local Keycloak users and Mailpit to activate the `acme` owner through the Access API. It is safe to rerun when the owner is already active. No invitation code or token is printed. Open `https://access.excellore.localhost/t/acme/my-access` and sign in as the development `olivia.owner` user. The password is `DEV_USER_PASSWORD` in ignored `.env`; the OTP is generated from `DEV_OTP_SECRET` (the ignored `.local/show-dev-otp.mjs` helper can display the current code). The browser holds only the opaque Access session cookie.
 
-With the API and BFF running, `pnpm exec node scripts/check-access-console.mjs` verifies real login, tenant isolation, read proxies, CSRF rejection, and that no tokens are rendered in the page. On its first run it invites the local `nora.nomember` identity, reads the one-time code from Mailpit without printing it, accepts the invitation, then checks custom role creation, assignment, and permission changes in the same browser session. It revokes the test assignment and deletes the test role; Nora remains a member for repeat runs. The Assignments read requires MFA because `access.assignment.manage` is privileged. The local Access BFF has its own `svc-access-authz` machine client; `scripts/dev-up.sh` reconciles it and Keycloak's `basic` subject scope for existing development realms.
+With the API and BFF running, `node scripts/with-local-ca.mjs scripts/check-access-console.mjs` verifies real login, tenant isolation, read proxies, CSRF rejection, and that no tokens are rendered in the page. On its first run it invites the local `nora.nomember` identity, reads the one-time code from Mailpit without printing it, accepts the invitation, then checks custom role creation, assignment, and permission changes in the same browser session. It revokes the test assignment and deletes the test role; Nora remains a member for repeat runs. The Assignments read requires MFA because `access.assignment.manage` is privileged. The local Access BFF has its own `svc-access-authz` machine client; `scripts/dev-up.sh` reconciles it and Keycloak's `basic` subject scope for existing development realms.
 
 ## Platform console (WP-11)
 
-With the Access API and BFF running as above, open `http://access.excellore.localhost:3002/platform` and sign in as the local `penny.platform` fixture. Use `DEV_USER_PASSWORD` and the OTP helper described above. The console lists tenant metadata, app status, numeric feature limits, permission catalog, system roles, and the code-owned staff roster. The operator can create or edit a tenant, suspend or reactivate it, enable or disable non-core apps, change numeric feature limits, and request deletion with a reason code. The owner invitation is delivered through local Mailpit. `sam.support` can request an owner-approved, time-boxed read-only support grant; `sec.platform` can suspend a tenant. The auditor view is restricted to `platform-auditor` or `platform-admin` roles. These assignments are development fixtures from `infra/keycloak/platform-staff.yaml`, validated by CI. No emergency user sign-out or disable control is exposed pending an INV-11-compliant Keycloak design.
+With the Access API and BFF running as above, open `https://access.excellore.localhost/platform` and sign in as the local `penny.platform` fixture. Use `DEV_USER_PASSWORD` and the OTP helper described above. The console lists tenant metadata, app status, numeric feature limits, permission catalog, system roles, and the code-owned staff roster. The operator can create or edit a tenant, suspend or reactivate it, enable or disable non-core apps, change numeric feature limits, and request deletion with a reason code. The owner invitation is delivered through local Mailpit. `sam.support` can request an owner-approved, time-boxed read-only support grant; `sec.platform` can suspend a tenant. The auditor view is restricted to `platform-auditor` or `platform-admin` roles. These assignments are development fixtures from `infra/keycloak/platform-staff.yaml`, validated by CI. No emergency user sign-out or disable control is exposed pending an INV-11-compliant Keycloak design.
 
 The automated `PlatformTenantApiTests` use disposable PostgreSQL to exercise role gates, RLS, app authorization invalidation, lifecycle, and audit. The shared BFF tests verify the platform proxy keeps access tokens server-side and enforces CSRF. With the local stack running, `node scripts/check-platform-console.mjs` verifies a real operator login, platform page, role gate, metadata read, and CSRF rejection without printing credentials. No manual test is required for WP-11 verification.
 
@@ -147,11 +154,10 @@ Start the local stack and Access API, then run from the repository root:
 bash scripts/migrate-profile.sh
 pnpm exec node scripts/sync-dev-catalog.mjs
 pnpm exec node scripts/run-profile-local.mjs
-pnpm exec node scripts/setup-next-local.mjs profile
-pnpm --filter @excellore/profile dev
+pnpm local:web
 ```
 
-Leave the Profile API and BFF commands running in separate terminals. Open `http://profile.excellore.localhost:3001/account` and sign in with the local development user. Account details, preferences, Keycloak security actions, sessions, avatar, export request, and deletion request are available there. Personal-data export requests remain pending until the complete cross-service flow in WP-12. The tenant page at `/t/acme` offers the member profile and active visible directory; the Access seed must have activated the `acme` tenant and owner first. Admin edits require `profile.member.manage` and a reason. The browser resizes supported avatar images up to 10 MB to a 512-pixel WebP before upload; the API still validates the upload against its 700 KB limit and re-encodes it before object storage. Upload progress and validation errors appear in the Avatar card. Processed images are served through the authenticated `/api/avatar` BFF route. The browser receives no object-store credential or token.
+Leave the Profile API and shared web command running in separate terminals. Open `https://profile.excellore.localhost/account` and sign in with the local development user. Account details, preferences, Keycloak security actions, sessions, avatar, export request, and deletion request are available there. Personal-data export requests remain pending until the complete cross-service flow in WP-12. The tenant page at `/t/acme` offers the member profile and active visible directory; the Access seed must have activated the `acme` tenant and owner first. Admin edits require `profile.member.manage` and a reason. The browser resizes supported avatar images up to 10 MB to a 512-pixel WebP before upload; the API still validates the upload against its 700 KB limit and re-encodes it before object storage. Upload progress and validation errors appear in the Avatar card. Processed images are served through the authenticated `/api/avatar` BFF route. The browser receives no object-store credential or token.
 
 Profile API configuration is loaded by `scripts/run-profile-local.mjs` from ignored local credentials. Its `api-profile` bearer token gate uses `svc-profile-authz` to resolve tenant permissions in Access and consumes Access invalidation events through RabbitMQ. Run `dotnet test services/profile/Excellore.Profile.Tests` for the disposable PostgreSQL isolation, outbox, and avatar processing tests.
-With the Profile API and BFF running, `pnpm exec node scripts/check-profile-login.mjs` exercises OIDC login, authenticated Profile reads, tenant membership and directory, avatar processing and cleanup, CSP, and logout. It uses the ignored local development account and prints no credentials.
+With the Profile API and BFF running, `node scripts/with-local-ca.mjs scripts/check-profile-login.mjs` exercises OIDC login, authenticated Profile reads, tenant membership and directory, avatar processing and cleanup, CSP, and logout. It uses the ignored local development account and prints no credentials.

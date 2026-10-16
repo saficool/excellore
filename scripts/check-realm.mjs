@@ -12,12 +12,12 @@ const env = Object.fromEntries(
       return [line.slice(0, separator), line.slice(separator + 1)];
     }),
 );
-const issuer = 'http://auth.excellore.localhost:8080/realms/excellore';
-const adminBase = 'http://auth.excellore.localhost:8080/admin/realms/excellore';
+const issuer = `${env.KEYCLOAK_ORIGIN}/realms/excellore`;
+const adminBase = `${env.KEYCLOAK_ADMIN_ORIGIN}/admin/realms/excellore`;
 
 async function token(form, realm = 'excellore') {
   const response = await fetch(
-    `http://auth.excellore.localhost:8080/realms/${realm}/protocol/openid-connect/token`,
+    `${env.KEYCLOAK_ADMIN_ORIGIN}/realms/${realm}/protocol/openid-connect/token`,
     {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -58,6 +58,7 @@ assert.deepEqual(realm.eventsListeners ?? [], []);
 assert.equal(realm.registrationAllowed, false);
 assert.equal(realm.accessTokenLifespan, 300);
 assert.equal(realm.ssoSessionIdleTimeout, 1800);
+assert.equal(realm.ssoSessionMaxLifespan, 36000);
 assert.equal(realm.revokeRefreshToken, true);
 assert.equal(realm.refreshTokenMaxReuse, 0);
 assert.equal(realm.bruteForceProtected, true);
@@ -67,6 +68,18 @@ assert.ok(realm.passwordPolicy.includes('length(12)'));
 assert.ok(
   realm.passwordPolicy.includes('passwordBlacklist(excellore-common.txt)'),
 );
+const levelTwoExecutions = await adminGet(
+  `/authentication/flows/${encodeURIComponent('excellore-level-2')}/executions`,
+);
+const levelTwoCondition = levelTwoExecutions.find(
+  (item) => item.providerId === 'conditional-level-of-authentication',
+);
+assert.ok(levelTwoCondition?.authenticationConfig, 'level 2 condition');
+const levelTwoConfig = await adminGet(
+  `/authentication/config/${levelTwoCondition.authenticationConfig}`,
+);
+assert.equal(levelTwoConfig.config['loa-condition-level'], '2');
+assert.equal(levelTwoConfig.config['loa-max-age'], '36000');
 
 const clients = await adminGet('/clients');
 const clientScopes = await adminGet('/client-scopes');

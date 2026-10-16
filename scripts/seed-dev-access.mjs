@@ -31,7 +31,7 @@ assert.ok(
     env.DEV_OTP_SECRET &&
     env.ACCESS_BFF_SECRET,
 );
-const issuer = 'http://auth.excellore.localhost:8080/realms/excellore';
+const issuer = `${env.KEYCLOAK_ORIGIN}/realms/excellore`;
 const callback = `${env.ACCESS_ORIGIN}/auth/callback`;
 const api = 'http://127.0.0.1:5002';
 

@@ -163,6 +163,7 @@ export function createAuthHandlers(
       return beginAuthorization(returnTo, session.sub, {
         acr_values: '2',
         prompt: 'login',
+        max_age: '0',
       });
     },
 

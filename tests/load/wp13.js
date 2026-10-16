@@ -1,9 +1,9 @@
 import http from 'k6/http';
 import { check } from 'k6';
 
-const shell = __ENV.SHELL_URL || 'http://shell.excellore.localhost:3000';
+const shell = __ENV.SHELL_URL || 'https://excellore.localhost';
 const access = __ENV.ACCESS_API_URL || 'http://127.0.0.1:5002';
-const profile = __ENV.PROFILE_URL || 'http://profile.excellore.localhost:3001';
+const profile = __ENV.PROFILE_URL || 'https://profile.excellore.localhost';
 const token = __ENV.ACCESS_TOKEN || 'load-test-token';
 const cookie = __ENV.SESSION_COOKIE || 'load-test-session';
 const userId = __ENV.USER_ID || '11111111-1111-4111-8111-111111111111';

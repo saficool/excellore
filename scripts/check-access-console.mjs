@@ -13,7 +13,7 @@ const env = Object.fromEntries(
 );
 const origin = env.ACCESS_ORIGIN;
 assert.ok(
-  origin?.endsWith('.localhost:3002') &&
+  new URL(origin).hostname.endsWith('.localhost') &&
     env.DEV_USER_PASSWORD &&
     env.DEV_OTP_SECRET,
 );

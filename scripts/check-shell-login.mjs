@@ -131,9 +131,7 @@ let response = await browser.request(`${appOrigin}/auth/login?returnTo=%2F`);
 assert.equal(response.status, 302, 'Generated app did not start OIDC login');
 const loginUrl = response.headers.get('location');
 assert.ok(
-  loginUrl?.startsWith(
-    'http://auth.excellore.localhost:8080/realms/excellore/',
-  ),
+  loginUrl?.startsWith(`${env.KEYCLOAK_ORIGIN}/realms/excellore/`),
   'Unexpected login destination',
 );
 response = await browser.request(loginUrl);

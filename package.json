@@ -8,7 +8,7 @@
   "scripts": {
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "turbo run test",
+    "test": "turbo run test && node --test scripts/local-https-proxy.test.mjs",
     "contracts:check": "node scripts/check-event-schemas.mjs",
     "permissions:check": "node scripts/check-permissions.mjs",
     "permissions:test": "node --test scripts/check-permissions.test.mjs",
@@ -16,6 +16,9 @@
     "observability:check": "node scripts/check-observability.mjs",
     "infra:check": "node scripts/check-production-manifests.mjs",
     "wp14:rehearse-local": "node scripts/run-local-rehearsal.mjs",
+    "local:https:setup": "node scripts/setup-local-https.mjs",
+    "local:web": "node scripts/run-web-local.mjs",
+    "local:https:test": "node --test scripts/local-https-proxy.test.mjs",
     "format:check": "prettier --check \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"infra/observability/**/*.{json,yml}\" \"infra/security/*.json\" \"infra/k8s/excellore/{Chart,values}.yaml\" \"tests/load/*.{js,md}\" \"*.{json,mjs,yaml}\"",
     "format": "prettier --write \"{apps,packages}/**/*.{ts,tsx,js,mjs,json,css,md}\" \"scripts/**/*.{mjs,json,md}\" \"shared/dotnet/Excellore.Contracts/{Schemas,Examples}/*.json\" \"infra/observability/**/*.{json,yml}\" \"infra/security/*.json\" \"infra/k8s/excellore/{Chart,values}.yaml\" \"tests/load/*.{js,md}\" \"*.{json,mjs,yaml}\""
   },

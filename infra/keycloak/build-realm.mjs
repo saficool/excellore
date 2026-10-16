@@ -273,7 +273,7 @@ const realm = {
     },
     {
       alias: 'excellore-loa-2',
-      config: { 'loa-condition-level': '2', 'loa-max-age': '0' },
+      config: { 'loa-condition-level': '2', 'loa-max-age': '36000' },
     },
   ],
   authenticationFlows: [

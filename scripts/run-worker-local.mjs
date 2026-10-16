@@ -38,7 +38,7 @@ const workerEnv = {
   ...process.env,
   DOTNET_ENVIRONMENT: 'Development',
   EXCELLORE_INSECURE_LOCAL_DEV: 'true',
-  Auth__Authority: 'http://auth.excellore.localhost:8080/realms/excellore',
+  Auth__Authority: `${env.KEYCLOAK_ORIGIN}/realms/excellore`,
   IdentityDirectory__ClientSecret: env[`WORKER_${prefix}_SECRET`],
   Messaging__RabbitMqUri: broker.toString(),
   [`ConnectionStrings__${service === 'access' ? 'Access' : 'Profile'}Publisher`]:

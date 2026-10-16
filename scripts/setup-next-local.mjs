@@ -29,7 +29,7 @@ try {
 }
 key ??= randomBytes(32).toString('base64url');
 const values = {
-  OIDC_ISSUER: 'http://auth.excellore.localhost:8080/realms/excellore',
+  OIDC_ISSUER: `${env.KEYCLOAK_ORIGIN}/realms/excellore`,
   OIDC_CLIENT_ID: `excellore-${app}`,
   OIDC_CLIENT_SECRET: env[`${upper}_BFF_SECRET`],
   OIDC_SCOPES:

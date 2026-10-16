@@ -16,7 +16,7 @@ const env = Object.fromEntries(
     }),
 );
 
-const baseUrl = 'http://auth.excellore.localhost:8080';
+const baseUrl = env.KEYCLOAK_ADMIN_ORIGIN;
 const tokenResponse = await fetch(
   `${baseUrl}/realms/master/protocol/openid-connect/token`,
   {

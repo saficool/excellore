@@ -28,7 +28,9 @@ services:
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run scripts/dev-up.sh first}
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Run scripts/dev-up.sh first}
-      KC_HOSTNAME: http://auth.excellore.localhost:8080
+      KC_HOSTNAME: ${KEYCLOAK_ORIGIN:?Run scripts/setup-local-https.mjs first}
+      KC_HTTP_ENABLED: 'true'
+      KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: 'true'
       SHELL_ORIGIN: ${SHELL_ORIGIN:?Run scripts/dev-up.sh first}
       PROFILE_ORIGIN: ${PROFILE_ORIGIN:?Run scripts/dev-up.sh first}

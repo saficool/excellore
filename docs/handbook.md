@@ -889,7 +889,7 @@ No tenant or business attributes in Keycloak.
 ### 10.7 Authentication flows
 
 - Browser flow: username and password, then required second factor (OTP or WebAuthn). Passkeys preferred **(verify maturity)**.
-- **Step-up:** define authentication levels and map them with ACR-to-LoA (level 1 password, level 2 password plus recent MFA). Privileged operations require level 2 ([11.6](#116-step-up-authentication)) **(verify configuration)**.
+- **Step-up:** define authentication levels and map them with ACR-to-LoA (level 1 password, level 2 password plus MFA). A level 2 result remains valid for the SSO session so another app opens without a prompt. Privileged step-up requests use `prompt=login`, `acr_values=2`, and `max_age=0` to force fresh authentication. Privileged operations require level 2 ([11.6](#116-step-up-authentication)) **(verify configuration)**.
 - Disable what is unused: direct grant, identity brokering, registration (until Q-01 says otherwise).
 
 ### 10.8 Invitations and onboarding
@@ -2210,7 +2210,7 @@ A bootstrap script creates the `<app>_migrator` and `<app>_app` roles in each se
 127.0.0.1  excellore.localhost  profile.excellore.localhost  access.excellore.localhost  auth.excellore.localhost
 ```
 
-Register matching redirect URIs in the dev realm. `__Host-` cookies need `Secure`: use a local certificate (mkcert) or a dev-only cookie name, never in production.
+Register matching HTTPS redirect URIs in the dev realm. The local loopback gateway terminates an mkcert certificate for all four hostnames and forwards only to loopback development ports. `__Host-` cookies require `Secure`; a dev-only cookie name remains allowed only in local development.
 
 ### 32.3 Seed data
 

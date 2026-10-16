@@ -243,7 +243,7 @@ function Members({
             <ReasonField value={reason} onChange={setReason} />
           )}
           <div className="access-table-wrap">
-            <table>
+            <table className="access-member-table">
               <thead>
                 <tr>
                   <th>Name</th>
@@ -265,19 +265,19 @@ function Members({
                   )
                   .map((member) => (
                     <tr key={member.membershipId}>
-                      <td>
+                      <td data-label="Name">
                         {[member.givenName, member.familyName]
                           .filter(Boolean)
                           .join(' ') || '—'}
                       </td>
-                      <td>{member.email}</td>
-                      <td>{member.status}</td>
-                      <td>
+                      <td data-label="Email">{member.email}</td>
+                      <td data-label="Status">{member.status}</td>
+                      <td data-label="Joined">
                         {member.joinedAt
                           ? new Date(member.joinedAt).toLocaleDateString()
                           : '—'}
                       </td>
-                      <td className="access-actions">
+                      <td className="access-actions" data-label="Actions">
                         <button onClick={() => setSelectedMember(member)}>
                           Details
                         </button>

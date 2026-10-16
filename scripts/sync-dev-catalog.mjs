@@ -11,7 +11,7 @@ const env = Object.fromEntries(
       line.slice(line.indexOf('=') + 1),
     ]),
 );
-const issuer = 'http://auth.excellore.localhost:8080/realms/excellore';
+const issuer = `${env.KEYCLOAK_ORIGIN}/realms/excellore`;
 const api = 'http://127.0.0.1:5002';
 const tokenResponse = await fetch(`${issuer}/protocol/openid-connect/token`, {
   method: 'POST',
