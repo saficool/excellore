@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.8 |
+| **Document version** | 5.10 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,8 @@
 
 | Version | Summary |
 |---|---|
+| 5.10 | WP-12 personal-data exports exclude restricted audit originals because they can contain other people's data. Live account, preference, membership, and user-linked service data remain in scope (ADR-0070 proposed). |
+| 5.9 | WP-12 owner-requested tenant exports are limited to one request per tenant per UTC calendar day, enforced in the tenant database (ADR-0069 proposed). |
 | 5.8 | WP-12 tenant deletion retains audit history in restricted, forced-RLS archives and opaque tombstones; active tenant rows and objects are erased only after service confirmations (ADR-0067 proposed). Profile outbox now carries nullable tenant routing metadata for erasure confirmations. Keycloak user deletion remains deferred under INV-11; restricted hash-chained audit originals are preserved with an appended erasure marker (ADR-0068 proposed). |
 | 5.7 | WP-11 app enablement uses a transaction-local tenant context for only the app metadata row, with forced RLS and dual-scope audit (ADR-0066 proposed). Keycloak emergency user actions are deferred under INV-11. |
 | 5.6 | WP-10 adds bounded, owner-approved bulk role assignment jobs with per-target worker rechecks, tenant RLS, and aggregate progress (ADR-0065 proposed). |
@@ -1210,7 +1212,7 @@ Two faces and one authority:
 | **Audit log** (`access.audit.read`) | Tenant audit, search, export |
 | **Settings** (`access.settings.read`, `access.settings.manage`) | Tenant name, slug, security options |
 | **Support grants** (`access.supportgrant.manage`) | See and revoke platform support access |
-| **Ownership and deletion** (`access.tenant.transfer`, `access.tenant.delete`) | Transfer ownership, request tenant deletion (step-up) |
+| **Ownership, export, and deletion** (`access.tenant.transfer`, `access.tenant.export`, `access.tenant.delete`) | Transfer ownership, request tenant export or deletion (step-up) |
 | **Access reviews** (`access.review.manage`) | Periodic recertification (later phase) |
 
 **Platform console** (`/platform/…`, platform roles from the `platform_roles` claim)
@@ -1747,7 +1749,9 @@ Prefer events and local read models. If unavoidable, use token exchange (RFC 869
 
 **User erasure**: every service removes global application data and **anonymizes** live user references inside tenant data that must be kept (for example `created_by` becomes a tombstone ID), then confirms. Restricted hash-chained audit originals are preserved with an appended erasure marker (ADR-0068). Keycloak identity deletion is deferred under INV-11 because its Admin API puts the user ID in a server-to-server URL. Until an approved design deletes the Keycloak identity, the overall deletion request remains pending and `identity.user.deleted.v1` MUST NOT be published.
 
-**Tenant export:** a tenant owner can request an export of tenant data (Access exports its data; other services contribute through events). Frequency limited per plan.
+**Personal-data export:** includes the requester's live global account, preferences, memberships, tenant profile fields, and other user-linked application data. Restricted audit originals are excluded because a single record can contain personal data about other people. Their disclosure and redaction policy remains a compliance decision; the export must not expose the restricted archive through the application path (ADR-0070 proposed).
+
+**Tenant export:** a tenant owner with recent MFA can request an export of tenant data (Access exports its data; other services contribute through events). The first-release limit is **one request per tenant per UTC calendar day**, enforced by a database uniqueness constraint, independent of plan (ADR-0069 proposed). A request records a pending job; authenticated download is available only after all service contributions are ready.
 
 ---
 
@@ -2997,6 +3001,7 @@ permissions:
   - { key: access.supportgrant.manage, description: Approve and revoke platform support access,  privileged: true, ownerOnly: true, systemRoles: [owner] }
   - { key: access.tenant.transfer,     description: Transfer tenant ownership,                   privileged: true, ownerOnly: true, systemRoles: [owner] }
   - { key: access.tenant.delete,       description: Request tenant deletion,                     privileged: true, ownerOnly: true, systemRoles: [owner] }
+  - { key: access.tenant.export,       description: Export tenant data,                          privileged: true, ownerOnly: true, systemRoles: [owner] }
 ```
 
 `services/profile/permissions.yaml`
@@ -3079,6 +3084,7 @@ Rules: no personal data beyond opaque identifiers; `changed` lists field names o
 | `POST /v1/platform/support-grants` | P `Platform.Support` | Staff request for own temporary support access; recent MFA |
 | `POST …/ownership-transfers`, `POST …/ownership-transfers/{id}/accept` | T `access.tenant.transfer` / T `access.app.access` plus target-member check | Ownership transfer |
 | `POST …/deletion-requests` | T `access.tenant.delete` | Tenant deletion |
+| `POST …/exports`, `GET …/exports/{exportId}` | T `access.tenant.export` | Owner export request (one per UTC day) and status |
 | `POST /v1/platform/tenants`, `GET /v1/platform/tenants`, `GET/PATCH /v1/platform/tenants/{id}` | P operator for writes; any platform role for reads | Tenant management |
 | `POST /v1/platform/tenants/{id}/owner-invitation:resend` | P operator | Rotate and resend a pending provisioning owner invitation |
 | `POST /v1/platform/tenants/{id}/suspend`, `…/reactivate`, `…/deletion-requests` | P operator (suspend also security) | Lifecycle |

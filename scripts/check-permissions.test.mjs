@@ -11,13 +11,19 @@ const source = readFileSync('services/access/permissions.yaml', 'utf8');
 
 test('Access catalog validates with explicit system role grants', () => {
   const catalog = validatePermissionCatalog(source, 'access');
-  assert.equal(catalog.permissions.length, 18);
+  assert.equal(catalog.permissions.length, 19);
   assert.deepEqual(
     catalog.permissions.find(
       (permission) => permission.key === 'access.supportgrant.manage',
     ).systemRoles,
     ['owner'],
   );
+  const tenantExport = catalog.permissions.find(
+    (permission) => permission.key === 'access.tenant.export',
+  );
+  assert.deepEqual(tenantExport.systemRoles, ['owner']);
+  assert.equal(tenantExport.ownerOnly, true);
+  assert.equal(tenantExport.privileged, true);
 });
 
 test('removal requires a prior release marking the permission deprecated', () => {

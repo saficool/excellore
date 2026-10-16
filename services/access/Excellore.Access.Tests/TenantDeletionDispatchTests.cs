@@ -34,7 +34,7 @@ public sealed class TenantDeletionDispatchTests
             "011_support_grants_rls.sql", "012_audit_export_requests.sql",
             "013_worker_expiry.sql", "015_role_assignment_batches.sql",
             "016_tenant_deletion_dispatch.sql", "017_tenant_erasure_receipts.sql",
-            "018_tenant_erasure_finalization.sql"
+            "018_tenant_erasure_finalization.sql", "019_tenant_export_requests.sql"
         })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, migration)));
@@ -56,6 +56,8 @@ public sealed class TenantDeletionDispatchTests
             INSERT INTO tenant_settings(tenant_id) VALUES (@due),(@future);
             INSERT INTO audit_exports(id,tenant_id,requested_by,status,object_key)
             VALUES (gen_random_uuid(),@due,gen_random_uuid(),'ready',@key);
+            INSERT INTO tenant_exports(id,tenant_id,requested_by)
+            VALUES (gen_random_uuid(),@due,gen_random_uuid());
             """, admin))
         {
             seed.Parameters.AddWithValue("due", due);
@@ -115,6 +117,8 @@ public sealed class TenantDeletionDispatchTests
             "SELECT count(*) FROM tenants WHERE id=@tenant", due));
         Assert.Equal(0L, await CountAsync(admin,
             "SELECT count(*) FROM tenant_settings WHERE tenant_id=@tenant", due));
+        Assert.Equal(0L, await CountAsync(admin,
+            "SELECT count(*) FROM tenant_exports WHERE tenant_id=@tenant", due));
         Assert.Equal(1L, await CountAsync(admin,
             "SELECT count(*) FROM tenant_settings WHERE tenant_id=@tenant", future));
         Assert.Equal(0L, await CountAsync(admin,
@@ -144,7 +148,7 @@ public sealed class TenantDeletionDispatchTests
                 "tenant_members", "role_assignments", "groups", "group_members",
                 "group_role_assignments", "tenant_apps", "tenant_settings",
                 "invitations", "access_requests", "support_grants",
-                "ownership_transfers", "audit_exports", "role_assignment_batches",
+                "ownership_transfers", "audit_exports", "tenant_exports", "role_assignment_batches",
                 "roles", "role_permissions", "audit_events"
             })
             {

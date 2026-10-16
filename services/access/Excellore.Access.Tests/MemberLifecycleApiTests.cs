@@ -36,6 +36,7 @@ public sealed class MemberLifecycleApiTests
         await admin.OpenAsync();
         await ExecuteAsync(admin, $"CREATE ROLE access_migrator LOGIN PASSWORD '{migratorPassword}' NOSUPERUSER NOBYPASSRLS");
         await ExecuteAsync(admin, $"CREATE ROLE access_app LOGIN PASSWORD '{appPassword}' NOSUPERUSER NOBYPASSRLS");
+        await ExecuteAsync(admin, $"CREATE ROLE access_worker LOGIN PASSWORD '{appPassword}' NOSUPERUSER NOBYPASSRLS");
         await ExecuteAsync(admin, "GRANT USAGE, CREATE ON SCHEMA public TO access_migrator");
         await ExecuteAsync(admin, "GRANT USAGE ON SCHEMA public TO access_app");
         var migratorString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
@@ -48,7 +49,7 @@ public sealed class MemberLifecycleApiTests
             foreach (var migration in new[] { "001_initial.sql", "002_register_apps.sql",
                 "003_membership_index.sql", "005_audit_append_only.sql", "006_custom_role_lifecycle.sql",
                 "010_ownership_transfers.sql", "011_support_grants_rls.sql",
-                "012_audit_export_requests.sql" })
+                "012_audit_export_requests.sql", "019_tenant_export_requests.sql" })
                 await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                     Path.Combine(AppContext.BaseDirectory, migration)));
         }
@@ -70,6 +71,7 @@ public sealed class MemberLifecycleApiTests
                 new CatalogPermission("access.request.create", "Request access", false, false, false, ["owner", "admin", "member"]),
                 new CatalogPermission("access.request.approve", "Approve requests", false, false, false, ["owner", "admin"]),
                 new CatalogPermission("access.tenant.delete", "Delete tenant", true, true, false, ["owner"]),
+                new CatalogPermission("access.tenant.export", "Export tenant", true, true, false, ["owner"]),
                 new CatalogPermission("access.audit.read", "Read audit", false, false, false, ["owner"]),
                 new CatalogPermission("access.supportgrant.manage", "Manage support", true, true, false, ["owner"])
             ]), platformActor));
@@ -336,6 +338,27 @@ public sealed class MemberLifecycleApiTests
             Assert.Equal(1L, await CountAsync(admin,
                 "audit_exports WHERE tenant_id = @tenant AND id = @id AND status = 'pending'",
                 ("tenant", tenantOne), ("id", exportId)));
+            var tenantExports = $"/v1/tenants/{tenantOne:D}/exports";
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Post, owner,
+                $"/v1/tenants/{tenantTwo:D}/exports");
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, owner,
+                tenantExports);
+            await ExpectAsync(HttpStatusCode.Forbidden, client, HttpMethod.Post, tenantAdmin,
+                tenantExports, null, "1");
+            using var tenantExportRequested = await SendAsync(client, HttpMethod.Post, tenantAdmin,
+                tenantExports);
+            Assert.Equal(HttpStatusCode.Accepted, tenantExportRequested.StatusCode);
+            var tenantExportId = (await tenantExportRequested.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("exportId").GetGuid();
+            await ExpectAsync(HttpStatusCode.TooManyRequests, client, HttpMethod.Post, tenantAdmin,
+                tenantExports);
+            await ExpectAsync(HttpStatusCode.OK, client, HttpMethod.Get, tenantAdmin,
+                $"{tenantExports}/{tenantExportId:D}");
+            await ExpectAsync(HttpStatusCode.NotFound, client, HttpMethod.Get, tenantAdmin,
+                $"/v1/tenants/{tenantTwo:D}/exports/{tenantExportId:D}");
+            Assert.Equal(1L, await CountAsync(admin,
+                "tenant_exports WHERE tenant_id = @tenant AND id = @id AND status = 'pending'",
+                ("tenant", tenantOne), ("id", tenantExportId)));
             var platformSupport = "/v1/platform/support-grants";
             var support = $"/v1/tenants/{tenantOne:D}/support-grants";
             var grantRequest = new { tenantId = tenantOne, roleId = viewerRole,

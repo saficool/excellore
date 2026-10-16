@@ -43,7 +43,7 @@ public sealed class AccessMigrationTests
         foreach (var migration in new[] { "013_worker_expiry.sql",
                      "014_worker_identity_drift.sql", "015_role_assignment_batches.sql",
                      "016_tenant_deletion_dispatch.sql", "017_tenant_erasure_receipts.sql",
-                     "018_tenant_erasure_finalization.sql" })
+                     "018_tenant_erasure_finalization.sql", "019_tenant_export_requests.sql" })
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, migration)));
 
@@ -70,7 +70,7 @@ public sealed class AccessMigrationTests
             ["tenant_settings"] = "T", ["invitations"] = "T", ["access_requests"] = "T",
             ["ownership_transfers"] = "T", ["audit_exports"] = "T",
             ["role_assignment_batches"] = "T", ["tenant_tombstones"] = "T",
-            ["audit_events_archive"] = "T"
+            ["audit_events_archive"] = "T", ["tenant_exports"] = "T"
         };
         await using (var command = new NpgsqlCommand("""
             SELECT c.relname, obj_description(c.oid), c.relrowsecurity, c.relforcerowsecurity
@@ -99,6 +99,10 @@ public sealed class AccessMigrationTests
         Assert.True(await HasTablePrivilegeAsync(app, "support_grants", "INSERT"));
         Assert.True(await HasTablePrivilegeAsync(app, "ownership_transfers", "INSERT"));
         Assert.True(await HasTablePrivilegeAsync(app, "audit_exports", "INSERT"));
+        Assert.False(await HasTablePrivilegeAsync(app, "tenant_exports", "INSERT"));
+        await using (var columnGrant = new NpgsqlCommand(
+            "SELECT has_column_privilege(current_user,'tenant_exports','id','INSERT')", app))
+            Assert.Equal(true, await columnGrant.ExecuteScalarAsync());
         Assert.True(await HasTablePrivilegeAsync(app, "role_assignment_batches", "INSERT"));
         Assert.False(await HasTablePrivilegeAsync(app, "role_assignment_batches", "UPDATE"));
 
@@ -109,6 +113,7 @@ public sealed class AccessMigrationTests
         await VerifyTenantWriteBoundariesAsync(app, tenantOne, tenantTwo, ids);
         Assert.Equal(0L, await CountAsync(app, "ownership_transfers"));
         Assert.Equal(0L, await CountAsync(app, "audit_exports"));
+        Assert.Equal(0L, await CountAsync(app, "tenant_exports"));
         Assert.Equal(0L, await CountAsync(app, "role_assignment_batches"));
         Assert.Equal(0L, await CountAsync(app, "support_grants"));
         await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
@@ -117,6 +122,9 @@ public sealed class AccessMigrationTests
             ("user", ids["u2"]), ("other", ids["u1"]));
         await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
             "INSERT INTO audit_exports (id, tenant_id, requested_by, status) VALUES (@id, @tenant, @user, 'pending')",
+            ("id", Guid.NewGuid()), ("tenant", tenantTwo), ("user", ids["u2"]));
+        await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
+            "INSERT INTO tenant_exports (id, tenant_id, requested_by) VALUES (@id, @tenant, @user)",
             ("id", Guid.NewGuid()), ("tenant", tenantTwo), ("user", ids["u2"]));
         await AssertRejectedAsync(app, tenantOne, PostgresErrorCodes.InsufficientPrivilege,
             "INSERT INTO support_grants (id, tenant_id, staff_user_id, role_id, reason, status, expires_at) VALUES (@id, @tenant, @user, @role, 'fixture', 'requested', now() + interval '1 hour')",

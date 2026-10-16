@@ -34,6 +34,7 @@ builder.Services.AddScoped<TenantSettingsService>();
 builder.Services.AddScoped<AccessRequestService>();
 builder.Services.AddScoped<TenantDeletionRequestService>();
 builder.Services.AddScoped<AuditExportRequestService>();
+builder.Services.AddScoped<TenantExportRequestService>();
 builder.Services.AddScoped<AuditExportDownloadService>();
 builder.Services.AddSingleton<IAuditExportObjectStore, S3AuditExportObjectStore>();
 builder.Services.AddScoped<SupportGrantService>();
@@ -371,6 +372,29 @@ tenantRoutes.MapPost("/deletion-requests", async (RequestTenantDeletion request,
     TenantDeletionRequestService service, CancellationToken cancellationToken) =>
     TenantDeletionRequestResponses.Map(await service.RequestAsync(request, cancellationToken)))
     .RequirePermission("access.tenant.delete");
+tenantRoutes.MapPost("/exports", async (TenantExportRequestService service,
+    CancellationToken cancellationToken) =>
+{
+    var result = await service.RequestAsync(cancellationToken);
+    return result.Status switch
+    {
+        TenantExportRequestStatus.Accepted => Results.Json(new { result.ExportId },
+            statusCode: StatusCodes.Status202Accepted),
+        TenantExportRequestStatus.Forbidden => Results.Problem(statusCode: 403,
+            type: "urn:excellore:problem:tenant-export-denied", title: "Tenant export denied"),
+        TenantExportRequestStatus.StepUpRequired => Results.Problem(statusCode: 403,
+            type: "urn:excellore:problem:step-up-required", title: "Step-up required"),
+        TenantExportRequestStatus.DailyLimit => Results.Problem(statusCode: 429,
+            type: "urn:excellore:problem:tenant-export-daily-limit", title: "Daily export limit reached"),
+        _ => Results.NotFound()
+    };
+}).RequirePermission("access.tenant.export");
+tenantRoutes.MapGet("/exports/{exportId:guid}", async (Guid exportId,
+    TenantExportRequestService service, CancellationToken cancellationToken) =>
+{
+    var job = await service.GetAsync(exportId, cancellationToken);
+    return job is null ? Results.NotFound() : Results.Json(job);
+}).RequirePermission("access.tenant.export");
 tenantRoutes.MapGet("/support-grants", async (HttpContext context,
     SupportGrantService service, CancellationToken cancellationToken) =>
 {

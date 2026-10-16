@@ -98,3 +98,10 @@ permissions:
       ownerOnly: true,
       systemRoles: [owner],
     }
+  - {
+      key: access.tenant.export,
+      description: Export tenant data,
+      privileged: true,
+      ownerOnly: true,
+      systemRoles: [owner],
+    }

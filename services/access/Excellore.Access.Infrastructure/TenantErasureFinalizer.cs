@@ -13,7 +13,7 @@ public sealed class TenantErasureFinalizer(NpgsqlDataSource database, ITenantIdA
     [
         "group_role_assignments", "group_members", "role_assignments",
         "ownership_transfers", "role_assignment_batches", "access_requests",
-        "invitations", "audit_exports", "tenant_settings", "tenant_apps",
+        "invitations", "audit_exports", "tenant_exports", "tenant_settings", "tenant_apps",
         "support_grants", "groups", "tenant_members", "role_permissions",
         "roles", "user_tenant_index"
     ];
