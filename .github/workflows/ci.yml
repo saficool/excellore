@@ -142,7 +142,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Start isolated identity stack
-        run: bash scripts/dev-up.sh
+        run: bash scripts/dev-up.sh --identity-only
       - name: Prepare Shell and Profile BFFs
         run: |
           node scripts/setup-next-local.mjs shell

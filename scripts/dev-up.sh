@@ -5,6 +5,12 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 export MSYS_NO_PATHCONV=1
 
+mode="${1:-full}"
+if [ "$mode" != full ] && [ "$mode" != --identity-only ]; then
+  echo 'Usage: scripts/dev-up.sh [--identity-only]' >&2
+  exit 2
+fi
+
 if ! command -v docker >/dev/null 2>&1; then
   echo 'Docker CLI is required. Install and start Docker Desktop first.' >&2
   exit 1
@@ -101,6 +107,16 @@ node scripts/render-dev-realm.mjs
 
 compose=(docker compose --env-file .env -f infra/compose/docker-compose.yml)
 "${compose[@]}" config --quiet
+
+if [ "$mode" = --identity-only ]; then
+  "${compose[@]}" up -d --wait --wait-timeout 300 keycloak valkey
+  curl --silent --show-error --fail --max-time 10 \
+    http://127.0.0.1:9000/health/ready >/dev/null
+  node scripts/sync-dev-access-redirect.mjs
+  echo 'Identity test stack healthy.'
+  exit 0
+fi
+
 "${compose[@]}" up -d --wait --wait-timeout 300
 
 for service in access profile; do
