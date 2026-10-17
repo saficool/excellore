@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { neonConnectionString } from './neon-database-config.mjs';
 
 const service = process.argv[2];
 assert.ok(
@@ -31,9 +32,6 @@ assert.ok(env[`WORKER_${prefix}_SECRET`], 'Local worker identity is missing');
 const broker = new URL('amqp://127.0.0.1:5672/');
 broker.username = env.RABBITMQ_USER;
 broker.password = env.RABBITMQ_PASSWORD;
-const port = service === 'access' ? 5434 : 5433;
-const connection = (role, password) =>
-  `Host=127.0.0.1;Port=${port};Database=${service};Username=${role};Password=${password}`;
 const workerEnv = {
   ...process.env,
   DOTNET_ENVIRONMENT: 'Development',
@@ -42,9 +40,9 @@ const workerEnv = {
   IdentityDirectory__ClientSecret: env[`WORKER_${prefix}_SECRET`],
   Messaging__RabbitMqUri: broker.toString(),
   [`ConnectionStrings__${service === 'access' ? 'Access' : 'Profile'}Publisher`]:
-    connection(`${service}_publisher`, env[`${prefix}_PUBLISHER_PASSWORD`]),
+    neonConnectionString(env, service, 'publisher'),
   [`ConnectionStrings__${service === 'access' ? 'Access' : 'Profile'}Worker`]:
-    connection(`${service}_worker`, env[`${prefix}_WORKER_PASSWORD`]),
+    neonConnectionString(env, service, 'worker'),
   ExportStore__Endpoint: 'http://127.0.0.1:8333',
   ExportStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
   ExportStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,

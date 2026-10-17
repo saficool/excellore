@@ -20,18 +20,10 @@ SELECT format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOIN
 SELECT format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L', :'service' || '_publisher', :'publisher_password') \gexec
 SELECT format('ALTER ROLE %I WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD %L', :'service' || '_worker', :'worker_password') \gexec
 
-SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'service') \gexec
-SELECT format('GRANT CONNECT ON DATABASE %I TO %I, %I, %I, %I', :'service', :'service' || '_migrator', :'service' || '_app', :'service' || '_publisher', :'service' || '_worker') \gexec
+SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', current_database()) \gexec
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I, %I, %I, %I', current_database(), :'service' || '_migrator', :'service' || '_app', :'service' || '_publisher', :'service' || '_worker') \gexec
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SELECT format('GRANT USAGE, CREATE ON SCHEMA public TO %I', :'service' || '_migrator') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'service' || '_app') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'service' || '_publisher') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'service' || '_worker') \gexec
--- Access and Notifications use table-specific grants from migrations. Re-running
--- dev-up must not restore broad default grants for their later migrations.
-SELECT :'service' IN ('access', 'notifications') AS restricted_service \gset
-\if :restricted_service
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM %I', :'service' || '_migrator', :'service' || '_app') \gexec
-\else
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I', :'service' || '_migrator', :'service' || '_app') \gexec
-SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO %I', :'service' || '_migrator', :'service' || '_app') \gexec
-\endif

@@ -23,8 +23,10 @@ if ! docker info --format '{{.ServerVersion}}' >/dev/null 2>&1; then
   exit 1
 fi
 
-compose=(docker compose --env-file .env -f infra/compose/docker-compose.yml)
+compose=(docker compose --profile local-database-drill --env-file .env -f infra/compose/docker-compose.yml)
 "${compose[@]}" config --quiet
+"${compose[@]}" up -d --wait --wait-timeout 180 \
+  keycloak-db postgres-access postgres-profile postgres-notifications
 
 scratch_entries=()
 rotation_role=excellore_rotation_probe

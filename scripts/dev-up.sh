@@ -7,21 +7,13 @@ export MSYS_NO_PATHCONV=1
 export KEYCLOAK_IMPORT_GID="${KEYCLOAK_IMPORT_GID:-$(id -g)}"
 
 mode="${1:-full}"
-if [ "$mode" != full ] && [ "$mode" != --identity-only ]; then
-  echo 'Usage: scripts/dev-up.sh [--identity-only]' >&2
+if [ "$mode" != full ] && [ "$mode" != --identity-only ] && [ "$mode" != --prepare ]; then
+  echo 'Usage: scripts/dev-up.sh [--identity-only|--prepare]' >&2
   exit 2
 fi
 
-if ! command -v docker >/dev/null 2>&1; then
-  echo 'Docker CLI is required. Install and start Docker Desktop first.' >&2
-  exit 1
-fi
 if ! command -v node >/dev/null 2>&1; then
   echo 'Node.js is required to render the local Keycloak realm.' >&2
-  exit 1
-fi
-if ! docker info --format '{{.ServerVersion}}' >/dev/null 2>&1; then
-  echo 'Docker engine is unavailable. Start Docker Desktop and retry.' >&2
   exit 1
 fi
 
@@ -90,6 +82,20 @@ if grep -q '=__GENERATE__' .env; then
   trap - EXIT
 fi
 
+if [ "$mode" = --prepare ]; then
+  echo 'Local .env is prepared. Add Neon connection settings, then run scripts/bootstrap-neon.sh.'
+  exit 0
+fi
+
+if ! command -v docker >/dev/null 2>&1; then
+  echo 'Docker CLI is required. Install and start Docker Desktop first.' >&2
+  exit 1
+fi
+if ! docker info --format '{{.ServerVersion}}' >/dev/null 2>&1; then
+  echo 'Docker engine is unavailable. Start Docker Desktop and retry.' >&2
+  exit 1
+fi
+
 access_key="$(sed -n 's/^OBJECTSTORE_ACCESS_KEY=//p' .env)"
 secret_key="$(sed -n 's/^OBJECTSTORE_SECRET_KEY=//p' .env)"
 for value in "$access_key" "$secret_key"; do
@@ -106,13 +112,22 @@ printf '{"identities":[{"name":"local-dev","credentials":[{"accessKey":"%s","sec
 
 node scripts/render-dev-realm.mjs
 
+# Runtime PostgreSQL lives in the four Neon development projects. The one-time
+# owner bootstrap is deliberately separate; normal startup needs only restricted
+# runtime and migrator credentials.
+if [ "$mode" = full ]; then
+  bash scripts/migrate-access.sh
+  bash scripts/migrate-profile.sh
+  bash scripts/migrate-notifications.sh
+fi
+
 compose=(docker compose --env-file .env -f infra/compose/docker-compose.yml)
 "${compose[@]}" config --quiet
 
 if [ "$mode" = --identity-only ]; then
   if ! "${compose[@]}" up -d --wait --wait-timeout 300 keycloak valkey; then
     "${compose[@]}" ps --all >&2
-    "${compose[@]}" logs --no-color keycloak keycloak-db valkey >&2
+    "${compose[@]}" logs --no-color keycloak valkey >&2
     exit 1
   fi
   curl --silent --show-error --fail --max-time 10 \
@@ -123,11 +138,6 @@ if [ "$mode" = --identity-only ]; then
 fi
 
 "${compose[@]}" up -d --wait --wait-timeout 300
-
-for service in access profile notifications; do
-  "${compose[@]}" exec -T "postgres-$service" \
-    psql -X -U postgres -d "$service" -f /opt/excellore/bootstrap-roles.sql >/dev/null
-done
 
 bash scripts/check-dev-stack.sh
 node scripts/sync-dev-realm.mjs

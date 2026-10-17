@@ -2,17 +2,38 @@
 
 ## Start and verify
 
-Install Docker Desktop and start its engine. On Windows, run these commands in Git Bash; on Linux or macOS, use Bash. OpenSSL and curl must be on `PATH`.
+Install Docker Desktop and start its engine. On Windows, run these commands in Git Bash; on Linux or macOS, use Bash. OpenSSL and curl must be on `PATH`. Runtime PostgreSQL is hosted by four separate Neon development projects: Keycloak, Access, Profile, and Notifications.
+
+Prepare the ignored environment file without starting services:
 
 ```sh
-bash scripts/dev-up.sh
-bash scripts/check-dev-stack.sh
-mkcert -install
-pnpm local:https:setup
-pnpm local:web
+bash scripts/dev-up.sh --prepare
 ```
 
-The first run creates an ignored `.env` with random local credentials and an ignored SeaweedFS S3 configuration. Keep both local. The script starts Keycloak, its PostgreSQL database, separate Access, Profile, and Notifications PostgreSQL databases, Valkey, RabbitMQ, SeaweedFS, and Mailpit. It also creates the `<app>_migrator`, `<app>_app`, `<app>_publisher`, and scoped worker roles in each service database. Re-running is safe. Runtime roles own no objects and cannot bypass RLS (INV-03). Migrations start in later work packages.
+In each Neon project's **Connect** dialog, select the development branch and copy the connection details into ignored `.env`. Copy hostnames only into the host fields; do not paste a `postgresql://` URL.
+
+| Project       | Required settings                                                                                                                                                           |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keycloak      | `KEYCLOAK_NEON_DIRECT_HOST`, `KEYCLOAK_NEON_DATABASE`, `KEYCLOAK_NEON_ADMIN_USERNAME`, `KEYCLOAK_NEON_ADMIN_PASSWORD`                                                       |
+| Access        | `ACCESS_NEON_DIRECT_HOST`, `ACCESS_NEON_POOLED_HOST`, `ACCESS_NEON_DATABASE`, `ACCESS_NEON_ADMIN_USERNAME`, `ACCESS_NEON_ADMIN_PASSWORD`                                    |
+| Profile       | `PROFILE_NEON_DIRECT_HOST`, `PROFILE_NEON_POOLED_HOST`, `PROFILE_NEON_DATABASE`, `PROFILE_NEON_ADMIN_USERNAME`, `PROFILE_NEON_ADMIN_PASSWORD`                               |
+| Notifications | `NOTIFICATIONS_NEON_DIRECT_HOST`, `NOTIFICATIONS_NEON_POOLED_HOST`, `NOTIFICATIONS_NEON_DATABASE`, `NOTIFICATIONS_NEON_ADMIN_USERNAME`, `NOTIFICATIONS_NEON_ADMIN_PASSWORD` |
+
+The pooled hostname contains `-pooler`; the direct hostname does not. The database is normally `neondb`, and the initial owner is normally `neondb_owner`. Use the actual values shown by Neon.
+
+Bootstrap restricted roles and schemas once, then start the stack:
+
+```sh
+bash scripts/bootstrap-neon.sh
+bash scripts/dev-up.sh
+bash scripts/check-dev-stack.sh
+```
+
+`bootstrap-neon.sh` is the only local workflow that needs the four Neon owner credentials. After it succeeds, remove the four `*_NEON_ADMIN_PASSWORD` values from `.env`. Reinsert them only when explicitly running the bootstrap again. Migrations use the restricted `<service>_migrator` roles.
+
+Finish the browser setup with `mkcert -install`, `pnpm local:https:setup`, and `pnpm local:web`.
+
+The preparation step creates an ignored `.env` with random restricted-role credentials. Keep it local. The start script applies migrations to Neon, then starts Keycloak, Valkey, RabbitMQ, SeaweedFS, and Mailpit. It does not start a runtime PostgreSQL container. `bootstrap-neon.sh` creates the `<app>_migrator`, `<app>_app`, `<app>_publisher`, and scoped worker roles. Re-running is safe. Runtime roles own no objects and cannot bypass RLS (INV-03).
 
 WP-02 also renders `infra/keycloak/realm-dev.json` with the generated credentials into ignored `.local/keycloak/realm-dev.json`. Keycloak imports that realm on first startup. Changes to the source realm do not alter an existing local realm automatically. To discard only the local `excellore` realm and re-import it from the current file, run:
 
@@ -27,18 +48,16 @@ The reset deletes local seed users, sessions, and events in the `excellore` real
 
 The endpoints bind to `127.0.0.1` only:
 
-| Service                  | Local endpoint                              |
-| ------------------------ | ------------------------------------------- |
-| Keycloak (browser)       | `https://auth.excellore.localhost`          |
-| Keycloak (host admin)    | `http://auth.excellore.localhost:8080`      |
-| Keycloak readiness       | `http://127.0.0.1:9000/health/ready`        |
-| Access PostgreSQL        | `127.0.0.1:5434`                            |
-| Profile PostgreSQL       | `127.0.0.1:5433`                            |
-| Notifications PostgreSQL | `127.0.0.1:5435`                            |
-| Valkey                   | `127.0.0.1:6379`                            |
-| RabbitMQ / management    | `127.0.0.1:5672` / `http://127.0.0.1:15672` |
-| SeaweedFS S3             | `http://127.0.0.1:8333`                     |
-| Mailpit web / SMTP       | `http://127.0.0.1:8025` / `127.0.0.1:1025`  |
+| Service               | Local endpoint                              |
+| --------------------- | ------------------------------------------- |
+| Keycloak (browser)    | `https://auth.excellore.localhost`          |
+| Keycloak (host admin) | `http://auth.excellore.localhost:8080`      |
+| Keycloak readiness    | `http://127.0.0.1:9000/health/ready`        |
+| PostgreSQL            | Four private Neon development projects      |
+| Valkey                | `127.0.0.1:6379`                            |
+| RabbitMQ / management | `127.0.0.1:5672` / `http://127.0.0.1:15672` |
+| SeaweedFS S3          | `http://127.0.0.1:8333`                     |
+| Mailpit web / SMTP    | `http://127.0.0.1:8025` / `127.0.0.1:1025`  |
 
 The Keycloak bootstrap admin username is `admin`; its password is in your local `.env`. RabbitMQ and SeaweedFS credentials are there too. Do not use these credentials outside this local stack.
 
@@ -82,7 +101,7 @@ The gateway binds only to `127.0.0.1:443`, accepts only the four exact local hos
 docker compose --env-file .env -f infra/compose/docker-compose.yml down
 ```
 
-This keeps named database and broker volumes. Removing those volumes deletes local data.
+This keeps broker and object-store volumes. PostgreSQL data remains in Neon. The Compose PostgreSQL services are behind the `local-database-drill` profile and are used only for disposable recovery rehearsal; they are not part of normal runtime startup.
 
 ## Notifications email flow (WP-15)
 
@@ -120,10 +139,11 @@ APPLICATION_EMAIL_FROM_ADDRESS=notifications@notify.example.com
 their child process without printing it. Set `APPLICATION_EMAIL_TRANSPORT=mailpit` to restore the
 local Mailpit default.
 
-After updating an existing local checkout, provision the new database role and Keycloak client,
-apply the migration, build the worker, and start it in a separate terminal:
+After updating an existing local checkout, bootstrap the Notifications Neon roles, reconcile the
+Keycloak client, apply the migration, build the worker, and start it in a separate terminal:
 
 ```sh
+bash scripts/bootstrap-neon.sh notifications
 bash scripts/dev-up.sh
 bash scripts/migrate-notifications.sh
 dotnet build services/notifications/Excellore.Notifications.Worker
@@ -162,7 +182,7 @@ For WP-05 Access database work, run `bash scripts/migrate-access.sh` after `scri
 
 The Access outbox worker requires `ConnectionStrings__AccessPublisher` for the `access_publisher` login and `Messaging__RabbitMqUri` for RabbitMQ. Use the generated credentials in ignored `.env` and keep them out of command arguments and logs. The worker retries pending events until the broker confirms routing to a bound consumer queue. The current local stack does not provision a consumer queue for `access.authz.changed.v1`; that event stays pending until a consumer starts. The disposable integration test verifies publication and retry without changing the local databases.
 
-For WP-10, rerun `bash scripts/dev-up.sh` to provision the scoped worker logins and reconcile their read-only Keycloak directory roles, then rerun both migration scripts. Start `node scripts/run-worker-local.mjs access` and `node scripts/run-worker-local.mjs profile` in separate terminals. The Access worker publishes its outbox, sweeps expired role assignments and support grants once per minute, and checks Keycloak identity drift at startup and daily. The Profile worker publishes global Profile events, projects Access membership events, and refreshes existing name and locale mirrors from Keycloak after identity update events. Directory scans use numeric pagination and fail closed above 10,000 users; person IDs and email never enter their request URLs or logs. Keep the Access and Profile APIs running separately. Worker credentials come from ignored `.env`; the launch script does not print them. The Profile export request remains pending while cross-service export and erasure are finalized in WP-12.
+For WP-10, run `bash scripts/bootstrap-neon.sh access` and `bash scripts/bootstrap-neon.sh profile` when introducing or rotating the scoped worker logins, then run `bash scripts/dev-up.sh` to apply migrations and reconcile read-only Keycloak directory roles. Start `node scripts/run-worker-local.mjs access` and `node scripts/run-worker-local.mjs profile` in separate terminals. The Access worker publishes its outbox, sweeps expired role assignments and support grants once per minute, and checks Keycloak identity drift at startup and daily. The Profile worker publishes global Profile events, projects Access membership events, and refreshes existing name and locale mirrors from Keycloak after identity update events. Directory scans use numeric pagination and fail closed above 10,000 users; person IDs and email never enter their request URLs or logs. Keep the Access and Profile APIs running separately. Worker credentials come from ignored `.env`; the launch script does not print them. The Profile export request remains pending while cross-service export and erasure are finalized in WP-12.
 
 The Access worker also builds pending tenant audit exports in the same tenant sweep. The status route returns `ready` after the private object is stored; download through `/api/t/{slug}/audit-events/exports/{exportId}/download` in the Access BFF with recent MFA. The download is capped at 64 MiB; oversized jobs become `failed` and are audited. The local launcher supplies the ignored object-store credentials and uses the separate `excellore-audit-exports` bucket.
 

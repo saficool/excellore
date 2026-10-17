@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { localApplicationEmailEnvironment } from './application-email-config.mjs';
+import { neonConnectionString } from './neon-database-config.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const env = Object.fromEntries(
@@ -37,7 +38,11 @@ const child = spawn(
       DOTNET_ENVIRONMENT: 'Development',
       EXCELLORE_INSECURE_LOCAL_DEV: 'true',
       Messaging__RabbitMqUri: broker.toString(),
-      ConnectionStrings__NotificationsWorker: `Host=127.0.0.1;Port=5435;Database=notifications;Username=notifications_worker;Password=${env.NOTIFICATIONS_WORKER_PASSWORD}`,
+      ConnectionStrings__NotificationsWorker: neonConnectionString(
+        env,
+        'notifications',
+        'worker',
+      ),
       Authz__ClientSecret: env.SVC_NOTIFICATIONS_AUTHZ_SECRET,
       ...localApplicationEmailEnvironment(env),
     },

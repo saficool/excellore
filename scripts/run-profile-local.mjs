@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { neonConnectionString } from './neon-database-config.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const env = Object.fromEntries(
@@ -42,7 +43,7 @@ const child = spawn(
       ASPNETCORE_ENVIRONMENT: 'Development',
       EXCELLORE_INSECURE_LOCAL_DEV: 'true',
       Auth__Authority: `${env.KEYCLOAK_ORIGIN}/realms/excellore`,
-      ConnectionStrings__Profile: `Host=127.0.0.1;Port=5433;Database=profile;Username=profile_app;Password=${env.PROFILE_APP_PASSWORD}`,
+      ConnectionStrings__Profile: neonConnectionString(env, 'profile', 'app'),
       Authz__Valkey: '127.0.0.1:6379',
       Authz__AccessInternalUrl: 'http://127.0.0.1:5002',
       Authz__TokenEndpoint: `${env.KEYCLOAK_ORIGIN}/realms/excellore/protocol/openid-connect/token`,

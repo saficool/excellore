@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.16 |
+| **Document version** | 5.17 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.17 | Local development runtime uses four isolated Neon PostgreSQL projects for Keycloak, Access, Profile, and Notifications. Restricted SQL-created service roles preserve the RLS boundary; direct endpoints serve Keycloak, migrations, and session-locking Access worker jobs, while transaction-pooled endpoints serve request workloads. Disposable PostgreSQL containers remain test and recovery-rehearsal infrastructure only (ADR-0078 owner-approved). |
 | 5.16 | WP-15 delivery callbacks use signed Resend webhooks, an opaque random email correlation ID, an immutable P routing index, and forced-RLS delivery updates. The narrow webhook ingress exposes one exact path and stores neither provider payloads nor contact data (ADR-0077 owner-approved). Local Keycloak, Access, and Notifications processes may use code-owned authenticated SMTP configuration from ignored environment secrets. |
 | 5.15 | Owner-directed WP-15 adds an independent Notifications service for event-driven business email and future channels. Access keeps one-time invitation email and Keycloak keeps identity email, so ephemeral secrets never enter events or cross a new synchronous boundary (RFC-0007, ADR-0076 proposed). |
 | 5.14 | The platform console is a separate `apps/platform` UI and BFF with its own host, OIDC client, session boundary, and deployment. The Platform BFF may call only Access's documented `/v1/platform/**` contracts; Access retains all tenant and authorization ownership (ADR-0075, owner-approved INV-09 exception). |
@@ -2006,12 +2007,14 @@ ALTER DEFAULT PRIVILEGES FOR ROLE access_migrator IN SCHEMA public
 
 Runtime roles never receive superuser, `BYPASSRLS`, or ownership. Break-glass database access is time-limited, audited, and separate.
 
+Local development uses four isolated Neon projects, one each for Keycloak, Access, Profile, and Notifications. Neon owner credentials are bootstrap-only. Service roles are created through SQL so they do not inherit Neon's administrative role. Keycloak and migrations use direct endpoints. APIs, publishers, and ordinary workers use transaction-pooled endpoints; the Access worker uses its direct endpoint because its scheduler holds session advisory locks. Every connection verifies TLS hostname and certificate and requires channel binding. This development topology does not select the production cloud provider.
+
 ### 27.5 Data stores
 
 | Store | Used by | Notes |
 |---|---|---|
 | PostgreSQL (Keycloak) | Keycloak | Separate |
-| PostgreSQL `profile`, `access` | Respective service and worker | RLS; `audit_events` append-only |
+| PostgreSQL `profile`, `access`, `notifications` | Respective service and worker | Separate database per service; RLS; audit data append-only |
 | Valkey | BFFs and PEP caches | Separate key prefixes per app; replication per availability needs |
 | RabbitMQ | Profile, Access | Exchange `excellore.events`; per-service queues and vhosts |
 | Object storage | Profile, Access | Private buckets; Profile avatars use opaque keys and authenticated BFF streams |
@@ -2188,49 +2191,15 @@ Restore tests at least quarterly; a full DR exercise annually. A backup that has
 
 ## 32. Local Development
 
-### 32.1 Docker Compose (reference)
+### 32.1 Docker Compose and Neon (reference)
 
-```yaml
-services:
-  keycloak-db:
-    image: postgres:16
-    environment: { POSTGRES_DB: keycloak, POSTGRES_USER: keycloak, POSTGRES_PASSWORD: change-me }
-    volumes: [keycloak-data:/var/lib/postgresql/data]
-  keycloak:
-    image: quay.io/keycloak/keycloak:26.0        # use the current stable tag (verify)
-    command: start-dev --import-realm
-    environment:
-      KC_DB: postgres
-      KC_DB_URL_HOST: keycloak-db
-      KC_DB_URL_PORT: 5432
-      KC_DB_URL_DATABASE: keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: change-me
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_HOSTNAME: auth.excellore.localhost
-    ports: ["8080:8080"]
-    volumes:
-      - ./keycloak/realm-dev.json:/opt/keycloak/data/import/realm-dev.json
-      - ./keycloak/themes:/opt/keycloak/themes
-    depends_on: [keycloak-db]
-  valkey:   { image: "valkey/valkey:8", ports: ["6379:6379"] }
-  rabbitmq: { image: "rabbitmq:3-management", ports: ["5672:5672", "15672:15672"] }
-  postgres-profile:
-    image: postgres:16
-    environment: { POSTGRES_DB: profile, POSTGRES_USER: postgres, POSTGRES_PASSWORD: change-me }
-    ports: ["5433:5432"]
-  postgres-access:
-    image: postgres:16
-    environment: { POSTGRES_DB: access, POSTGRES_USER: postgres, POSTGRES_PASSWORD: change-me }
-    ports: ["5434:5432"]
-  objectstore: { image: chrislusf/seaweedfs, command: "server -s3", ports: ["8333:8333"] }
-  mailpit:     { image: axllent/mailpit, ports: ["8025:8025", "1025:1025"] }
-volumes:
-  keycloak-data:
-```
+Docker Compose runs Keycloak, Valkey, RabbitMQ, S3-compatible object storage, and Mailpit. Normal local runtime does not start PostgreSQL containers. Four private Neon development projects provide the Keycloak, Access, Profile, and Notifications databases.
 
-A bootstrap script creates the `<app>_migrator` and `<app>_app` roles in each service database ([27.4](#274-database-roles-per-service)) and applies migrations as the migrator.
+The ignored local environment stores separate direct and pooled hostnames plus generated credentials for restricted database roles. `scripts/bootstrap-neon.sh` uses each project's owner credential only to create or repair those roles and the Keycloak schema. Owner credentials are removed from the normal runtime environment after bootstrap. `scripts/dev-up.sh` applies service migrations through direct connections as `<app>_migrator`, then starts the non-database Compose services.
+
+Keycloak uses a direct JDBC connection with a bounded pool. Service APIs and publishers use Neon transaction pooling. Profile and Notifications workers also use transaction pooling. The Access worker uses a direct connection because session-level advisory locks require a stable PostgreSQL session. All connections use certificate and hostname verification plus channel binding.
+
+The Compose PostgreSQL services are available only through the `local-database-drill` profile for disposable recovery rehearsal. Automated integration tests continue to use disposable PostgreSQL Testcontainers so destructive tests never target Neon.
 
 ### 32.2 Local hostnames
 
@@ -2291,10 +2260,10 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 
 ### WP-01: Local platform stack
 
-- **Goal:** One command starts every dependency.
+- **Goal:** One command starts every local dependency and connects to isolated managed development databases.
 - **Depends on:** WP-00.
-- **Deliverables:** `infra/compose/docker-compose.yml` ([32.1](#321-docker-compose-reference)); `scripts/dev-up.sh` creating `<app>_migrator` and `<app>_app` roles per service database ([27.4](#274-database-roles-per-service)); `.env.example`; local hostnames doc and mkcert instructions.
-- **AC:** `scripts/dev-up.sh` brings up Keycloak, Postgres x4, Valkey, RabbitMQ, object store, Mailpit; a script verifies each is healthy; Access, Profile, and Notifications runtime roles exist with `NOBYPASSRLS` and own no tables.
+- **Deliverables:** `infra/compose/docker-compose.yml` ([32.1](#321-docker-compose-and-neon-reference)); `scripts/bootstrap-neon.sh` creating restricted roles per service database ([27.4](#274-database-roles-per-service)); `scripts/dev-up.sh`; `.env.example`; local hostnames doc and mkcert instructions.
+- **AC:** `scripts/dev-up.sh` applies service migrations and brings up Keycloak, Valkey, RabbitMQ, object store, and Mailpit against four isolated Neon projects; a script verifies each dependency and database role; Access, Profile, and Notifications runtime roles have `NOBYPASSRLS`, hold no administrative role membership, and own no tables. PostgreSQL containers do not run in the normal runtime profile.
 
 ### WP-02: Keycloak realm as code
 

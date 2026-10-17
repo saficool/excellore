@@ -19,33 +19,17 @@ assert.ok(
   'Run scripts/dev-up.sh first',
 );
 
-const compose = [
-  'compose',
-  '--env-file',
-  '.env',
-  '-f',
-  'infra/compose/docker-compose.yml',
-  'exec',
-  '-T',
-  'postgres-access',
-  'psql',
-  '-X',
-  '-A',
-  '-t',
-  '-U',
-  'postgres',
-  '-d',
-  'access',
-];
 const membership = await sql(
-  compose,
-  `SELECT m.tenant_id::text || '|' || m.user_id::text
-     FROM tenant_members m
-     JOIN tenants t ON t.id=m.tenant_id
-     JOIN identities i ON i.user_id=m.user_id
-    WHERE m.status='active' AND t.status='active'
+  'access',
+  'app',
+  'pooled',
+  `SELECT x.tenant_id::text || '|' || x.user_id::text
+     FROM user_tenant_index x
+     JOIN tenants t ON t.id=x.tenant_id
+     JOIN identities i ON i.user_id=x.user_id
+    WHERE x.membership_status='active' AND t.status='active'
       AND i.status='active' AND i.email_verified
-    ORDER BY m.created_at LIMIT 1`,
+    ORDER BY x.tenant_id, x.user_id LIMIT 1`,
 );
 const [tenantId, userId] = membership.split('|');
 assert.match(
@@ -140,17 +124,27 @@ async function mailCount() {
 }
 
 async function notificationSql(query) {
-  const args = [...compose];
-  args[args.indexOf('postgres-access')] = 'postgres-notifications';
-  args[args.indexOf('access')] = 'notifications';
-  return sql(args, query);
+  return sql(
+    'notifications',
+    'worker',
+    'pooled',
+    `BEGIN; SELECT set_config('app.tenant_id','${tenantId}',true); ${query}; COMMIT`,
+  );
 }
 
-async function sql(args, query) {
-  const result = await run('docker', [...args, '-c', query], {
-    cwd: new URL('../', import.meta.url),
-    windowsHide: true,
-    maxBuffer: 64 * 1024,
-  });
-  return result.stdout.trim();
+async function sql(service, role, endpoint, query) {
+  const result = await run(
+    'bash',
+    ['scripts/query-neon.sh', service, role, endpoint, query],
+    {
+      cwd: new URL('../', import.meta.url),
+      windowsHide: true,
+      maxBuffer: 64 * 1024,
+    },
+  );
+  return result.stdout
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line && line !== 'BEGIN' && line !== 'COMMIT')
+    .at(-1);
 }
