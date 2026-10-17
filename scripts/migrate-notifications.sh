@@ -17,4 +17,14 @@ elif [ "$exists" != t ]; then
   echo 'Could not determine Notifications migration state.' >&2
   exit 1
 fi
+provider_index_exists="$(docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-notifications \
+  sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -A -t -v ON_ERROR_STOP=1 -U notifications_migrator -d notifications -c "SELECT to_regclass('\''public.notification_provider_index'\'') IS NOT NULL"' | tr -d '\r\n')"
+if [ "$provider_index_exists" = f ]; then
+  docker compose --env-file .env -f infra/compose/docker-compose.yml exec -T postgres-notifications \
+    sh -c 'export PGPASSWORD="$DB_MIGRATOR_PASSWORD"; exec psql -X -q -v ON_ERROR_STOP=1 -1 -U notifications_migrator -d notifications' \
+    < services/notifications/Excellore.Notifications.Infrastructure/Migrations/002_provider_webhooks.sql
+elif [ "$provider_index_exists" != t ]; then
+  echo 'Could not determine Notifications provider migration state.' >&2
+  exit 1
+fi
 echo 'Notifications database migration applied.'

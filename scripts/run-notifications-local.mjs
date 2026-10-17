@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { localApplicationEmailEnvironment } from './application-email-config.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const env = Object.fromEntries(
@@ -38,6 +39,7 @@ const child = spawn(
       Messaging__RabbitMqUri: broker.toString(),
       ConnectionStrings__NotificationsWorker: `Host=127.0.0.1;Port=5435;Database=notifications;Username=notifications_worker;Password=${env.NOTIFICATIONS_WORKER_PASSWORD}`,
       Authz__ClientSecret: env.SVC_NOTIFICATIONS_AUTHZ_SECRET,
+      ...localApplicationEmailEnvironment(env),
     },
   },
 );

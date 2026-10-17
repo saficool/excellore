@@ -40,7 +40,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [shell, profile-bff, access-bff, platform-bff, identity-proxy]
+        values: [shell, profile-bff, access-bff, platform-bff, notifications-api, identity-proxy]
   policyTypes: [Ingress]
   ingress:
     - from:

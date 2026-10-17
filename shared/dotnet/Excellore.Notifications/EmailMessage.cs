@@ -7,7 +7,8 @@ public sealed record EmailMessage(
     string Subject,
     string TextBody,
     string? HtmlBody = null,
-    string? ReplyToAddress = null)
+    string? ReplyToAddress = null,
+    string? MessageId = null)
 {
     public void Validate()
     {
@@ -20,6 +21,10 @@ public sealed record EmailMessage(
             throw new InvalidOperationException("Email text body is invalid.");
         if (HtmlBody?.Length > 512_000)
             throw new InvalidOperationException("Email HTML body is invalid.");
+        if (MessageId is not null &&
+            (MessageId.Length > 254 || MessageId.Contains('\r') || MessageId.Contains('\n') ||
+             MessageId.Any(char.IsWhiteSpace) || MessageId.Count(character => character == '@') != 1))
+            throw new InvalidOperationException("Email Message-ID is invalid.");
     }
 
     internal static MailboxAddress ValidateAddress(string value, string parameterName)

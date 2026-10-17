@@ -1,4 +1,5 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { applyLocalKeycloakEmailConfig } from './keycloak-email-config.mjs';
 
 const source = new URL('../infra/keycloak/realm-dev.json', import.meta.url);
 const destination = new URL(
@@ -27,8 +28,10 @@ const rendered = readFileSync(source, 'utf8').replace(
 if (rendered.includes('${')) {
   throw new Error('Unresolved local realm placeholder.');
 }
-JSON.parse(rendered);
+const realm = applyLocalKeycloakEmailConfig(JSON.parse(rendered), env);
 mkdirSync(new URL('../.local/keycloak/', import.meta.url), { recursive: true });
-writeFileSync(destination, rendered, { mode: 0o640 });
+writeFileSync(destination, `${JSON.stringify(realm, null, 2)}\n`, {
+  mode: 0o640,
+});
 chmodSync(destination, 0o640);
 console.log('Rendered ignored local Keycloak realm.');

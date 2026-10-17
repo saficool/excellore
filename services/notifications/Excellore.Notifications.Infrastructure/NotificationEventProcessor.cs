@@ -26,7 +26,8 @@ public sealed class NotificationEventProcessor(NotificationDatabase database,
                 await database.MarkSuppressedAsync(delivery.TenantId, delivery.Id, cancellationToken);
                 return;
             }
-            await emailSender.SendAsync(templates.Render(delivery.TemplateKey, contact, delivery.Id),
+            await emailSender.SendAsync(templates.Render(delivery.TemplateKey, contact,
+                    delivery.ProviderCorrelationId),
                 cancellationToken);
             await database.MarkSentAsync(delivery.TenantId, delivery.Id, cancellationToken);
         }

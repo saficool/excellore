@@ -91,6 +91,35 @@ resolves an active member's verified email from Access with its own machine clie
 code-owned template, and sends through the shared SMTP transport. Events and delivery rows contain
 opaque IDs and safe status codes only; they do not contain an email address or rendered message.
 
+Keycloak identity email remains Mailpit-backed by default. To exercise a real authenticated SMTP
+relay locally, set the following only in ignored `.env`, rerun `node scripts/render-dev-realm.mjs`,
+then run `node scripts/sync-dev-realm.mjs`:
+
+```text
+KEYCLOAK_EMAIL_TRANSPORT=smtp
+EMAIL_SMTP_HOST=smtp.resend.com
+EMAIL_SMTP_PORT=587
+KEYCLOAK_EMAIL_FROM_ADDRESS=accounts@notify.example.com
+KEYCLOAK_EMAIL_SMTP_USERNAME=resend
+KEYCLOAK_EMAIL_SMTP_PASSWORD=<provider credential>
+```
+
+The sync updates the existing local realm from the rendered code-owned definition. Never commit the
+credential or edit SMTP in the Keycloak Admin Console. Set `KEYCLOAK_EMAIL_TRANSPORT=mailpit` and
+rerun render plus sync to return identity email to Mailpit.
+
+To send Access invitation codes and Notifications business email through the same authenticated
+relay, also set these values in ignored `.env` before starting either local process:
+
+```text
+APPLICATION_EMAIL_TRANSPORT=smtp
+APPLICATION_EMAIL_FROM_ADDRESS=notifications@notify.example.com
+```
+
+`scripts/run-access-local.mjs` and `scripts/run-notifications-local.mjs` then pass the SMTP secret to
+their child process without printing it. Set `APPLICATION_EMAIL_TRANSPORT=mailpit` to restore the
+local Mailpit default.
+
 After updating an existing local checkout, provision the new database role and Keycloak client,
 apply the migration, build the worker, and start it in a separate terminal:
 
@@ -112,6 +141,12 @@ message body and prints no contact data or credentials.
 For a deployed environment, configure an authenticated SMTP relay through the workload secret keys
 `Email__SmtpPassword` and `KEYCLOAK_EMAIL_SMTP_PASSWORD`; the host, port, username, sender addresses,
 and `StartTls` mode are code-owned chart values. Do not put provider credentials in repository files.
+Create a Resend webhook for `https://<notifications-host>/webhooks/v1/resend` with the sent,
+delivered, delayed, bounced, complained, failed, and suppressed email events. Store its signing
+secret as `ProviderWebhooks__ResendSigningSecret` in the Notifications API secret record. The
+provider endpoint cannot be exercised from a private local host without an explicitly approved HTTPS
+tunnel; automated tests verify signature rejection, idempotency, status transitions, and tenant
+isolation locally.
 
 ## Profile BFF login (WP-04)
 

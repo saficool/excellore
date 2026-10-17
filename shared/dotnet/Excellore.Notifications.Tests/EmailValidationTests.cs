@@ -49,6 +49,17 @@ public sealed class EmailValidationTests
         Assert.Throws<InvalidOperationException>(message.Validate);
     }
 
+    [Theory]
+    [InlineData("safe@example.test\r\nBcc: attacker@example.test")]
+    [InlineData("missing-at-sign")]
+    public void Message_rejects_invalid_message_id(string messageId)
+    {
+        var message = new EmailMessage("member@example.test", "Safe subject", "Safe body",
+            MessageId: messageId);
+
+        Assert.Throws<InvalidOperationException>(message.Validate);
+    }
+
     private static SmtpEmailOptions ValidOptions() => new(
         "smtp.example.test", 587, "sender", "secret", "notify@example.test",
         "Excellore", SmtpSecurity.StartTls);

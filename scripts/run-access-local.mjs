@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { localApplicationEmailEnvironment } from './application-email-config.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const env = Object.fromEntries(
@@ -49,6 +50,7 @@ const child = spawn(
       ExportStore__Endpoint: 'http://127.0.0.1:8333',
       ExportStore__AccessKey: env.OBJECTSTORE_ACCESS_KEY,
       ExportStore__SecretKey: env.OBJECTSTORE_SECRET_KEY,
+      ...localApplicationEmailEnvironment(env),
     },
   },
 );

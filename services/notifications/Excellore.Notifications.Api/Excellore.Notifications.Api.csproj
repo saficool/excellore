@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="Resend.Webhooks" Version="0.19.0" />
     <ProjectReference Include="../Excellore.Notifications.Infrastructure/Excellore.Notifications.Infrastructure.csproj" />
     <ProjectReference Include="../../../shared/dotnet/Excellore.Platform/Excellore.Platform.csproj" />
   </ItemGroup>

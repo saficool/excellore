@@ -33,6 +33,30 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
+  name: {{ include "excellore.fullname" . }}-notifications-webhook
+  labels:
+    {{- include "excellore.labels" . | nindent 4 }}
+  annotations:
+    nginx.ingress.kubernetes.io/enable-access-log: "false"
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts: [{{ .Values.ingress.hosts.notifications | quote }}]
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.hosts.notifications | quote }}
+      http:
+        paths:
+          - path: /webhooks/v1/resend
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "excellore.fullname" . }}-notifications-api
+                port: { name: http }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
   name: {{ include "excellore.fullname" . }}-identity
   labels:
     {{- include "excellore.labels" . | nindent 4 }}

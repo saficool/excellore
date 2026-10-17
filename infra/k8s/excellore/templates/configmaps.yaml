@@ -135,6 +135,8 @@ metadata:
   name: {{ include "excellore.fullname" . }}-notifications-api
 data:
   DOTNET_ENVIRONMENT: Production
+  ProviderWebhooks__ResendEnabled: "true"
+  ProviderWebhooks__MessageIdDomain: {{ .Values.platform.notificationMessageIdDomain | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -152,6 +154,7 @@ data:
   Email__FromAddress: {{ .Values.platform.emailFrom | quote }}
   Email__FromName: Excellore
   Notification__ShellOrigin: {{ printf "https://%s" .Values.ingress.hosts.shell | quote }}
+  Notification__MessageIdDomain: {{ .Values.platform.notificationMessageIdDomain | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap

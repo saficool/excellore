@@ -16,6 +16,7 @@ public sealed class NotificationIsolationTests
     {
         var adminPassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
         var workerPassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
+        var appPassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
         var migratorPassword = Convert.ToHexString(RandomNumberGenerator.GetBytes(24));
         await using var container = new PostgreSqlBuilder("postgres:16.12")
             .WithPassword(adminPassword).Build();
@@ -26,8 +27,11 @@ public sealed class NotificationIsolationTests
             $"CREATE ROLE notifications_migrator LOGIN PASSWORD '{migratorPassword}' NOSUPERUSER NOBYPASSRLS");
         await ExecuteAsync(admin,
             $"CREATE ROLE notifications_worker LOGIN PASSWORD '{workerPassword}' NOSUPERUSER NOBYPASSRLS");
+        await ExecuteAsync(admin,
+            $"CREATE ROLE notifications_app LOGIN PASSWORD '{appPassword}' NOSUPERUSER NOBYPASSRLS");
         await ExecuteAsync(admin, "GRANT USAGE,CREATE ON SCHEMA public TO notifications_migrator");
         await ExecuteAsync(admin, "GRANT USAGE ON SCHEMA public TO notifications_worker");
+        await ExecuteAsync(admin, "GRANT USAGE ON SCHEMA public TO notifications_app");
         var migratorString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
         {
             Username = "notifications_migrator", Password = migratorPassword
@@ -37,6 +41,8 @@ public sealed class NotificationIsolationTests
             await migrator.OpenAsync();
             await ExecuteAsync(migrator, await File.ReadAllTextAsync(
                 Path.Combine(AppContext.BaseDirectory, "001_initial.sql")));
+            await ExecuteAsync(migrator, await File.ReadAllTextAsync(
+                Path.Combine(AppContext.BaseDirectory, "002_provider_webhooks.sql")));
         }
 
         var workerString = new NpgsqlConnectionStringBuilder(container.GetConnectionString())
@@ -48,7 +54,8 @@ public sealed class NotificationIsolationTests
         var processor = new NotificationEventProcessor(
             new NotificationDatabase(source, new PostgresEventInbox()),
             new StaticContactResolver(),
-            new NotificationTemplateRenderer("https://excellore.example.test", false), sender);
+            new NotificationTemplateRenderer("https://excellore.example.test", false,
+                "notify.example.test"), sender);
         var tenant = Guid.NewGuid();
         var otherTenant = Guid.NewGuid();
         var envelope = new PlatformEvent<AccessAssignmentGrantedV1>

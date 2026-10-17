@@ -14,6 +14,7 @@ ingress:
     access: access.excellore.example.invalid
     platform: platform.excellore.example.invalid
     identity: auth.excellore.example.invalid
+    notifications: notifications.excellore.example.invalid
 
 externalSecrets:
   enabled: true
@@ -34,6 +35,7 @@ platform:
   smtpUsername: excellore
   emailFrom: notifications@example.invalid
   keycloakEmailFrom: accounts@example.invalid
+  notificationMessageIdDomain: notifications.excellore.example.invalid
 
 images:
   shell:

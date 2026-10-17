@@ -20,6 +20,7 @@ public sealed class MailKitEmailSender(SmtpEmailOptions options, bool allowInsec
         if (message.ReplyToAddress is not null)
             mimeMessage.ReplyTo.Add(EmailMessage.ValidateAddress(message.ReplyToAddress,
                 nameof(message.ReplyToAddress)));
+        if (message.MessageId is not null) mimeMessage.MessageId = message.MessageId;
         mimeMessage.Subject = message.Subject;
         mimeMessage.Body = new BodyBuilder
         {

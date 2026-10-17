@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.15 |
+| **Document version** | 5.16 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.16 | WP-15 delivery callbacks use signed Resend webhooks, an opaque random email correlation ID, an immutable P routing index, and forced-RLS delivery updates. The narrow webhook ingress exposes one exact path and stores neither provider payloads nor contact data (ADR-0077 owner-approved). Local Keycloak, Access, and Notifications processes may use code-owned authenticated SMTP configuration from ignored environment secrets. |
 | 5.15 | Owner-directed WP-15 adds an independent Notifications service for event-driven business email and future channels. Access keeps one-time invitation email and Keycloak keeps identity email, so ephemeral secrets never enter events or cross a new synchronous boundary (RFC-0007, ADR-0076 proposed). |
 | 5.14 | The platform console is a separate `apps/platform` UI and BFF with its own host, OIDC client, session boundary, and deployment. The Platform BFF may call only Access's documented `/v1/platform/**` contracts; Access retains all tenant and authorization ownership (ADR-0075, owner-approved INV-09 exception). |
 | 5.13 | WP-12 application user erasure is orchestrated from Profile to Access and back through existing ID-only erasure confirmations. Access immediately denies the identity, removes grants, anonymizes retained live references, and appends tenant audit markers; Profile removes personal rows and objects, preserves restricted audit originals, and exposes `pending_external_identity_deletion` while Keycloak deletion remains deferred (ADR-0073 proposed). |
@@ -1405,6 +1406,12 @@ They couple availability and deployment and create hidden dependencies. The only
   identity-provider messages. Neither secret crosses the broker or Notifications boundary.
 - Email is active first. SMS, push, and in-app delivery require separate reviewed endpoint,
   consent, abuse, compliance, and cost decisions (RFC-0007, ADR-0076).
+- Each email carries a random opaque provider correlation in its `Message-ID`; it contains no tenant,
+  user, or delivery ID. An immutable class-P index maps that value to a delivery internally.
+- The Notifications API accepts Resend callbacks only on the exact signed webhook route. It verifies
+  the signature over the raw body, stores only an idempotency ID and bounded delivery status, enters
+  tenant context before updating the forced-RLS row, and never stores or logs the provider payload
+  or its contact fields (ADR-0077).
 
 ---
 
@@ -2434,6 +2441,7 @@ Verify at adoption and on major upgrades.
 | AWSSDK.S3 | Apache 2.0 | Profile object-store client |
 | SkiaSharp | MIT | Profile avatar re-encoding; native assets for Windows and Linux |
 | MailKit / MimeKit | MIT | Shared SMTP and MIME transport; pin patched transitive cryptography packages |
+| Resend.Webhooks | MIT | Official signed webhook verification; raw provider payload is never persisted or logged |
 | MinIO | AGPL-3.0 | Review AGPL obligations |
 | Zitadel (alternative IdP) | AGPL-3.0 | Relevant if modified and hosted |
 
@@ -2673,6 +2681,10 @@ Email__SmtpPassword=***
 Email__FromAddress=invites@notify.excellore.com
 Email__FromName=Excellore
 Email__SmtpTimeoutSeconds=15
+Notification__MessageIdDomain=notify.excellore.com            # Notifications worker only
+ProviderWebhooks__ResendEnabled=true                          # Notifications API only
+ProviderWebhooks__MessageIdDomain=notify.excellore.com
+ProviderWebhooks__ResendSigningSecret=***
 Otel__Endpoint=http://otel-collector:4317
 ```
 

@@ -36,7 +36,8 @@ builder.Configuration["Authz:ClientSecret"] ??=
 builder.Services.AddAccessAuthzClient(builder.Configuration, allowLocal);
 builder.Services.AddSingleton<INotificationContactResolver, HttpNotificationContactResolver>();
 builder.Services.AddSingleton<INotificationTemplateRenderer>(_ => new NotificationTemplateRenderer(
-    builder.Configuration["Notification:ShellOrigin"], allowLocal));
+    builder.Configuration["Notification:ShellOrigin"], allowLocal,
+    builder.Configuration["Notification:MessageIdDomain"]));
 builder.Services.AddSingleton<IEmailSender>(_ => new MailKitEmailSender(smtpOptions, allowLocal));
 builder.Services.AddSingleton<NotificationEventProcessor>();
 builder.Services.AddHostedService<NotificationSubscriber>();

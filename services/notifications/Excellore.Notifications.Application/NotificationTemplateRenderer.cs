@@ -7,8 +7,10 @@ public sealed class NotificationTemplateRenderer
     : INotificationTemplateRenderer
 {
     private readonly Uri _shellOrigin;
+    private readonly string _messageIdDomain;
 
-    public NotificationTemplateRenderer(string? shellOrigin, bool allowLocalHttp)
+    public NotificationTemplateRenderer(string? shellOrigin, bool allowLocalHttp,
+        string? messageIdDomain = "excellore.example.test")
     {
         if (!Uri.TryCreate(shellOrigin, UriKind.Absolute, out var origin) ||
             (origin.Scheme != Uri.UriSchemeHttps &&
@@ -18,10 +20,13 @@ public sealed class NotificationTemplateRenderer
             origin.Fragment.Length != 0 || origin.AbsolutePath != "/")
             throw new InvalidOperationException("Notification shell origin is not configured.");
         _shellOrigin = origin;
+        _messageIdDomain = messageIdDomain ?? throw new InvalidOperationException(
+            "Notification Message-ID domain is not configured.");
+        _ = NotificationMessageId.Create(Guid.NewGuid(), _messageIdDomain);
     }
 
     public EmailMessage Render(string templateKey, NotificationContact contact,
-        Guid notificationId)
+        Guid providerCorrelationId)
     {
         if (templateKey != NotificationTemplates.AccessAssignmentGranted)
             throw new InvalidOperationException("Notification template is not allowed.");
@@ -42,6 +47,7 @@ public sealed class NotificationTemplateRenderer
               <p>If you did not expect this change, contact your organization administrator.</p>
             </body>
             </html>
-            """);
+            """,
+            MessageId: NotificationMessageId.Create(providerCorrelationId, _messageIdDomain));
     }
 }

@@ -1,8 +1,9 @@
 # Excellore Kubernetes chart
 
 This chart deploys the Shell, Profile, Access, and Platform BFFs; the Profile, Access, and Notifications
-APIs and workers; an HA Keycloak pair; and a narrow public proxy for Keycloak. Every service is a private ClusterIP.
-Only the four BFFs and the identity proxy have ingress resources.
+APIs and workers; an HA Keycloak pair; and narrow public routes for Keycloak and signed provider
+webhooks. Every service remains a private ClusterIP. The Notifications ingress exposes only the
+exact `/webhooks/v1/resend` path and suppresses ingress access logs.
 
 ## Required deployment inputs
 
@@ -28,7 +29,8 @@ At minimum:
   object store configuration. Access uses SMTP only for the synchronous one-time invitation code.
 - Workers: publisher/worker connection strings, RabbitMQ, object store configuration, machine
   actor ID where required, and Keycloak directory client credentials.
-- Notifications API: `ConnectionStrings__Notifications`.
+- Notifications API: `ConnectionStrings__Notifications` and
+  `ProviderWebhooks__ResendSigningSecret`.
 - Notifications worker: `ConnectionStrings__NotificationsWorker`, `Messaging__RabbitMqUri`,
   `Authz__ClientSecret`, and `Email__SmtpPassword`.
 - Keycloak: `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`, and the BFF and machine-client

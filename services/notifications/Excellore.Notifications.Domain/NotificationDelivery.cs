@@ -10,4 +10,5 @@ public sealed record PendingNotification(
     Guid TenantId,
     Guid UserId,
     string TemplateKey,
-    int Attempt);
+    int Attempt,
+    Guid ProviderCorrelationId);

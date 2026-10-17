@@ -58,7 +58,7 @@ public sealed class AccessMigrationTests
         Assert.True((await RlsDatabaseChecks.GetRuntimeRoleStatusAsync(app)).IsSafe);
         var exemptions = RlsDatabaseChecks.ParseExemptions(await File.ReadAllTextAsync(
             Path.Combine(AppContext.BaseDirectory, "rls-exempt.txt")));
-        Assert.Equal(["outbox", "user_tenant_index"], exemptions);
+        Assert.Equal(["outbox", "user_tenant_index", "notification_provider_index"], exemptions);
         Assert.Empty(await RlsDatabaseChecks.FindUnprotectedTenantTablesAsync(app, exemptions));
 
         var classes = new Dictionary<string, string>(StringComparer.Ordinal)

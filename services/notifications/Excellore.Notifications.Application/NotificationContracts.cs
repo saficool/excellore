@@ -10,5 +10,5 @@ public interface INotificationContactResolver
 
 public interface INotificationTemplateRenderer
 {
-    EmailMessage Render(string templateKey, NotificationContact contact, Guid notificationId);
+    EmailMessage Render(string templateKey, NotificationContact contact, Guid providerCorrelationId);
 }

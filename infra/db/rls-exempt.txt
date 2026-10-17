@@ -4,3 +4,5 @@ outbox
 # Access membership lookup index is keyed by tenant for routing (ADR-0038).
 # Support grants moved to forced RLS in migration 011 (ADR-0056).
 user_tenant_index
+# Notifications webhook routing index contains opaque correlation and delivery IDs only (ADR-0077).
+notification_provider_index

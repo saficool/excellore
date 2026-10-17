@@ -83,6 +83,7 @@ const allowedBackends = new Set([
   'excellore-profile-bff',
   'excellore-access-bff',
   'excellore-platform-bff',
+  'excellore-notifications-api',
   'excellore-identity-proxy',
 ]);
 const ingressBackends = ingresses.flatMap((ingress) =>
@@ -90,10 +91,28 @@ const ingressBackends = ingresses.flatMap((ingress) =>
     rule.http.paths.map((path) => path.backend.service.name),
   ),
 );
-assert(ingressBackends.length === 5, 'expected five public ingress backends');
+assert(ingressBackends.length === 6, 'expected six public ingress backends');
 assert(
   ingressBackends.every((name) => allowedBackends.has(name)),
-  'an API, worker, or Keycloak service is publicly routed',
+  'an unapproved API, worker, or Keycloak service is publicly routed',
+);
+
+const notificationIngress = ingresses.find(
+  (ingress) => ingress.metadata.name === 'excellore-notifications-webhook',
+);
+const notificationPath =
+  notificationIngress?.spec?.rules?.[0]?.http?.paths?.[0];
+assert(
+  notificationPath?.path === '/webhooks/v1/resend' &&
+    notificationPath?.pathType === 'Exact' &&
+    notificationPath?.backend?.service?.name === 'excellore-notifications-api',
+  'Notifications ingress must expose only the exact Resend webhook path',
+);
+assert(
+  notificationIngress?.metadata?.annotations?.[
+    'nginx.ingress.kubernetes.io/enable-access-log'
+  ] === 'false',
+  'Notifications webhook ingress must suppress request metadata logs',
 );
 
 const identityIngress = ingresses.find(

@@ -13,16 +13,20 @@ public sealed class NotificationDatabase(NpgsqlDataSource dataSource, PostgresEv
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await inbox.RunOnceAsync(connection, eventId, tenantId, async (transaction, token) =>
         {
+            var correlationId = Guid.NewGuid();
             await using var command = new NpgsqlCommand("""
                 INSERT INTO notification_deliveries
-                  (id,tenant_id,event_id,user_id,template_key,channel,status)
-                VALUES (@id,@tenant,@event,@user,@template,'email','pending')
+                  (id,tenant_id,event_id,user_id,template_key,channel,status,provider_correlation_id)
+                VALUES (@id,@tenant,@event,@user,@template,'email','pending',@correlation);
+                INSERT INTO notification_provider_index (correlation_id,tenant_id,delivery_id)
+                VALUES (@correlation,@tenant,@id)
                 """, connection, (NpgsqlTransaction)transaction);
             command.Parameters.AddWithValue("id", eventId);
             command.Parameters.AddWithValue("tenant", tenantId);
             command.Parameters.AddWithValue("event", eventId);
             command.Parameters.AddWithValue("user", userId);
             command.Parameters.AddWithValue("template", templateKey);
+            command.Parameters.AddWithValue("correlation", correlationId);
             await command.ExecuteNonQueryAsync(token);
         }, cancellationToken);
     }
@@ -40,7 +44,7 @@ public sealed class NotificationDatabase(NpgsqlDataSource dataSource, PostgresEv
              WHERE id=@id AND tenant_id=@tenant AND attempts < 3
                AND (status IN ('pending','failed') OR
                     (status='sending' AND lease_until < now()))
-            RETURNING id,tenant_id,user_id,template_key,attempts
+            RETURNING id,tenant_id,user_id,template_key,attempts,provider_correlation_id
             """, connection, transaction);
         command.Parameters.AddWithValue("id", notificationId);
         command.Parameters.AddWithValue("tenant", tenantId);
@@ -48,7 +52,7 @@ public sealed class NotificationDatabase(NpgsqlDataSource dataSource, PostgresEv
         PendingNotification? result = null;
         if (await reader.ReadAsync(cancellationToken))
             result = new PendingNotification(reader.GetGuid(0), reader.GetGuid(1), reader.GetGuid(2),
-                reader.GetString(3), reader.GetInt32(4));
+                reader.GetString(3), reader.GetInt32(4), reader.GetGuid(5));
         await reader.DisposeAsync();
         await transaction.CommitAsync(cancellationToken);
         return result;
