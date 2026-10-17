@@ -46,6 +46,7 @@ services:
       SVC_CATALOG_SYNC_SECRET: ${SVC_CATALOG_SYNC_SECRET:?Run scripts/dev-up.sh first}
       SVC_ACCESS_ADMIN_SECRET: ${SVC_ACCESS_ADMIN_SECRET:?Run scripts/dev-up.sh first}
       SVC_PROFILE_IDENTITY_SECRET: ${SVC_PROFILE_IDENTITY_SECRET:?Run scripts/dev-up.sh first}
+      SVC_NOTIFICATIONS_AUTHZ_SECRET: ${SVC_NOTIFICATIONS_AUTHZ_SECRET:?Run scripts/dev-up.sh first}
       DEV_USER_PASSWORD: ${DEV_USER_PASSWORD:?Run scripts/dev-up.sh first}
       DEV_OTP_SECRET: ${DEV_OTP_SECRET:?Run scripts/dev-up.sh first}
     ports:
@@ -115,6 +116,28 @@ services:
       timeout: 3s
       retries: 20
 
+  postgres-notifications:
+    image: postgres:16.12
+    environment:
+      POSTGRES_DB: notifications
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${NOTIFICATIONS_DB_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_SERVICE: notifications
+      DB_MIGRATOR_PASSWORD: ${NOTIFICATIONS_MIGRATOR_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_APP_PASSWORD: ${NOTIFICATIONS_APP_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_PUBLISHER_PASSWORD: ${NOTIFICATIONS_PUBLISHER_PASSWORD:?Run scripts/dev-up.sh first}
+      DB_WORKER_PASSWORD: ${NOTIFICATIONS_WORKER_PASSWORD:?Run scripts/dev-up.sh first}
+    ports:
+      - 127.0.0.1:5435:5432
+    volumes:
+      - notifications-data:/var/lib/postgresql/data
+      - ../db/bootstrap-roles.sql:/opt/excellore/bootstrap-roles.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d notifications']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   valkey:
     image: valkey/valkey:8.1
     ports:
@@ -166,6 +189,7 @@ volumes:
   keycloak-data:
   profile-data:
   access-data:
+  notifications-data:
   valkey-data:
   rabbitmq-data:
   objectstore-data:

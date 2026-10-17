@@ -1,6 +1,6 @@
 # AGENTS.md: Excellore
 
-You are working on **Excellore**, a multi-tenant SaaS platform made of four front-end apps (**Shell**, **Profile**, **Access**, **Platform**), the Profile and Access backend services, workers, and a Keycloak identity provider.
+You are working on **Excellore**, a multi-tenant SaaS platform made of four front-end apps (**Shell**, **Profile**, **Access**, **Platform**), the Profile, Access, and Notifications backend services, workers, and a Keycloak identity provider.
 
 **The single source of truth is `excellore-platform-handbook.md` (The Excellore Platform Handbook).** Read **Part 0 (Agent Operating Manual)** before writing any code, then read the sections relevant to your task. If this file and the handbook disagree, the handbook wins.
 
@@ -45,7 +45,7 @@ If a requirement seems to conflict with an invariant, **stop and ask a human**. 
 
 ## 3. How to work
 
-1. **Pick the next unfinished work package** in handbook section 34 (WP-00 to WP-15, in order). State which one you are doing.
+1. **Pick the next unfinished work package** in handbook section 34 (WP-00 to WP-16, in order). State which one you are doing.
 2. Work in **small, reviewable commits on `main`**. Run all required local checks before each push, then verify CI on `main`. Use a short-lived `wp-<nn>/<short-description>` branch only when a PR is specifically required.
 3. Use the **templates and shared libraries** (`Excellore.Auth`, `Excellore.Authz`, `Excellore.Platform`, `@excellore/auth`, `@excellore/ui`). If something security-relevant is missing, add it to the library, never to one app.
 4. Write tests with the code. Meet the work package's **acceptance criteria** and the **definition of done** (handbook 0.6).
@@ -55,7 +55,7 @@ If a requirement seems to conflict with an invariant, **stop and ask a human**. 
 
 ```bash
 # Local stack
-scripts/dev-up.sh                         # Keycloak, Postgres x3, Valkey, RabbitMQ, object store, Mailpit
+scripts/dev-up.sh                         # Keycloak, Postgres x4, Valkey, RabbitMQ, object store, Mailpit
 
 # Checks (run before declaring a step done)
 pnpm -w build && pnpm -w lint && pnpm -w test
@@ -113,8 +113,8 @@ Check the license list (handbook section 35) before adding any dependency. Sever
 ```
 apps/            shell, profile, access, platform  (Next.js UI + BFF)
 packages/        excellore-auth, ui, config        (shared TypeScript)
-services/        profile, access                   (Excellore.<App>.Api / Worker / Application / Domain / Infrastructure)
-shared/dotnet/   Excellore.Auth, .Authz, .Platform, .Contracts
+services/        profile, access, notifications    (Excellore.<App>.Api / Worker / Application / Domain / Infrastructure)
+shared/dotnet/   Excellore.Auth, .Authz, .Platform, .Contracts, .Notifications
 infra/           keycloak/, platform/, db/, tofu/, k8s/, compose/
 docs/            handbook.md, adr/, runbooks/
 ```
@@ -126,7 +126,7 @@ docs/            handbook.md, adr/, runbooks/
 - **Errors:** RFC 9457 problem details with stable `urn:excellore:problem:<name>` types. `404` for unknown or non-member tenant, `403` for member without permission or step-up needed.
 - **Commits:** Conventional Commits with project scope, for example `feat(access-api): add custom role endpoints`.
 - **Table classes:** every new table is classified in its migration as P (platform), H (hybrid), or T (tenant). T and H tables get forced RLS. Platform tables that carry `tenant_id` must be added to `infra/db/rls-exempt.txt`, which requires security review.
-- **Security review record** is required for `infra/keycloak/`, `Excellore.Auth`, `Excellore.Authz`, `Excellore.Platform`, `@excellore/auth`, `services/access/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. While @saficool is the only maintainer, the author records the review in the commit body (or PR when required); no separate approving reviewer is required (handbook section 24.2; ADR-0017).
+- **Security review record** is required for `infra/keycloak/`, `Excellore.Auth`, `Excellore.Authz`, `Excellore.Platform`, `Excellore.Notifications`, `@excellore/auth`, `services/access/`, `services/notifications/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. While @saficool is the only maintainer, the author records the review in the commit body (or PR when required); no separate approving reviewer is required (handbook section 24.2; ADR-0017).
 
 ## 8. Never
 

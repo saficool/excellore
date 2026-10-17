@@ -60,6 +60,9 @@ public static class ExcelloreAuthentication
             options.AddPolicy("Internal.Catalog", policy => policy.RequireAuthenticatedUser()
                 .RequireRole("access.catalog.sync")
                 .RequireClaim("azp", "svc-catalog-sync"));
+            options.AddPolicy("Internal.Notifications", policy => policy.RequireAuthenticatedUser()
+                .RequireRole("access.notification.contact.resolve")
+                .RequireClaim("azp", "svc-notifications-authz"));
             options.AddPolicy("Platform.Operator", policy => policy.RequireAuthenticatedUser().RequireClaim("platform_roles", "platform-operator", "platform-admin"));
             options.AddPolicy("Platform.Staff", policy => policy.RequireAuthenticatedUser().RequireClaim("platform_roles", "platform-operator", "platform-support", "platform-auditor", "platform-security", "platform-admin"));
             options.AddPolicy("Platform.Suspend", policy => policy.RequireAuthenticatedUser().RequireClaim("platform_roles", "platform-operator", "platform-security", "platform-admin"));

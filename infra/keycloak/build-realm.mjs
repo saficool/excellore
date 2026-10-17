@@ -212,6 +212,27 @@ const realm = {
   realm: 'excellore',
   enabled: true,
   displayName: 'Excellore',
+  smtpServer: production
+    ? {
+        host: '${EMAIL_SMTP_HOST}',
+        port: '${EMAIL_SMTP_PORT}',
+        from: '${KEYCLOAK_EMAIL_FROM_ADDRESS}',
+        fromDisplayName: 'Excellore Accounts',
+        auth: 'true',
+        user: '${KEYCLOAK_EMAIL_SMTP_USERNAME}',
+        password: '${KEYCLOAK_EMAIL_SMTP_PASSWORD}',
+        ssl: 'false',
+        starttls: 'true',
+      }
+    : {
+        host: 'mailpit',
+        port: '1025',
+        from: 'accounts@excellore.localhost',
+        fromDisplayName: 'Excellore Accounts',
+        auth: 'false',
+        ssl: 'false',
+        starttls: 'false',
+      },
   loginTheme: 'excellore',
   registrationAllowed: false,
   resetPasswordAllowed: true,
@@ -319,6 +340,7 @@ const realm = {
         'access.authz.resolve',
         'access.catalog.sync',
         'access.worker',
+        'access.notification.contact.resolve',
       ].map((name) => ({ name })),
       'api-profile': [{ name: 'profile.worker' }],
     },
@@ -331,6 +353,10 @@ const realm = {
       { client: 'svc-profile-authz', roles: ['access.authz.resolve'] },
       { client: 'svc-access-authz', roles: ['access.authz.resolve'] },
       { client: 'svc-catalog-sync', roles: ['access.catalog.sync'] },
+      {
+        client: 'svc-notifications-authz',
+        roles: ['access.notification.contact.resolve'],
+      },
     ],
     'api-profile': [{ client: 'worker-profile', roles: ['profile.worker'] }],
     'realm-management': [
@@ -428,6 +454,11 @@ const realm = {
     machine('svc-profile-authz', 'SVC_PROFILE_AUTHZ_SECRET', 'api-access'),
     machine('svc-access-authz', 'SVC_ACCESS_AUTHZ_SECRET', 'api-access'),
     machine('svc-catalog-sync', 'SVC_CATALOG_SYNC_SECRET', 'api-access'),
+    machine(
+      'svc-notifications-authz',
+      'SVC_NOTIFICATIONS_AUTHZ_SECRET',
+      'api-access',
+    ),
     machine('svc-access-admin', 'SVC_ACCESS_ADMIN_SECRET'),
     machine('svc-profile-identity', 'SVC_PROFILE_IDENTITY_SECRET'),
   ],
@@ -462,6 +493,9 @@ const realm = {
       'api-access': ['access.authz.resolve'],
     }),
     serviceUser('svc-catalog-sync', { 'api-access': ['access.catalog.sync'] }),
+    serviceUser('svc-notifications-authz', {
+      'api-access': ['access.notification.contact.resolve'],
+    }),
     serviceUser('svc-access-admin', {
       'realm-management': ['query-users', 'view-users', 'manage-users'],
     }),

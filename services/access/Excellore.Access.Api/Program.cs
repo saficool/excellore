@@ -3,6 +3,7 @@ using Excellore.Access.Api;
 using Excellore.Access.Infrastructure;
 using Excellore.Auth;
 using Excellore.Authz;
+using Excellore.Notifications;
 using Excellore.Platform;
 using Npgsql;
 using System.Net.Mail;
@@ -38,6 +39,7 @@ builder.Services.AddScoped<InvitationDeliveryCoordinator>();
 builder.Services.AddScoped<OwnerInvitationResendService>();
 builder.Services.AddScoped<MemberLifecycleService>();
 builder.Services.AddScoped<AccessTenantReadService>();
+builder.Services.AddScoped<NotificationContactService>();
 builder.Services.AddScoped<OwnershipTransferService>();
 builder.Services.AddScoped<TenantSettingsService>();
 builder.Services.AddScoped<AccessRequestService>();
@@ -63,12 +65,21 @@ builder.Services.AddSingleton(new IdentityAdminOptions(
 builder.Services.AddSingleton<IdentityAdminCircuit>();
 builder.Services.AddHttpClient<IIdentityAdmin, KeycloakIdentityAdmin>(client =>
     client.Timeout = TimeSpan.FromSeconds(10));
-builder.Services.AddScoped<IInvitationDelivery>(_ => new SmtpInvitationDelivery(
-    builder.Configuration["Invitation:SmtpHost"],
-    int.TryParse(builder.Configuration["Invitation:SmtpPort"], out var port) ? port : 0,
-    builder.Configuration["Invitation:From"],
-    builder.Configuration["Invitation:AcceptanceOrigin"],
-    bool.TryParse(builder.Configuration["Invitation:SmtpTls"], out var tls) && tls,
+var smtpSecurity = Enum.TryParse<SmtpSecurity>(builder.Configuration["Email:SmtpSecurity"], true,
+    out var configuredSecurity) ? configuredSecurity : SmtpSecurity.None;
+var smtpOptions = new SmtpEmailOptions(
+    builder.Configuration["Email:SmtpHost"],
+    int.TryParse(builder.Configuration["Email:SmtpPort"], out var smtpPort) ? smtpPort : 0,
+    builder.Configuration["Email:SmtpUsername"],
+    builder.Configuration["Email:SmtpPassword"],
+    builder.Configuration["Email:FromAddress"],
+    builder.Configuration["Email:FromName"] ?? "Excellore",
+    smtpSecurity,
+    int.TryParse(builder.Configuration["Email:SmtpTimeoutSeconds"], out var smtpTimeout)
+        ? smtpTimeout : 15);
+builder.Services.AddSingleton<IEmailSender>(_ => new MailKitEmailSender(smtpOptions, allowLocalHttp));
+builder.Services.AddScoped<IInvitationDelivery>(provider => new SmtpInvitationDelivery(
+    provider.GetRequiredService<IEmailSender>(), builder.Configuration["Invitation:AcceptanceOrigin"],
     allowLocalHttp));
 builder.Services.AddExcelloreAuthentication(builder.Configuration, "api-access", !allowLocalHttp);
 
@@ -265,6 +276,15 @@ app.MapPost("/internal/v1/users/invitations:list", async (TenantListRequest requ
     context.Response.Headers.CacheControl = "no-store";
     return Results.Json(await service.ListForUserAsync(request.UserId, cancellationToken));
 }).RequireAuthorization("Internal.Authz");
+
+app.MapPost("/internal/v1/identities:resolve-notification-contact", async (
+    ResolveNotificationContactRequest request, NotificationContactService service,
+    HttpContext context, CancellationToken cancellationToken) =>
+{
+    context.Response.Headers.CacheControl = "no-store";
+    var contact = await service.ResolveAsync(request.TenantId, request.UserId, cancellationToken);
+    return contact is null ? Results.NotFound() : Results.Json(contact);
+}).RequireAuthorization("Internal.Notifications");
 
 app.MapPost("/internal/v1/tenants:resolve-slug", async (ResolveSlugRequest request,
     AccessResolutionService service, CancellationToken cancellationToken) =>
@@ -584,3 +604,5 @@ tenantRoutes.MapDelete("/groups/{groupId:guid}/role-assignments/{assignmentId:gu
 app.AssertTenantRoutesProtected();
 
 app.Run();
+
+public sealed record ResolveNotificationContactRequest(Guid TenantId, Guid UserId);

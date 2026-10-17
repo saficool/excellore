@@ -26,10 +26,10 @@ SELECT format('GRANT USAGE, CREATE ON SCHEMA public TO %I', :'service' || '_migr
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'service' || '_app') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'service' || '_publisher') \gexec
 SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'service' || '_worker') \gexec
--- Access uses table-specific grants from its migration. Re-running dev-up must
--- not restore broad default grants for later Access migrations.
-SELECT :'service' = 'access' AS access_service \gset
-\if :access_service
+-- Access and Notifications use table-specific grants from migrations. Re-running
+-- dev-up must not restore broad default grants for their later migrations.
+SELECT :'service' IN ('access', 'notifications') AS restricted_service \gset
+\if :restricted_service
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM %I', :'service' || '_migrator', :'service' || '_app') \gexec
 \else
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %I', :'service' || '_migrator', :'service' || '_app') \gexec

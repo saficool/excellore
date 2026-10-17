@@ -15,6 +15,7 @@
     "security:scenarios": "node scripts/check-security-scenarios.mjs",
     "observability:check": "node scripts/check-observability.mjs",
     "infra:check": "node scripts/check-production-manifests.mjs",
+    "notifications:check": "node scripts/check-notifications-local.mjs",
     "wp14:rehearse-local": "node scripts/run-local-rehearsal.mjs",
     "local:https:setup": "node scripts/setup-local-https.mjs",
     "local:web": "node scripts/run-web-local.mjs",

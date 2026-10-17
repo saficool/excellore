@@ -26,7 +26,7 @@ assert(
 const deployments = resources.filter(
   (resource) => resource.kind === 'Deployment',
 );
-assert(deployments.length === 10, 'expected ten application deployments');
+assert(deployments.length === 12, 'expected twelve application deployments');
 for (const deployment of deployments) {
   const spec = deployment.spec.template.spec;
   assert(
@@ -149,6 +149,22 @@ assert(
       '/realms/excellore/protocol/openid-connect/token',
   'Profile Authz token endpoint must be the public credential-free realm endpoint',
 );
+const notificationsConfig = configMaps.find(
+  (config) => config.metadata.name === 'excellore-notifications-worker',
+);
+const notificationsTokenEndpoint = new URL(
+  notificationsConfig?.data?.Authz__TokenEndpoint ?? 'invalid:',
+);
+assert(
+  notificationsTokenEndpoint.protocol === 'https:' &&
+    notificationsTokenEndpoint.username === '' &&
+    notificationsTokenEndpoint.password === '' &&
+    notificationsTokenEndpoint.search === '' &&
+    notificationsTokenEndpoint.hash === '' &&
+    notificationsTokenEndpoint.pathname ===
+      '/realms/excellore/protocol/openid-connect/token',
+  'Notifications Authz token endpoint must be the public credential-free realm endpoint',
+);
 
 for (const [component, prefix] of [
   ['profile-api', 'Identity'],
@@ -193,11 +209,11 @@ const externalSecrets = resources.filter(
   (resource) => resource.kind === 'ExternalSecret',
 );
 assert(
-  externalSecrets.length === 10,
+  externalSecrets.length === 12,
   'each secret-bearing workload needs its own ExternalSecret',
 );
 assert(
-  new Set(externalSecrets.map((secret) => secret.spec.target.name)).size === 10,
+  new Set(externalSecrets.map((secret) => secret.spec.target.name)).size === 12,
   'workloads must not share runtime Secrets',
 );
 

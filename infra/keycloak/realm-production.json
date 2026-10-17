@@ -2,6 +2,17 @@
   "realm": "excellore",
   "enabled": true,
   "displayName": "Excellore",
+  "smtpServer": {
+    "host": "${EMAIL_SMTP_HOST}",
+    "port": "${EMAIL_SMTP_PORT}",
+    "from": "${KEYCLOAK_EMAIL_FROM_ADDRESS}",
+    "fromDisplayName": "Excellore Accounts",
+    "auth": "true",
+    "user": "${KEYCLOAK_EMAIL_SMTP_USERNAME}",
+    "password": "${KEYCLOAK_EMAIL_SMTP_PASSWORD}",
+    "ssl": "false",
+    "starttls": "true"
+  },
   "loginTheme": "excellore",
   "registrationAllowed": false,
   "resetPasswordAllowed": true,
@@ -161,7 +172,8 @@
       "api-access": [
         { "name": "access.authz.resolve" },
         { "name": "access.catalog.sync" },
-        { "name": "access.worker" }
+        { "name": "access.worker" },
+        { "name": "access.notification.contact.resolve" }
       ],
       "api-profile": [{ "name": "profile.worker" }]
     }
@@ -184,7 +196,11 @@
       { "client": "svc-shell-authz", "roles": ["access.authz.resolve"] },
       { "client": "svc-profile-authz", "roles": ["access.authz.resolve"] },
       { "client": "svc-access-authz", "roles": ["access.authz.resolve"] },
-      { "client": "svc-catalog-sync", "roles": ["access.catalog.sync"] }
+      { "client": "svc-catalog-sync", "roles": ["access.catalog.sync"] },
+      {
+        "client": "svc-notifications-authz",
+        "roles": ["access.notification.contact.resolve"]
+      }
     ],
     "api-profile": [
       { "client": "worker-profile", "roles": ["profile.worker"] }
@@ -660,6 +676,21 @@
       "secret": "${SVC_CATALOG_SYNC_SECRET}"
     },
     {
+      "clientId": "svc-notifications-authz",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "acr", "api-access"],
+      "optionalClientScopes": [],
+      "secret": "${SVC_NOTIFICATIONS_AUTHZ_SECRET}"
+    },
+    {
       "clientId": "svc-access-admin",
       "enabled": true,
       "protocol": "openid-connect",
@@ -732,6 +763,12 @@
       "enabled": true,
       "serviceAccountClientId": "svc-catalog-sync",
       "clientRoles": { "api-access": ["access.catalog.sync"] }
+    },
+    {
+      "username": "service-account-svc-notifications-authz",
+      "enabled": true,
+      "serviceAccountClientId": "svc-notifications-authz",
+      "clientRoles": { "api-access": ["access.notification.contact.resolve"] }
     },
     {
       "username": "service-account-svc-access-admin",

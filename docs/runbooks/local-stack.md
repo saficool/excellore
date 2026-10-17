@@ -12,7 +12,7 @@ pnpm local:https:setup
 pnpm local:web
 ```
 
-The first run creates an ignored `.env` with random local credentials and an ignored SeaweedFS S3 configuration. Keep both local. The script starts Keycloak, its PostgreSQL database, separate Access and Profile PostgreSQL databases, Valkey, RabbitMQ, SeaweedFS, and Mailpit. It also creates the `<app>_migrator`, `<app>_app`, and `<app>_publisher` roles in each service database. Re-running is safe. The app and publisher roles own no objects and cannot bypass RLS (INV-03). Migrations start in later work packages.
+The first run creates an ignored `.env` with random local credentials and an ignored SeaweedFS S3 configuration. Keep both local. The script starts Keycloak, its PostgreSQL database, separate Access, Profile, and Notifications PostgreSQL databases, Valkey, RabbitMQ, SeaweedFS, and Mailpit. It also creates the `<app>_migrator`, `<app>_app`, `<app>_publisher`, and scoped worker roles in each service database. Re-running is safe. Runtime roles own no objects and cannot bypass RLS (INV-03). Migrations start in later work packages.
 
 WP-02 also renders `infra/keycloak/realm-dev.json` with the generated credentials into ignored `.local/keycloak/realm-dev.json`. Keycloak imports that realm on first startup. Changes to the source realm do not alter an existing local realm automatically. To discard only the local `excellore` realm and re-import it from the current file, run:
 
@@ -27,17 +27,18 @@ The reset deletes local seed users, sessions, and events in the `excellore` real
 
 The endpoints bind to `127.0.0.1` only:
 
-| Service               | Local endpoint                              |
-| --------------------- | ------------------------------------------- |
-| Keycloak (browser)    | `https://auth.excellore.localhost`          |
-| Keycloak (host admin) | `http://auth.excellore.localhost:8080`      |
-| Keycloak readiness    | `http://127.0.0.1:9000/health/ready`        |
-| Access PostgreSQL     | `127.0.0.1:5434`                            |
-| Profile PostgreSQL    | `127.0.0.1:5433`                            |
-| Valkey                | `127.0.0.1:6379`                            |
-| RabbitMQ / management | `127.0.0.1:5672` / `http://127.0.0.1:15672` |
-| SeaweedFS S3          | `http://127.0.0.1:8333`                     |
-| Mailpit web / SMTP    | `http://127.0.0.1:8025` / `127.0.0.1:1025`  |
+| Service                  | Local endpoint                              |
+| ------------------------ | ------------------------------------------- |
+| Keycloak (browser)       | `https://auth.excellore.localhost`          |
+| Keycloak (host admin)    | `http://auth.excellore.localhost:8080`      |
+| Keycloak readiness       | `http://127.0.0.1:9000/health/ready`        |
+| Access PostgreSQL        | `127.0.0.1:5434`                            |
+| Profile PostgreSQL       | `127.0.0.1:5433`                            |
+| Notifications PostgreSQL | `127.0.0.1:5435`                            |
+| Valkey                   | `127.0.0.1:6379`                            |
+| RabbitMQ / management    | `127.0.0.1:5672` / `http://127.0.0.1:15672` |
+| SeaweedFS S3             | `http://127.0.0.1:8333`                     |
+| Mailpit web / SMTP       | `http://127.0.0.1:8025` / `127.0.0.1:1025`  |
 
 The Keycloak bootstrap admin username is `admin`; its password is in your local `.env`. RabbitMQ and SeaweedFS credentials are there too. Do not use these credentials outside this local stack.
 
@@ -82,6 +83,35 @@ docker compose --env-file .env -f infra/compose/docker-compose.yml down
 ```
 
 This keeps named database and broker volumes. Removing those volumes deletes local data.
+
+## Notifications email flow (WP-15)
+
+Business services publish allow-listed, privacy-safe events to RabbitMQ. The Notifications worker
+resolves an active member's verified email from Access with its own machine client, renders a
+code-owned template, and sends through the shared SMTP transport. Events and delivery rows contain
+opaque IDs and safe status codes only; they do not contain an email address or rendered message.
+
+After updating an existing local checkout, provision the new database role and Keycloak client,
+apply the migration, build the worker, and start it in a separate terminal:
+
+```sh
+bash scripts/dev-up.sh
+bash scripts/migrate-notifications.sh
+dotnet build services/notifications/Excellore.Notifications.Worker
+pnpm exec node scripts/run-notifications-local.mjs
+```
+
+Keep the Access API and Access worker running. Granting a role emits
+`access.assignment.granted.v1`; duplicate broker delivery still creates one Notifications row and
+one email. View the local message at `http://127.0.0.1:8025`. Invitation codes remain synchronous in
+Access, and Keycloak continues to send account setup messages. Both also use Mailpit locally.
+With the Access API and Notifications worker running, `pnpm notifications:check` publishes an
+opaque local probe event twice and verifies one delivery row and one Mailpit message. It reads no
+message body and prints no contact data or credentials.
+
+For a deployed environment, configure an authenticated SMTP relay through the workload secret keys
+`Email__SmtpPassword` and `KEYCLOAK_EMAIL_SMTP_PASSWORD`; the host, port, username, sender addresses,
+and `StartTls` mode are code-owned chart values. Do not put provider credentials in repository files.
 
 ## Profile BFF login (WP-04)
 

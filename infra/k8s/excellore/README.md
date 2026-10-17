@@ -1,7 +1,7 @@
 # Excellore Kubernetes chart
 
-This chart deploys the Shell, Profile, Access, and Platform BFFs; the Profile and Access APIs and workers;
-an HA Keycloak pair; and a narrow public proxy for Keycloak. Every service is a private ClusterIP.
+This chart deploys the Shell, Profile, Access, and Platform BFFs; the Profile, Access, and Notifications
+APIs and workers; an HA Keycloak pair; and a narrow public proxy for Keycloak. Every service is a private ClusterIP.
 Only the four BFFs and the identity proxy have ingress resources.
 
 ## Required deployment inputs
@@ -24,12 +24,16 @@ At minimum:
   first two values.
 - Profile API: `ConnectionStrings__Profile`, `Authz__ClientSecret`, `Authz__RabbitMq`, and object
   store credentials/configuration.
-- Access API: `ConnectionStrings__Access`, `IdentityAdmin__ClientSecret`, and object store and SMTP
-  credentials/configuration.
+- Access API: `ConnectionStrings__Access`, `IdentityAdmin__ClientSecret`, `Email__SmtpPassword`, and
+  object store configuration. Access uses SMTP only for the synchronous one-time invitation code.
 - Workers: publisher/worker connection strings, RabbitMQ, object store configuration, machine
   actor ID where required, and Keycloak directory client credentials.
+- Notifications API: `ConnectionStrings__Notifications`.
+- Notifications worker: `ConnectionStrings__NotificationsWorker`, `Messaging__RabbitMqUri`,
+  `Authz__ClientSecret`, and `Email__SmtpPassword`.
 - Keycloak: `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`, and the BFF and machine-client
-  secrets referenced by the generated realm, including `PLATFORM_BFF_SECRET`. Bootstrap
+  secrets referenced by the generated realm, including `PLATFORM_BFF_SECRET`,
+  `SVC_NOTIFICATIONS_AUTHZ_SECRET`, and `KEYCLOAK_EMAIL_SMTP_PASSWORD`. Bootstrap
   administrator credentials belong only in the one-time realm provisioning job.
 
 The private CIDR lists enable only the documented PostgreSQL, Valkey, RabbitMQ, object store, and

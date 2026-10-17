@@ -11,6 +11,7 @@
     <PackageReference Include="AWSSDK.S3" Version="4.0.102.5" />
     <ProjectReference Include="../Excellore.Access.Application/Excellore.Access.Application.csproj" />
     <ProjectReference Include="../../../shared/dotnet/Excellore.Authz/Excellore.Authz.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Notifications/Excellore.Notifications.csproj" />
     <ProjectReference Include="../../../shared/dotnet/Excellore.Platform/Excellore.Platform.csproj" />
   </ItemGroup>
 

@@ -8,6 +8,8 @@
   (dict "name" "access-api" "image" "accessApi" "replicas" .Values.replicas.api "class" "api" "port" 8080 "assembly" "Excellore.Access.Api.dll")
   (dict "name" "profile-worker" "image" "profileWorker" "replicas" .Values.replicas.worker "class" "worker" "port" 0 "assembly" "Excellore.Profile.Worker.dll")
   (dict "name" "access-worker" "image" "accessWorker" "replicas" .Values.replicas.worker "class" "worker" "port" 0 "assembly" "Excellore.Access.Worker.dll")
+  (dict "name" "notifications-api" "image" "notificationsApi" "replicas" .Values.replicas.api "class" "api" "port" 8080 "assembly" "Excellore.Notifications.Api.dll")
+  (dict "name" "notifications-worker" "image" "notificationsWorker" "replicas" .Values.replicas.worker "class" "worker" "port" 0 "assembly" "Excellore.Notifications.Worker.dll")
 -}}
 {{- range $component := $components }}
 ---

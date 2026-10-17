@@ -91,12 +91,14 @@ jobs:
           docker build -f infra/images/next/Dockerfile --build-arg APP_NAME=shell -t excellore-shell:ci .
           docker build -f infra/images/next/Dockerfile --build-arg APP_NAME=platform -t excellore-platform:ci .
           docker build -f infra/images/dotnet/Dockerfile --build-arg PROJECT=services/access/Excellore.Access.Api/Excellore.Access.Api.csproj -t excellore-access-api:ci .
+          docker build -f infra/images/dotnet/Dockerfile --build-arg PROJECT=services/notifications/Excellore.Notifications.Worker/Excellore.Notifications.Worker.csproj -t excellore-notifications-worker:ci .
           docker build -f infra/images/keycloak/Dockerfile -t excellore-keycloak:ci .
       - name: Verify non-root runtime users
         run: |
           test "$(docker image inspect excellore-shell:ci --format '{{.Config.User}}')" = "10001:10001"
           test "$(docker image inspect excellore-platform:ci --format '{{.Config.User}}')" = "10001:10001"
           test "$(docker image inspect excellore-access-api:ci --format '{{.Config.User}}')" = "1654:1654"
+          test "$(docker image inspect excellore-notifications-worker:ci --format '{{.Config.User}}')" = "1654:1654"
           test "$(docker image inspect excellore-keycloak:ci --format '{{.Config.User}}')" = "1000:0"
 
   dotnet:

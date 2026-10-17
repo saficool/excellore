@@ -374,6 +374,121 @@ if (!(await assigned.json()).some((item) => item.name === role.name)) {
 }
 console.log('Local Access BFF authority client is configured.');
 
+// Add the Notifications recipient resolver identity and its single Access role
+// without resetting local users or their OTP enrollments.
+let notificationMachine = (
+  await (
+    await fetch(endpoint, { headers: { authorization: `Bearer ${token}` } })
+  ).json()
+).find((candidate) => candidate.clientId === 'svc-notifications-authz');
+if (!notificationMachine) {
+  const definition = realmDefinition.clients.find(
+    (candidate) => candidate.clientId === 'svc-notifications-authz',
+  );
+  assert.ok(definition, 'declarative Notifications resolver client');
+  const created = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(definition),
+  });
+  assert.equal(created.status, 201, 'local Notifications resolver client');
+  notificationMachine = (
+    await (
+      await fetch(endpoint, { headers: { authorization: `Bearer ${token}` } })
+    ).json()
+  ).find((candidate) => candidate.clientId === 'svc-notifications-authz');
+}
+assert.ok(notificationMachine?.id, 'local Notifications resolver client');
+const notificationRoleName = 'access.notification.contact.resolve';
+let notificationRoleResponse = await fetch(
+  `${endpoint}/${apiClient.id}/roles/${notificationRoleName}`,
+  { headers: { authorization: `Bearer ${token}` } },
+);
+if (notificationRoleResponse.status === 404) {
+  const created = await fetch(`${endpoint}/${apiClient.id}/roles`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ name: notificationRoleName }),
+  });
+  assert.equal(created.status, 201, 'create Notifications contact role');
+  notificationRoleResponse = await fetch(
+    `${endpoint}/${apiClient.id}/roles/${notificationRoleName}`,
+    { headers: { authorization: `Bearer ${token}` } },
+  );
+}
+assert.equal(
+  notificationRoleResponse.status,
+  200,
+  'Notifications contact role',
+);
+const notificationRole = await notificationRoleResponse.json();
+for (const mapping of [
+  `${endpoint}/${notificationMachine.id}/scope-mappings/clients/${apiClient.id}`,
+  `${base}/admin/realms/excellore/users/${
+    (
+      await (
+        await fetch(
+          `${endpoint}/${notificationMachine.id}/service-account-user`,
+          {
+            headers: { authorization: `Bearer ${token}` },
+          },
+        )
+      ).json()
+    ).id
+  }/role-mappings/clients/${apiClient.id}`,
+]) {
+  const assignedResponse = await fetch(mapping, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(assignedResponse.status, 200, 'Notifications role mapping');
+  if (
+    !(await assignedResponse.json()).some(
+      (item) => item.name === notificationRoleName,
+    )
+  ) {
+    const assigned = await fetch(mapping, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify([notificationRole]),
+    });
+    assert.equal(assigned.status, 204, 'assign Notifications contact role');
+  }
+}
+
+const realmEndpoint = `${base}/admin/realms/excellore`;
+const realmResponse = await fetch(realmEndpoint, {
+  headers: { authorization: `Bearer ${token}` },
+});
+assert.equal(realmResponse.status, 200, 'local realm configuration');
+const currentRealm = await realmResponse.json();
+if (
+  JSON.stringify(currentRealm.smtpServer) !==
+  JSON.stringify(realmDefinition.smtpServer)
+) {
+  const updated = await fetch(realmEndpoint, {
+    method: 'PUT',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...currentRealm,
+      smtpServer: realmDefinition.smtpServer,
+    }),
+  });
+  assert.equal(updated.status, 204, 'local realm SMTP update');
+}
+console.log('Local Notifications resolver and Keycloak SMTP are configured.');
+
 const scopesResponse = await fetch(
   `${base}/admin/realms/excellore/client-scopes`,
   {

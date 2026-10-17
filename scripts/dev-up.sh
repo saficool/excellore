@@ -124,7 +124,7 @@ fi
 
 "${compose[@]}" up -d --wait --wait-timeout 300
 
-for service in access profile; do
+for service in access profile notifications; do
   "${compose[@]}" exec -T "postgres-$service" \
     psql -X -U postgres -d "$service" -f /opt/excellore/bootstrap-roles.sql >/dev/null
 done

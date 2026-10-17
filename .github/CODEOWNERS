@@ -3,7 +3,9 @@
 /shared/dotnet/Excellore.Auth/ @saficool
 /shared/dotnet/Excellore.Authz/ @saficool
 /shared/dotnet/Excellore.Platform/ @saficool
+/shared/dotnet/Excellore.Notifications/ @saficool
 /packages/excellore-auth/ @saficool
 /services/access/ @saficool
+/services/notifications/ @saficool
 **/permissions.yaml @saficool
 /infra/db/rls-exempt.txt @saficool

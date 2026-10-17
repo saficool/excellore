@@ -104,6 +104,7 @@ const secretKeys = {
   'svc-profile-authz': 'SVC_PROFILE_AUTHZ_SECRET',
   'svc-access-authz': 'SVC_ACCESS_AUTHZ_SECRET',
   'svc-catalog-sync': 'SVC_CATALOG_SYNC_SECRET',
+  'svc-notifications-authz': 'SVC_NOTIFICATIONS_AUTHZ_SECRET',
   'svc-access-admin': 'SVC_ACCESS_ADMIN_SECRET',
   'svc-profile-identity': 'SVC_PROFILE_IDENTITY_SECRET',
 };
@@ -120,6 +121,7 @@ const expected = [
   'svc-profile-authz',
   'svc-access-authz',
   'svc-catalog-sync',
+  'svc-notifications-authz',
   'svc-access-admin',
   'svc-profile-identity',
 ];
@@ -277,6 +279,18 @@ const accessMachineClaims = claims(accessMachine.data.access_token);
 assert.ok([accessMachineClaims.aud].flat().includes('api-access'));
 assert.match(accessMachineClaims.sub, /^[0-9a-f-]{36}$/i);
 assert.ok(accessMachineClaims.roles?.includes('access.authz.resolve'));
+const notificationMachine = await token({
+  client_id: 'svc-notifications-authz',
+  client_secret: env.SVC_NOTIFICATIONS_AUTHZ_SECRET,
+  grant_type: 'client_credentials',
+});
+assert.equal(notificationMachine.status, 200, 'svc-notifications-authz token');
+const notificationClaims = claims(notificationMachine.data.access_token);
+assert.ok([notificationClaims.aud].flat().includes('api-access'));
+assert.deepEqual(notificationClaims.roles, [
+  'access.notification.contact.resolve',
+]);
+assert.equal(notificationClaims.platform_roles, undefined);
 assert.equal(machineClaims.platform_roles, undefined);
 assert.ok(!Object.keys(machineClaims).some((key) => /tenant/i.test(key)));
 

@@ -110,6 +110,7 @@ public class AuthenticationTests
     [InlineData("Internal.Authz", "roles", "access.authz.resolve", false)]
     [InlineData("Internal.Authz", "platform_roles", "platform-admin", false)]
     [InlineData("Internal.Catalog", "roles", "access.catalog.sync", false)]
+    [InlineData("Internal.Notifications", "roles", "access.notification.contact.resolve", false)]
     [InlineData("Platform.Operator", "platform_roles", "platform-operator", true)]
     [InlineData("Platform.Operator", "roles", "platform-operator", false)]
     [InlineData("Platform.Staff", "platform_roles", "platform-support", true)]
@@ -137,6 +138,9 @@ public class AuthenticationTests
     [InlineData("Internal.Catalog", "access.catalog.sync", "svc-catalog-sync", true)]
     [InlineData("Internal.Catalog", "access.catalog.sync", "excellore-access", false)]
     [InlineData("Internal.Catalog", "access.catalog.sync", "svc-shell-authz", false)]
+    [InlineData("Internal.Notifications", "access.notification.contact.resolve", "svc-notifications-authz", true)]
+    [InlineData("Internal.Notifications", "access.notification.contact.resolve", "svc-profile-authz", false)]
+    [InlineData("Internal.Notifications", "access.authz.resolve", "svc-notifications-authz", false)]
     public async Task Internal_policies_require_the_expected_machine_client_and_role(
         string policyName, string role, string client, bool expected)
     {

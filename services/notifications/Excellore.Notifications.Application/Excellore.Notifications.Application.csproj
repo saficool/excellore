@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Excellore.Notifications.Domain/Excellore.Notifications.Domain.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Notifications/Excellore.Notifications.csproj" />
+  </ItemGroup>
+</Project>

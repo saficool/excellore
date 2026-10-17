@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Excellore.Notifications.Application/Excellore.Notifications.Application.csproj" />
+    <ProjectReference Include="../Excellore.Notifications.Infrastructure/Excellore.Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Contracts/Excellore.Contracts.csproj" />
+    <ProjectReference Include="../../../shared/dotnet/Excellore.Notifications/Excellore.Notifications.csproj" />
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../Excellore.Notifications.Infrastructure/Migrations/*.sql" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

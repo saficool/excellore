@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.14 |
+| **Document version** | 5.15 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.15 | Owner-directed WP-15 adds an independent Notifications service for event-driven business email and future channels. Access keeps one-time invitation email and Keycloak keeps identity email, so ephemeral secrets never enter events or cross a new synchronous boundary (RFC-0007, ADR-0076 proposed). |
 | 5.14 | The platform console is a separate `apps/platform` UI and BFF with its own host, OIDC client, session boundary, and deployment. The Platform BFF may call only Access's documented `/v1/platform/**` contracts; Access retains all tenant and authorization ownership (ADR-0075, owner-approved INV-09 exception). |
 | 5.13 | WP-12 application user erasure is orchestrated from Profile to Access and back through existing ID-only erasure confirmations. Access immediately denies the identity, removes grants, anonymizes retained live references, and appends tenant audit markers; Profile removes personal rows and objects, preserves restricted audit originals, and exposes `pending_external_identity_deletion` while Keycloak deletion remains deferred (ADR-0073 proposed). |
 | 5.12 | WP-12 tenant exports use opaque-ID events and private object staging for tenant-bounded Access and Profile contributions; Access assembles and streams the authenticated result, and tenant erasure removes all export objects (ADR-0072 proposed). |
@@ -249,17 +250,17 @@ Four front-end apps (**Shell**, **Profile**, **Access**, **Platform**), two serv
 
 ### 3.2 Services and components
 
-| Component | Shell | Profile | Access | Platform |
-|---|---|---|---|---|
-| Front end + BFF | `excellore-shell` app | `excellore-profile` app | `excellore-access` app | `excellore-platform` app |
-| OIDC client (BFF) | `excellore-shell` | `excellore-profile` | `excellore-access` | `excellore-platform` |
-| API | none | `Excellore.Profile.Api` | `Excellore.Access.Api` | Access platform contracts only |
-| API audience | none | `api-profile` | `api-access` | `api-access` |
-| Worker | none | `Excellore.Profile.Worker` (`worker-profile`) | `Excellore.Access.Worker` (`worker-access`) | none |
-| Authz machine client | `svc-shell-authz` | `svc-profile-authz` | none (resolves locally) | none |
-| Database | none | `profile` | `access` | none |
-| Session key prefix | `shell:sess:` | `profile:sess:` | `access:sess:` | `platform:sess:` |
-| Permission namespace | none | `profile.*` | `access.*` | platform realm roles |
+| Component | Shell | Profile | Access | Platform | Notifications |
+|---|---|---|---|---|---|
+| Front end + BFF | `excellore-shell` app | `excellore-profile` app | `excellore-access` app | `excellore-platform` app | none initially |
+| OIDC client (BFF) | `excellore-shell` | `excellore-profile` | `excellore-access` | `excellore-platform` | none |
+| API | none | `Excellore.Profile.Api` | `Excellore.Access.Api` | Access platform contracts only | health and provider webhooks only |
+| API audience | none | `api-profile` | `api-access` | `api-access` | `api-notifications` when private APIs are added |
+| Worker | none | `Excellore.Profile.Worker` (`worker-profile`) | `Excellore.Access.Worker` (`worker-access`) | none | `Excellore.Notifications.Worker` (`worker-notifications`) |
+| Authz machine client | `svc-shell-authz` | `svc-profile-authz` | none (resolves locally) | none | `svc-notifications-authz` |
+| Database | none | `profile` | `access` | none | `notifications` |
+| Session key prefix | `shell:sess:` | `profile:sess:` | `access:sess:` | `platform:sess:` | none |
+| Permission namespace | none | `profile.*` | `access.*` | platform realm roles | none initially |
 
 ### 3.3 Dependency rules
 
@@ -1391,6 +1392,20 @@ Global Profile events carry no tenant ID or tenant-scoped data. Consumers proces
 
 They couple availability and deployment and create hidden dependencies. The only synchronous exceptions are the Access internal contracts (INV-09). Anything else needs an ADR first.
 
+### 16.6 Business notifications
+
+- Applications publish business facts through their transactional outbox. They do not publish a
+  recipient address, rendered subject/body, phone number, or one-time secret.
+- Notifications consumes only allow-listed event types and maps each type to a code-defined,
+  versioned template and channel policy.
+- The worker resolves a verified recipient from Access using a documented internal POST contract and
+  a dedicated machine identity. Access verifies the tenant and active membership before returning
+  contact data. Contact responses and rendered messages are never logged.
+- Access continues to send its one-time invitation code synchronously; Keycloak continues to send
+  identity-provider messages. Neither secret crosses the broker or Notifications boundary.
+- Email is active first. SMS, push, and in-app delivery require separate reviewed endpoint,
+  consent, abuse, compliance, and cost decisions (RFC-0007, ADR-0076).
+
 ---
 
 ## 17. Onboarding a New App
@@ -1818,7 +1833,7 @@ excellore/
 
 While @saficool is the only maintainer, use small direct commits to `main` (ADR-0017). Run the full local build, lint, test, formatting, and secret checks before each push, then verify the `javascript`, `dotnet`, `handbook`, and `secrets` CI jobs on `main`. Fix a failed job immediately with a follow-up commit; do not force-push or delete `main`. Signed commits are recommended. Use a short-lived branch and PR when a change explicitly requires independent approval, such as production platform-staff assignments.
 
-`CODEOWNERS` records @saficool as the platform security owner for `infra/keycloak/`, `shared/dotnet/Excellore.Auth`, `shared/dotnet/Excellore.Authz`, `shared/dotnet/Excellore.Platform`, `packages/excellore-auth`, `services/access/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. Before a direct push, the author reviews the full diff and records affected invariants and test evidence in the commit body. For security-owned paths, the author also records authentication, authorization, tenant-isolation, secret-handling, and audit implications; uses an ADR for a security decision; and resolves failed local checks before pushing. The PR template remains available for changes that require a PR. When another maintainer with write access joins, revisit ADR-0017 and require independent code-owner approval for security-owned paths.
+`CODEOWNERS` records @saficool as the platform security owner for `infra/keycloak/`, `shared/dotnet/Excellore.Auth`, `shared/dotnet/Excellore.Authz`, `shared/dotnet/Excellore.Platform`, `shared/dotnet/Excellore.Notifications`, `packages/excellore-auth`, `services/access/`, `services/notifications/`, every `permissions.yaml`, and `infra/db/rls-exempt.txt`. Before a direct push, the author reviews the full diff and records affected invariants and test evidence in the commit body. For security-owned paths, the author also records authentication, authorization, tenant-isolation, secret-handling, and audit implications; uses an ADR for a security decision; and resolves failed local checks before pushing. The PR template remains available for changes that require a PR. When another maintainer with write access joins, revisit ADR-0017 and require independent code-owner approval for security-owned paths.
 
 ### 24.3 Ownership
 
@@ -2251,7 +2266,7 @@ Custom role example in `acme`: `billing-manager` with a subset of permissions. A
 6. **Ask a human for:** real secrets, domains and DNS, legal and compliance choices (Q-05, Q-11), anything in section 0.5 step 4 or 5, and production access.
 7. **Never "temporarily" weaken a control.** If a control blocks progress, the control or the design is wrong; raise it.
 
-Order of work: **WP-00 → WP-01 → WP-02 → WP-03 → WP-04 → WP-05 → WP-06 → WP-07 → WP-08 → WP-09 → WP-10 → WP-11 → WP-12 → WP-13 → WP-14 → WP-15.** WP-07 (Shell) and WP-09 (Profile) MAY proceed in parallel after WP-06.
+Order of work: **WP-00 → WP-01 → WP-02 → WP-03 → WP-04 → WP-05 → WP-06 → WP-07 → WP-08 → WP-09 → WP-10 → WP-11 → WP-12 → WP-13 → WP-14 → WP-15 → WP-16.** WP-07 (Shell) and WP-09 (Profile) MAY proceed in parallel after WP-06. The owner directed WP-15 before the first business application.
 
 ---
 
@@ -2272,7 +2287,7 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 - **Goal:** One command starts every dependency.
 - **Depends on:** WP-00.
 - **Deliverables:** `infra/compose/docker-compose.yml` ([32.1](#321-docker-compose-reference)); `scripts/dev-up.sh` creating `<app>_migrator` and `<app>_app` roles per service database ([27.4](#274-database-roles-per-service)); `.env.example`; local hostnames doc and mkcert instructions.
-- **AC:** `scripts/dev-up.sh` brings up Keycloak, Postgres x3, Valkey, RabbitMQ, object store, Mailpit; a script verifies each is healthy; `access_app` and `profile_app` roles exist with `NOBYPASSRLS` and own no tables.
+- **AC:** `scripts/dev-up.sh` brings up Keycloak, Postgres x4, Valkey, RabbitMQ, object store, Mailpit; a script verifies each is healthy; Access, Profile, and Notifications runtime roles exist with `NOBYPASSRLS` and own no tables.
 
 ### WP-02: Keycloak realm as code
 
@@ -2373,7 +2388,23 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 - **Deliverables:** OpenTofu modules and Kubernetes manifests or Helm charts; HA Keycloak; managed PostgreSQL with PITR; secrets management and rotation jobs; network policies; backup jobs and restore scripts including the **single-tenant restore** procedure; runbooks from [section 30](#30-incident-response-and-runbooks).
 - **AC:** staging deployed by pipeline only; restore drill completed and timed; secret rotation drill completed; `/admin`, `master`, and `/internal/**` verified unreachable from the internet; a scheduled check confirms every `tenant_id` table has forced RLS.
 
-### WP-15: Later phase
+### WP-15: Notifications platform
+
+- **Goal:** Central, privacy-safe business notifications with email first and channel seams for SMS,
+  push, and in-app delivery.
+- **Depends on:** WP-03, WP-05, WP-10.
+- **Deliverables:** `Excellore.Notifications` shared SMTP transport; Notifications API, worker and
+  database; forced-RLS delivery state; allow-listed event-to-template mappings; Access verified
+  contact resolver; Mailpit local flow; authenticated TLS SMTP deployment configuration; provider
+  webhook boundary; export and erasure participation. Access invitation and Keycloak identity email
+  remain in their owning boundaries.
+- **AC:** an allow-listed Access business event produces one email under duplicate delivery; a wrong
+  tenant cannot resolve contact or read delivery state; events/logs/errors contain no contact data or
+  rendered content; SMTP requires TLS outside local development; provider outage reaches the dead
+  letter path without failing the originating operation; invitation and Keycloak onboarding remain
+  functional through Mailpit.
+
+### WP-16: Later phase
 
 Self-serve tenant signup (Q-01), access requests and reviews UI, groups UI (WP-08b), per-tenant enterprise SSO through Keycloak Organizations (Q-09), custom domains (Q-10), silo databases (Q-08), tenant security policies (Q-18), billing integration (Q-20). Each needs an RFC and ADR before work starts.
 
@@ -2402,6 +2433,7 @@ Verify at adoption and on major upgrades.
 | SeaweedFS | Apache 2.0 | |
 | AWSSDK.S3 | Apache 2.0 | Profile object-store client |
 | SkiaSharp | MIT | Profile avatar re-encoding; native assets for Windows and Linux |
+| MailKit / MimeKit | MIT | Shared SMTP and MIME transport; pin patched transitive cryptography packages |
 | MinIO | AGPL-3.0 | Review AGPL obligations |
 | Zitadel (alternative IdP) | AGPL-3.0 | Relevant if modified and hosted |
 
@@ -2413,7 +2445,7 @@ Until a human changes them through [section 37](#37-document-governance), the **
 
 | ID | Question | **Binding default** | Alternatives and impact |
 |---|---|---|---|
-| Q-01 | Self-serve tenant signup and open registration? | **Off.** Platform operators create tenants; people join by invitation | Enable Keycloak registration plus a signup flow in Shell that creates a tenant and makes the person `owner` (WP-15) |
+| Q-01 | Self-serve tenant signup and open registration? | **Off.** Platform operators create tenants; people join by invitation | Enable Keycloak registration plus a signup flow in Shell that creates a tenant and makes the person `owner` (WP-16) |
 | Q-02 | Custom roles per tenant | **25** (plan feature `maxCustomRoles`) | Per-plan limits |
 | Q-03 | Groups | **Data model and API now, UI later** (WP-08b) | Ship UI earlier |
 | Q-04 | How Profile changes identity attributes | **`svc-profile-identity` via `OwnIdentityService`** | Keycloak Account REST API with the user's token (smaller blast radius, more complexity) |
@@ -2432,7 +2464,7 @@ Until a human changes them through [section 37](#37-document-governance), the **
 | Q-17 | Hosting | **Kubernetes with Helm or Kustomize; Compose locally** | Simpler container platform |
 | Q-18 | Tenant-defined security policies (MFA, session length, allowed login methods) | **Not in first release**; platform baseline applies to all | Per-tenant policies (needs Q-09) |
 | Q-19 | Ownership of Access day to day | **Platform team with security oversight** | Dedicated IAM team |
-| Q-20 | Billing | **Out of scope; `tenants.plan` and `tenant_apps` are the hooks** | Billing integration (WP-15) |
+| Q-20 | Billing | **Out of scope; `tenants.plan` and `tenant_apps` are the hooks** | Billing integration (WP-16) |
 | Q-21 | Support access model | **Support grants only; no impersonation** | None planned |
 | Q-22 | Can a person be a member of unlimited tenants? | **Yes** | Plan limits |
 | Q-23 | Authority transport security | **Private network plus machine tokens; mTLS where the platform supports it** | Mesh-enforced mTLS everywhere |
@@ -2633,10 +2665,14 @@ Keycloak__AdminClientId=svc-profile-identity                  # svc-access-admin
 Keycloak__AdminClientSecret=***
 IdentityAdmin__ClientSecret=***                             # Access: svc-access-admin secret
 Invitation__AcceptanceOrigin=https://access.excellore.com    # Access: ID-only invitation link and fixed Keycloak redirect
-Invitation__SmtpHost=smtp.internal                            # Access invitation delivery
-Invitation__SmtpPort=587
-Invitation__From=invites@excellore.com
-Invitation__SmtpTls=true
+Email__SmtpHost=smtp.example                                  # Access or Notifications SMTP relay
+Email__SmtpPort=587
+Email__SmtpSecurity=StartTls
+Email__SmtpUsername=***
+Email__SmtpPassword=***
+Email__FromAddress=invites@notify.excellore.com
+Email__FromName=Excellore
+Email__SmtpTimeoutSeconds=15
 Otel__Endpoint=http://otel-collector:4317
 ```
 

@@ -13,13 +13,13 @@ fi
 compose=(docker compose --env-file .env -f infra/compose/docker-compose.yml)
 running="$("${compose[@]}" ps --status running --services)"
 
-for service in keycloak-db keycloak postgres-access postgres-profile valkey rabbitmq objectstore mailpit; do
+for service in keycloak-db keycloak postgres-access postgres-profile postgres-notifications valkey rabbitmq objectstore mailpit; do
   if ! printf '%s\n' "$running" | grep -Fxq "$service"; then
     echo "$service is not running." >&2
     exit 1
   fi
 done
-for service in keycloak-db keycloak postgres-access postgres-profile valkey rabbitmq; do
+for service in keycloak-db keycloak postgres-access postgres-profile postgres-notifications valkey rabbitmq; do
   container_id="$("${compose[@]}" ps -q "$service")"
   health="$(docker inspect --format '{{.State.Health.Status}}' "$container_id")"
   if [ "$health" != healthy ]; then
@@ -43,7 +43,7 @@ case "$s3_status" in
   *) echo "Object store S3 endpoint returned $s3_status." >&2; exit 1 ;;
 esac
 
-for service in access profile; do
+for service in access profile notifications; do
   role_check="$("${compose[@]}" exec -T "postgres-$service" psql -X -A -t -U postgres -d "$service" -c "
     SELECT CASE WHEN r.rolcanlogin
       AND NOT r.rolsuper AND NOT r.rolcreatedb AND NOT r.rolcreaterole

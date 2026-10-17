@@ -101,11 +101,13 @@ data:
   Auth__Authority: {{ .Values.platform.issuer | quote }}
   Auth__Audience: api-access
   Auth__RequireHttpsMetadata: "true"
-  Invitation__SmtpHost: {{ .Values.platform.smtpHost | quote }}
-  Invitation__SmtpPort: {{ .Values.platform.smtpPort | quote }}
-  Invitation__From: {{ .Values.platform.invitationFrom | quote }}
+  Email__SmtpHost: {{ .Values.platform.smtpHost | quote }}
+  Email__SmtpPort: {{ .Values.platform.smtpPort | quote }}
+  Email__SmtpSecurity: {{ .Values.platform.smtpSecurity | quote }}
+  Email__SmtpUsername: {{ .Values.platform.smtpUsername | quote }}
+  Email__FromAddress: {{ .Values.platform.emailFrom | quote }}
+  Email__FromName: Excellore
   Invitation__AcceptanceOrigin: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
-  Invitation__SmtpTls: "true"
   IdentityAdmin__Authority: {{ printf "http://%s-keycloak.%s.svc.cluster.local:8080/realms/excellore" (include "excellore.fullname" .) .Release.Namespace | quote }}
   IdentityAdmin__PrivateHttpHost: {{ printf "%s-keycloak.%s.svc.cluster.local" (include "excellore.fullname" .) .Release.Namespace | quote }}
 ---
@@ -130,6 +132,30 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: {{ include "excellore.fullname" . }}-notifications-api
+data:
+  DOTNET_ENVIRONMENT: Production
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "excellore.fullname" . }}-notifications-worker
+data:
+  DOTNET_ENVIRONMENT: Production
+  Authz__AccessInternalUrl: {{ .Values.platform.accessInternalUrl | quote }}
+  Authz__TokenEndpoint: {{ printf "%s/protocol/openid-connect/token" .Values.platform.issuer | quote }}
+  Authz__ClientId: svc-notifications-authz
+  Email__SmtpHost: {{ .Values.platform.smtpHost | quote }}
+  Email__SmtpPort: {{ .Values.platform.smtpPort | quote }}
+  Email__SmtpSecurity: {{ .Values.platform.smtpSecurity | quote }}
+  Email__SmtpUsername: {{ .Values.platform.smtpUsername | quote }}
+  Email__FromAddress: {{ .Values.platform.emailFrom | quote }}
+  Email__FromName: Excellore
+  Notification__ShellOrigin: {{ printf "https://%s" .Values.ingress.hosts.shell | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: {{ include "excellore.fullname" . }}-keycloak
 data:
   KC_DB: postgres
@@ -146,3 +172,7 @@ data:
   PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
   ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
   PLATFORM_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.platform | quote }}
+  EMAIL_SMTP_HOST: {{ .Values.platform.smtpHost | quote }}
+  EMAIL_SMTP_PORT: {{ .Values.platform.smtpPort | quote }}
+  KEYCLOAK_EMAIL_FROM_ADDRESS: {{ .Values.platform.keycloakEmailFrom | quote }}
+  KEYCLOAK_EMAIL_SMTP_USERNAME: {{ .Values.platform.smtpUsername | quote }}

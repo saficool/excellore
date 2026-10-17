@@ -86,7 +86,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [shell, profile-bff, access-bff, platform-bff, profile-api]
+                values: [shell, profile-bff, access-bff, platform-bff, profile-api, notifications-worker]
       ports: [{ protocol: TCP, port: 8080 }]
 ---
 apiVersion: networking.k8s.io/v1
@@ -106,7 +106,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [shell, profile-bff, access-bff, platform-bff, profile-api, access-api, profile-worker, access-worker, identity-proxy]
+                values: [shell, profile-bff, access-bff, platform-bff, profile-api, access-api, profile-worker, access-worker, notifications-worker, identity-proxy]
       ports: [{ protocol: TCP, port: 8080 }]
     - from:
         - podSelector:
@@ -214,6 +214,10 @@ spec:
     {{- range .Values.network.postgresCidrs }}
     - to: [{ ipBlock: { cidr: {{ . | quote }} } }]
       ports: [{ protocol: TCP, port: 5432 }]
+    {{- end }}
+    {{- range .Values.network.smtpCidrs }}
+    - to: [{ ipBlock: { cidr: {{ . | quote }} } }]
+      ports: [{ protocol: TCP, port: 587 }]
     {{- end }}
 ---
 apiVersion: networking.k8s.io/v1

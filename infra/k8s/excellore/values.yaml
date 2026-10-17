@@ -30,7 +30,10 @@ platform:
   accessInternalUrl: http://excellore-access-api:8080
   smtpHost: smtp.private.example.invalid
   smtpPort: '587'
-  invitationFrom: invites@example.invalid
+  smtpSecurity: StartTls
+  smtpUsername: excellore
+  emailFrom: notifications@example.invalid
+  keycloakEmailFrom: accounts@example.invalid
 
 images:
   shell:
@@ -56,6 +59,12 @@ images:
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
   accessWorker:
     repository: ghcr.io/saficool/excellore-access-worker
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  notificationsApi:
+    repository: ghcr.io/saficool/excellore-notifications-api
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  notificationsWorker:
+    repository: ghcr.io/saficool/excellore-notifications-worker
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
   keycloak:
     repository: ghcr.io/saficool/excellore-keycloak
