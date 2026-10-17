@@ -97,6 +97,7 @@ const secretKeys = {
   'excellore-shell': 'SHELL_BFF_SECRET',
   'excellore-profile': 'PROFILE_BFF_SECRET',
   'excellore-access': 'ACCESS_BFF_SECRET',
+  'excellore-platform': 'PLATFORM_BFF_SECRET',
   'worker-profile': 'WORKER_PROFILE_SECRET',
   'worker-access': 'WORKER_ACCESS_SECRET',
   'svc-shell-authz': 'SVC_SHELL_AUTHZ_SECRET',
@@ -110,6 +111,7 @@ const expected = [
   'excellore-shell',
   'excellore-profile',
   'excellore-access',
+  'excellore-platform',
   'api-profile',
   'api-access',
   'worker-profile',
@@ -181,7 +183,7 @@ for (const clientId of expected) {
   );
 }
 
-for (const app of ['shell', 'profile', 'access']) {
+for (const app of ['shell', 'profile', 'access', 'platform']) {
   const clientId = `excellore-${app}`;
   const callback = `${env[`${app.toUpperCase()}_ORIGIN`]}/auth/callback`;
   for (const redirectUri of [
@@ -231,8 +233,8 @@ const serviceAccountUser = await adminGet(
 const apiAccessClient = clients.find(
   (client) => client.clientId === 'api-access',
 );
-const accessBffClient = clients.find(
-  (client) => client.clientId === 'excellore-access',
+const platformBffClient = clients.find(
+  (client) => client.clientId === 'excellore-platform',
 );
 assert.ok(
   (
@@ -242,7 +244,7 @@ assert.ok(
   ).some((role) => role.name === 'access.authz.resolve'),
 );
 assert.deepEqual(
-  (await adminGet(`/clients/${accessBffClient.id}/scope-mappings/realm`))
+  (await adminGet(`/clients/${platformBffClient.id}/scope-mappings/realm`))
     .map((role) => role.name)
     .sort(),
   [
@@ -254,7 +256,7 @@ assert.deepEqual(
   ],
 );
 for (const client of clients.filter(
-  (candidate) => candidate.clientId !== 'excellore-access',
+  (candidate) => candidate.clientId !== 'excellore-platform',
 )) {
   assert.deepEqual(
     await adminGet(`/clients/${client.id}/scope-mappings/realm`),
@@ -465,16 +467,16 @@ assert.ok([access.claims.aud].flat().includes('api-access'));
 assert.match(access.claims.sub, /^[0-9a-f-]{36}$/i);
 assert.equal(access.claims.acr, '2');
 assert.equal(access.otpRequested, true);
-assert.deepEqual(access.claims.platform_roles, []);
+assert.equal(access.claims.platform_roles, undefined);
 assert.equal(access.claims.roles, undefined);
 assert.ok(!Object.keys(access.claims).some((key) => /tenant/i.test(key)));
 
 const staffSession = new BrowserSession();
 const staff = await userToken(
   staffSession,
-  'excellore-access',
-  env.ACCESS_BFF_SECRET,
-  `${env.ACCESS_ORIGIN}/auth/callback`,
+  'excellore-platform',
+  env.PLATFORM_BFF_SECRET,
+  `${env.PLATFORM_ORIGIN}/auth/callback`,
   'penny.platform',
 );
 assert.deepEqual(staff.claims.platform_roles, ['platform-operator']);

@@ -12,6 +12,7 @@ ingress:
     shell: excellore.example.invalid
     profile: profile.excellore.example.invalid
     access: access.excellore.example.invalid
+    platform: platform.excellore.example.invalid
     identity: auth.excellore.example.invalid
 
 externalSecrets:
@@ -40,6 +41,9 @@ images:
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
   accessBff:
     repository: ghcr.io/saficool/excellore-access
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  platformBff:
+    repository: ghcr.io/saficool/excellore-platform
     digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
   profileApi:
     repository: ghcr.io/saficool/excellore-profile-api

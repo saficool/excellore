@@ -1,5 +1,5 @@
 {{- $root := . -}}
-{{- range $name := list "shell" "profile-bff" "access-bff" "profile-api" "access-api" "profile-worker" "access-worker" "keycloak" "identity-proxy" }}
+{{- range $name := list "shell" "profile-bff" "access-bff" "platform-bff" "profile-api" "access-api" "profile-worker" "access-worker" "keycloak" "identity-proxy" }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -15,7 +15,7 @@ spec:
       app.kubernetes.io/name: {{ $name }}
 {{- end }}
 {{- if .Values.autoscaling.enabled }}
-{{- range $name := list "shell" "profile-bff" "access-bff" "profile-api" "access-api" }}
+{{- range $name := list "shell" "profile-bff" "access-bff" "platform-bff" "profile-api" "access-api" }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

@@ -134,6 +134,20 @@ const baseClient = (clientId, options = {}) => ({
   ...options,
 });
 
+const platformRoleMapper = () => ({
+  name: 'platform-roles',
+  protocol: 'openid-connect',
+  protocolMapper: 'oidc-usermodel-realm-role-mapper',
+  config: {
+    'claim.name': 'platform_roles',
+    'jsonType.label': 'String',
+    multivalued: 'true',
+    'access.token.claim': 'true',
+    'id.token.claim': 'false',
+    'userinfo.token.claim': 'false',
+  },
+});
+
 const bff = (app, origin, apiScope) =>
   baseClient(`excellore-${app}`, {
     scope: undefined,
@@ -151,24 +165,7 @@ const bff = (app, origin, apiScope) =>
       'acr',
       ...(apiScope ? [apiScope] : []),
     ],
-    protocolMappers:
-      app === 'access'
-        ? [
-            {
-              name: 'empty-platform-roles',
-              protocol: 'openid-connect',
-              protocolMapper: 'oidc-hardcoded-claim-mapper',
-              config: {
-                'claim.name': 'platform_roles',
-                'claim.value': '[]',
-                'jsonType.label': 'JSON',
-                'access.token.claim': 'true',
-                'id.token.claim': 'false',
-                'userinfo.token.claim': 'false',
-              },
-            },
-          ]
-        : [],
+    protocolMappers: app === 'platform' ? [platformRoleMapper()] : [],
     attributes: {
       'pkce.code.challenge.method': 'S256',
       'default.acr.values': '2',
@@ -326,7 +323,7 @@ const realm = {
       'api-profile': [{ name: 'profile.worker' }],
     },
   },
-  scopeMappings: [{ client: 'excellore-access', roles: platformRoles }],
+  scopeMappings: [{ client: 'excellore-platform', roles: platformRoles }],
   clientScopeMappings: {
     'api-access': [
       { client: 'worker-access', roles: ['access.worker'] },
@@ -416,25 +413,13 @@ const realm = {
     scope('api-access', [
       audienceMapper('api-access'),
       clientRoleMapper('api-access'),
-      {
-        name: 'platform-roles',
-        protocol: 'openid-connect',
-        protocolMapper: 'oidc-usermodel-realm-role-mapper',
-        config: {
-          'claim.name': 'platform_roles',
-          'jsonType.label': 'String',
-          multivalued: 'true',
-          'access.token.claim': 'true',
-          'id.token.claim': 'false',
-          'userinfo.token.claim': 'false',
-        },
-      },
     ]),
   ],
   clients: [
     bff('shell', 'SHELL_ORIGIN'),
     bff('profile', 'PROFILE_ORIGIN', 'api-profile'),
     bff('access', 'ACCESS_ORIGIN', 'api-access'),
+    bff('platform', 'PLATFORM_ORIGIN', 'api-access'),
     baseClient('api-profile', { bearerOnly: true }),
     baseClient('api-access', { bearerOnly: true }),
     machine('worker-profile', 'WORKER_PROFILE_SECRET', 'api-profile'),

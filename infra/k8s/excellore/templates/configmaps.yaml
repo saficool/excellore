@@ -60,6 +60,25 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: {{ include "excellore.fullname" . }}-platform-bff
+data:
+  NODE_ENV: production
+  OIDC_ISSUER: {{ .Values.platform.issuer | quote }}
+  OIDC_CLIENT_ID: excellore-platform
+  OIDC_SCOPES: openid profile email api-access
+  APP_BASE_URL: {{ printf "https://%s" .Values.ingress.hosts.platform | quote }}
+  SESSION_COOKIE_NAME: __Host-excellore-platform
+  SESSION_STORE_URL: {{ .Values.platform.valkeyUrl | quote }}
+  SESSION_KEY_PREFIX: "platform:sess:"
+  API_BASE_URL: http://excellore-access-api:8080
+  SHELL_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.shell | quote }}
+  PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
+  ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
+  PLATFORM_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.platform | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: {{ include "excellore.fullname" . }}-profile-api
 data:
   DOTNET_ENVIRONMENT: Production
@@ -123,3 +142,7 @@ data:
   KC_CACHE: ispn
   KC_CACHE_STACK: jdbc-ping
   KC_HTTP_MANAGEMENT_SCHEME: http
+  SHELL_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.shell | quote }}
+  PROFILE_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.profile | quote }}
+  ACCESS_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.access | quote }}
+  PLATFORM_ORIGIN: {{ printf "https://%s" .Values.ingress.hosts.platform | quote }}

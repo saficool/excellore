@@ -6,7 +6,7 @@ run as fixed non-root users.
 
 ## Next.js BFFs
 
-Build one BFF by setting `APP_NAME` to `shell`, `profile`, or `access`:
+Build one BFF by setting `APP_NAME` to `shell`, `profile`, `access`, or `platform`:
 
 ```bash
 docker build -f infra/images/next/Dockerfile \

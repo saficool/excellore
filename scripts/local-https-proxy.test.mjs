@@ -10,6 +10,7 @@ test('routes only the four exact local hostnames', () => {
   assert.equal(upstreamPort('excellore.localhost'), 3000);
   assert.equal(upstreamPort('PROFILE.EXCELLORE.LOCALHOST:443'), 3001);
   assert.equal(upstreamPort('access.excellore.localhost'), 3002);
+  assert.equal(upstreamPort('platform.excellore.localhost'), 3003);
   assert.equal(upstreamPort('auth.excellore.localhost'), 8080);
   assert.equal(upstreamPort('attacker.example'), undefined);
   assert.equal(

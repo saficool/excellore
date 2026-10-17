@@ -16,6 +16,7 @@ const hostnames = [
   'excellore.localhost',
   'profile.excellore.localhost',
   'access.excellore.localhost',
+  'platform.excellore.localhost',
   'auth.excellore.localhost',
 ];
 const certificate = join(root, '.local', 'certs', 'excellore.pem');
@@ -118,6 +119,7 @@ setEnvValues(join(root, '.env'), {
   SHELL_ORIGIN: 'https://excellore.localhost',
   PROFILE_ORIGIN: 'https://profile.excellore.localhost',
   ACCESS_ORIGIN: 'https://access.excellore.localhost',
+  PLATFORM_ORIGIN: 'https://platform.excellore.localhost',
   LOCAL_CA_CERT: caCertificate,
 });
 
@@ -126,6 +128,7 @@ for (const args of [
   ['scripts/setup-next-local.mjs', 'shell'],
   ['scripts/setup-next-local.mjs', 'profile'],
   ['scripts/setup-next-local.mjs', 'access'],
+  ['scripts/setup-next-local.mjs', 'platform'],
 ]) {
   const result = run(process.execPath, args, {
     stdio: 'inherit',
@@ -155,11 +158,10 @@ if (docker.status === 0) {
     { stdio: 'inherit', encoding: undefined },
   );
   assert.equal(restarted.status, 0, 'Unable to restart local Keycloak');
-  const reconciled = run(
-    process.execPath,
-    ['scripts/sync-dev-access-redirect.mjs'],
-    { stdio: 'inherit', encoding: undefined },
-  );
+  const reconciled = run(process.execPath, ['scripts/sync-dev-realm.mjs'], {
+    stdio: 'inherit',
+    encoding: undefined,
+  });
   assert.equal(reconciled.status, 0, 'Unable to reconcile local BFF redirects');
 }
 

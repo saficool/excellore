@@ -7,6 +7,7 @@ export const upstreams = new Map([
   ['excellore.localhost', 3000],
   ['profile.excellore.localhost', 3001],
   ['access.excellore.localhost', 3002],
+  ['platform.excellore.localhost', 3003],
   ['auth.excellore.localhost', 8080],
 ]);
 

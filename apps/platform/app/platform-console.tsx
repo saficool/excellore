@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { apiRequest, errorMessage } from '../../lib/browser-api';
+import { apiRequest, errorMessage } from '../lib/browser-api';
 
 type Tenant = {
   id: string;
@@ -64,9 +64,11 @@ const navigation = (roles: string[]): [string, string][] => [
 export function PlatformConsole({
   roles,
   staff,
+  accountUrl,
 }: {
   roles: string[];
   staff: Staff[];
+  accountUrl: string;
 }) {
   const [section, setSection] = useState('tenants');
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -245,9 +247,9 @@ export function PlatformConsole({
   const canEdit = mutating(roles);
   const canSuspend = suspending(roles);
   return (
-    <div className="access-layout">
-      <nav className="access-sidebar" aria-label="Platform sections">
-        <a href="/account">My account</a>
+    <div className="platform-layout">
+      <nav className="platform-sidebar" aria-label="Platform sections">
+        <a href={accountUrl}>My account</a>
         {navigation(roles).map(([id, label]) => (
           <button
             key={id}
@@ -262,21 +264,21 @@ export function PlatformConsole({
       <main
         id="main-content"
         tabIndex={-1}
-        className="access-main access-stack"
+        className="platform-main platform-stack"
       >
         <header>
-          <p className="access-eyebrow">Excellore Access</p>
+          <p className="platform-eyebrow">Excellore Platform</p>
           <h1>Platform console</h1>
           <p>Role: {roles.join(', ')}</p>
         </header>
         {message && <p role="status">{message}</p>}
         {section === 'tenants' && (
           <>
-            <section className="ex-card access-card">
+            <section className="ex-card platform-card">
               <h2>Tenants</h2>
               {tenants.length === 0 && <p>No tenants available.</p>}
               {tenants.map((tenant) => (
-                <div className="access-row" key={tenant.id}>
+                <div className="platform-row" key={tenant.id}>
                   <span>
                     {tenant.name} ({tenant.slug}) · {tenant.status} ·{' '}
                     {tenant.plan}
@@ -288,10 +290,10 @@ export function PlatformConsole({
               ))}
             </section>
             {canEdit && (
-              <section className="ex-card access-card">
+              <section className="ex-card platform-card">
                 <h2>Create tenant</h2>
                 <form
-                  className="access-form"
+                  className="platform-form"
                   onSubmit={(event) => void createTenant(event)}
                 >
                   <label>
@@ -333,7 +335,7 @@ export function PlatformConsole({
               </section>
             )}
             {selected && (
-              <section className="ex-card access-card">
+              <section className="ex-card platform-card">
                 <h2>{current?.name}</h2>
                 <p>
                   Status: {current?.status} · Plan: {current?.plan}
@@ -346,7 +348,7 @@ export function PlatformConsole({
                 )}
                 {canEdit && (
                   <form
-                    className="access-form"
+                    className="platform-form"
                     onSubmit={(event) => void editTenant(event)}
                   >
                     <label>
@@ -451,8 +453,8 @@ export function PlatformConsole({
                   )}
                 <h3>Apps</h3>
                 {selected.apps.map((app) => (
-                  <div className="access-detail" key={app.id}>
-                    <div className="access-row">
+                  <div className="platform-detail" key={app.id}>
+                    <div className="platform-row">
                       <span>
                         {app.name} · {app.status}
                         {app.core ? ' · core' : ''}
@@ -482,7 +484,7 @@ export function PlatformConsole({
                       )}
                     </div>
                     {canEdit && (
-                      <div className="access-form">
+                      <div className="platform-form">
                         <label>
                           Numeric feature limits for {app.name}
                           <textarea
@@ -512,7 +514,7 @@ export function PlatformConsole({
           </>
         )}
         {section === 'permissions' && (
-          <section className="ex-card access-card">
+          <section className="ex-card platform-card">
             <h2>Permission catalog</h2>
             <h3>System roles</h3>
             {systemRoles.map((role) => (
@@ -531,7 +533,7 @@ export function PlatformConsole({
           </section>
         )}
         {section === 'staff' && (
-          <section className="ex-card access-card">
+          <section className="ex-card platform-card">
             <h2>Platform staff</h2>
             <p>
               Assignments are managed in code and reviewed before deployment.
@@ -544,7 +546,7 @@ export function PlatformConsole({
           </section>
         )}
         {section === 'audit' && (
-          <section className="ex-card access-card">
+          <section className="ex-card platform-card">
             <h2>Platform audit</h2>
             {audit.map((event) => (
               <p key={event.id}>
@@ -556,13 +558,13 @@ export function PlatformConsole({
           </section>
         )}
         {section === 'support' && (
-          <section className="ex-card access-card">
+          <section className="ex-card platform-card">
             <h2>Request support access</h2>
             <p>
               Tenant owner approval is required. Access expires automatically.
             </p>
             <form
-              className="access-form"
+              className="platform-form"
               onSubmit={(event) => {
                 event.preventDefault();
                 void run(async () => {

@@ -4,6 +4,7 @@
   (dict "name" "shell" "host" .Values.ingress.hosts.shell "service" "shell")
   (dict "name" "profile" "host" .Values.ingress.hosts.profile "service" "profile-bff")
   (dict "name" "access" "host" .Values.ingress.hosts.access "service" "access-bff")
+  (dict "name" "platform" "host" .Values.ingress.hosts.platform "service" "platform-bff")
 }}
 ---
 apiVersion: networking.k8s.io/v1

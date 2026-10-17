@@ -11,7 +11,7 @@ const env = Object.fromEntries(
       line.slice(line.indexOf('=') + 1),
     ]),
 );
-const origin = env.ACCESS_ORIGIN;
+const origin = env.PLATFORM_ORIGIN;
 assert.ok(
   new URL(origin).hostname.endsWith('.localhost') &&
     env.DEV_USER_PASSWORD &&
@@ -66,10 +66,8 @@ function otp() {
 }
 
 const browser = new Browser();
-let response = await browser.request(
-  `${origin}/auth/login?returnTo=%2Fplatform`,
-);
-assert.equal(response.status, 302, 'Access BFF login');
+let response = await browser.request(`${origin}/auth/login?returnTo=%2F`);
+assert.equal(response.status, 302, 'Platform BFF login');
 response = await browser.request(response.headers.get('location'));
 assert.equal(response.status, 200, 'Keycloak login');
 let html = await response.text();
@@ -95,10 +93,10 @@ if (response.status === 200) {
 }
 assert.equal(response.status, 302, 'Keycloak callback');
 response = await browser.request(response.headers.get('location'));
-assert.equal(response.status, 302, 'Access BFF session');
-assert.equal(new URL(response.headers.get('location')).pathname, '/platform');
+assert.equal(response.status, 302, 'Platform BFF session');
+assert.equal(new URL(response.headers.get('location')).pathname, '/');
 
-response = await browser.request(`${origin}/platform`);
+response = await browser.request(`${origin}/`);
 assert.equal(response.status, 200, 'platform page');
 html = await response.text();
 assert.match(html, /Platform console/);

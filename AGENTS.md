@@ -1,6 +1,6 @@
 # AGENTS.md: Excellore
 
-You are working on **Excellore**, a multi-tenant SaaS platform made of three apps (**Shell**, **Profile**, **Access**), their backend services, workers, and a Keycloak identity provider.
+You are working on **Excellore**, a multi-tenant SaaS platform made of four front-end apps (**Shell**, **Profile**, **Access**, **Platform**), the Profile and Access backend services, workers, and a Keycloak identity provider.
 
 **The single source of truth is `excellore-platform-handbook.md` (The Excellore Platform Handbook).** Read **Part 0 (Agent Operating Manual)** before writing any code, then read the sections relevant to your task. If this file and the handbook disagree, the handbook wins.
 
@@ -16,7 +16,7 @@ You are working on **Excellore**, a multi-tenant SaaS platform made of three app
 - **Browser never sees tokens.** Each app has a Next.js BFF that holds tokens server-side and gives the browser an opaque `__Host-` session cookie.
 - **Tenant context:** front-end `/t/{slug}/…`, API `/v1/tenants/{tenantId}/…`. Non-members get `404`.
 - **Data isolation:** shared PostgreSQL, `tenant_id` on every tenant table, **forced row-level security**, transaction-local `set_config('app.tenant_id', …, true)`.
-- **Services talk through events** (RabbitMQ). The only synchronous cross-app calls are Access's documented internal contracts.
+- **Services talk through events** (RabbitMQ). Synchronous exceptions are Access's documented internal contracts and the Platform BFF's documented `/v1/platform/**` calls to Access.
 
 ## 2. Non-negotiables (full list: handbook section 0.3)
 
@@ -111,7 +111,7 @@ Check the license list (handbook section 35) before adding any dependency. Sever
 ## 6. Repository layout
 
 ```
-apps/            shell, profile, access            (Next.js UI + BFF)
+apps/            shell, profile, access, platform  (Next.js UI + BFF)
 packages/        excellore-auth, ui, config        (shared TypeScript)
 services/        profile, access                   (Excellore.<App>.Api / Worker / Application / Domain / Infrastructure)
 shared/dotnet/   Excellore.Auth, .Authz, .Platform, .Contracts

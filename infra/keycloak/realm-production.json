@@ -168,7 +168,7 @@
   },
   "scopeMappings": [
     {
-      "client": "excellore-access",
+      "client": "excellore-platform",
       "roles": [
         "platform-admin",
         "platform-operator",
@@ -411,19 +411,6 @@
             "id.token.claim": "false",
             "userinfo.token.claim": "false"
           }
-        },
-        {
-          "name": "platform-roles",
-          "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
-          "config": {
-            "claim.name": "platform_roles",
-            "jsonType.label": "String",
-            "multivalued": "true",
-            "access.token.claim": "true",
-            "id.token.claim": "false",
-            "userinfo.token.claim": "false"
-          }
         }
       ]
     }
@@ -504,15 +491,40 @@
         "${ACCESS_ORIGIN}/invitations/accept"
       ],
       "webOrigins": [],
+      "protocolMappers": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "default.acr.values": "2",
+        "post.logout.redirect.uris": "${ACCESS_ORIGIN}/",
+        "backchannel.logout.url": "${ACCESS_ORIGIN}/auth/backchannel-logout",
+        "backchannel.logout.session.required": "true"
+      }
+    },
+    {
+      "clientId": "excellore-platform",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "consentRequired": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["basic", "profile", "email", "acr", "api-access"],
+      "optionalClientScopes": [],
+      "secret": "${PLATFORM_BFF_SECRET}",
+      "redirectUris": ["${PLATFORM_ORIGIN}/auth/callback"],
+      "webOrigins": [],
       "protocolMappers": [
         {
-          "name": "empty-platform-roles",
+          "name": "platform-roles",
           "protocol": "openid-connect",
-          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
           "config": {
             "claim.name": "platform_roles",
-            "claim.value": "[]",
-            "jsonType.label": "JSON",
+            "jsonType.label": "String",
+            "multivalued": "true",
             "access.token.claim": "true",
             "id.token.claim": "false",
             "userinfo.token.claim": "false"
@@ -522,8 +534,8 @@
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "default.acr.values": "2",
-        "post.logout.redirect.uris": "${ACCESS_ORIGIN}/",
-        "backchannel.logout.url": "${ACCESS_ORIGIN}/auth/backchannel-logout",
+        "post.logout.redirect.uris": "${PLATFORM_ORIGIN}/",
+        "backchannel.logout.url": "${PLATFORM_ORIGIN}/auth/backchannel-logout",
         "backchannel.logout.session.required": "true"
       }
     },

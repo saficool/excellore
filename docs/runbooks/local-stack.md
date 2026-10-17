@@ -53,7 +53,7 @@ curl.exe --fail --silent --show-error --output NUL --write-out '%{http_code}' ht
 If the name does not resolve on your machine, add this line to the Windows hosts file (`C:\Windows\System32\drivers\etc\hosts`, edit as Administrator), or `/etc/hosts` on Linux or macOS:
 
 ```text
-127.0.0.1  excellore.localhost  profile.excellore.localhost  access.excellore.localhost  auth.excellore.localhost
+127.0.0.1  excellore.localhost  profile.excellore.localhost  access.excellore.localhost  platform.excellore.localhost  auth.excellore.localhost
 ```
 
 ## Local HTTPS for browser flows
@@ -65,9 +65,9 @@ mkcert -install
 pnpm local:https:setup
 ```
 
-The setup command creates an ignored certificate for all four Excellore hostnames, switches the ignored local configuration to HTTPS, prepares every BFF, updates Keycloak when Docker is running, and reconciles the existing realm's redirect and logout URLs. It never prints credentials. The certificate and private key remain in ignored `.local/certs`; keep the mkcert private CA key on this machine and never commit or share it.
+The setup command creates an ignored certificate for all five Excellore hostnames, switches the ignored local configuration to HTTPS, prepares every BFF, updates Keycloak when Docker is running, and reconciles the existing realm's redirect and logout URLs. It never prints credentials. The certificate and private key remain in ignored `.local/certs`; keep the mkcert private CA key on this machine and never commit or share it.
 
-Start the HTTPS gateway and all three Next.js apps in one terminal:
+Start the HTTPS gateway and all four Next.js apps in one terminal:
 
 ```sh
 pnpm local:web
@@ -142,7 +142,7 @@ With the API and BFF running, `node scripts/with-local-ca.mjs scripts/check-acce
 
 ## Platform console (WP-11)
 
-With the Access API and BFF running as above, open `https://access.excellore.localhost/platform` and sign in as the local `penny.platform` fixture. Use `DEV_USER_PASSWORD` and the OTP helper described above. The console lists tenant metadata, app status, numeric feature limits, permission catalog, system roles, and the code-owned staff roster. The operator can create or edit a tenant, suspend or reactivate it, enable or disable non-core apps, change numeric feature limits, and request deletion with a reason code. The owner invitation is delivered through local Mailpit. `sam.support` can request an owner-approved, time-boxed read-only support grant; `sec.platform` can suspend a tenant. The auditor view is restricted to `platform-auditor` or `platform-admin` roles. These assignments are development fixtures from `infra/keycloak/platform-staff.yaml`, validated by CI. No emergency user sign-out or disable control is exposed pending an INV-11-compliant Keycloak design.
+With the Access API and the separate Platform BFF running as above, open `https://platform.excellore.localhost` and sign in as the local `penny.platform` fixture. Use `DEV_USER_PASSWORD` and the OTP helper described above. The console lists tenant metadata, app status, numeric feature limits, permission catalog, system roles, and the code-owned staff roster. The operator can create or edit a tenant, suspend or reactivate it, enable or disable non-core apps, change numeric feature limits, and request deletion with a reason code. The owner invitation is delivered through local Mailpit. `sam.support` can request an owner-approved, time-boxed read-only support grant; `sec.platform` can suspend a tenant. The auditor view is restricted to `platform-auditor` or `platform-admin` roles. These assignments are development fixtures from `infra/keycloak/platform-staff.yaml`, validated by CI. No emergency user sign-out or disable control is exposed pending an INV-11-compliant Keycloak design.
 
 The automated `PlatformTenantApiTests` use disposable PostgreSQL to exercise role gates, RLS, app authorization invalidation, lifecycle, and audit. The shared BFF tests verify the platform proxy keeps access tokens server-side and enforces CSRF. With the local stack running, `node scripts/check-platform-console.mjs` verifies a real operator login, platform page, role gate, metadata read, and CSRF rejection without printing credentials. No manual test is required for WP-11 verification.
 

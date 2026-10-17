@@ -4,9 +4,10 @@ set -euo pipefail
 : "${SHELL_ORIGIN:?required}"
 : "${PROFILE_ORIGIN:?required}"
 : "${ACCESS_ORIGIN:?required}"
+: "${PLATFORM_ORIGIN:?required}"
 : "${IDENTITY_ORIGIN:?required}"
 
-for origin in "$SHELL_ORIGIN" "$PROFILE_ORIGIN" "$ACCESS_ORIGIN"; do
+for origin in "$SHELL_ORIGIN" "$PROFILE_ORIGIN" "$ACCESS_ORIGIN" "$PLATFORM_ORIGIN"; do
   status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$origin/health/live")"
   [[ "$status" == "200" ]] || {
     echo "A BFF health endpoint is unavailable (status $status)." >&2
@@ -22,7 +23,7 @@ for path in /admin /admin/ /realms/master /realms/master/.well-known/openid-conf
   }
 done
 
-for origin in "$SHELL_ORIGIN" "$PROFILE_ORIGIN" "$ACCESS_ORIGIN"; do
+for origin in "$SHELL_ORIGIN" "$PROFILE_ORIGIN" "$ACCESS_ORIGIN" "$PLATFORM_ORIGIN"; do
   status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$origin/internal/v1/authz/resolve")"
   [[ "$status" == "404" ]] || {
     echo "An internal API path was externally reachable (status $status)." >&2

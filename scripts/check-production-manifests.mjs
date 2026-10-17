@@ -26,7 +26,7 @@ assert(
 const deployments = resources.filter(
   (resource) => resource.kind === 'Deployment',
 );
-assert(deployments.length === 9, 'expected nine application deployments');
+assert(deployments.length === 10, 'expected ten application deployments');
 for (const deployment of deployments) {
   const spec = deployment.spec.template.spec;
   assert(
@@ -82,6 +82,7 @@ const allowedBackends = new Set([
   'excellore-shell',
   'excellore-profile-bff',
   'excellore-access-bff',
+  'excellore-platform-bff',
   'excellore-identity-proxy',
 ]);
 const ingressBackends = ingresses.flatMap((ingress) =>
@@ -89,7 +90,7 @@ const ingressBackends = ingresses.flatMap((ingress) =>
     rule.http.paths.map((path) => path.backend.service.name),
   ),
 );
-assert(ingressBackends.length === 4, 'expected four public ingress backends');
+assert(ingressBackends.length === 5, 'expected five public ingress backends');
 assert(
   ingressBackends.every((name) => allowedBackends.has(name)),
   'an API, worker, or Keycloak service is publicly routed',
@@ -192,11 +193,11 @@ const externalSecrets = resources.filter(
   (resource) => resource.kind === 'ExternalSecret',
 );
 assert(
-  externalSecrets.length === 9,
+  externalSecrets.length === 10,
   'each secret-bearing workload needs its own ExternalSecret',
 );
 assert(
-  new Set(externalSecrets.map((secret) => secret.spec.target.name)).size === 9,
+  new Set(externalSecrets.map((secret) => secret.spec.target.name)).size === 10,
   'workloads must not share runtime Secrets',
 );
 

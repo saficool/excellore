@@ -117,7 +117,7 @@ if [ "$mode" = --identity-only ]; then
   fi
   curl --silent --show-error --fail --max-time 10 \
     http://127.0.0.1:9000/health/ready >/dev/null
-  node scripts/sync-dev-access-redirect.mjs
+  node scripts/sync-dev-realm.mjs
   echo 'Identity test stack healthy.'
   exit 0
 fi
@@ -130,5 +130,5 @@ for service in access profile; do
 done
 
 bash scripts/check-dev-stack.sh
-node scripts/sync-dev-access-redirect.mjs
+node scripts/sync-dev-realm.mjs
 node scripts/sync-dev-worker-directory.mjs

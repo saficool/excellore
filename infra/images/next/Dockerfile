@@ -9,6 +9,7 @@ WORKDIR /workspace
 RUN corepack enable && corepack prepare pnpm@10.34.6 --activate
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.base.json ./
 COPY apps/access/package.json ./apps/access/package.json
+COPY apps/platform/package.json ./apps/platform/package.json
 COPY apps/profile/package.json ./apps/profile/package.json
 COPY apps/shell/package.json ./apps/shell/package.json
 COPY packages/config/package.json ./packages/config/package.json
@@ -19,7 +20,7 @@ RUN pnpm install --frozen-lockfile
 COPY apps ./apps
 COPY packages ./packages
 COPY infra/platform/app-catalog.yaml ./infra/platform/app-catalog.yaml
-RUN test "$APP_NAME" = shell || test "$APP_NAME" = profile || test "$APP_NAME" = access
+RUN test "$APP_NAME" = shell || test "$APP_NAME" = profile || test "$APP_NAME" = access || test "$APP_NAME" = platform
 RUN pnpm --filter @excellore/auth build \
     && pnpm --filter @excellore/config build \
     && pnpm --filter @excellore/ui build \

@@ -1,8 +1,8 @@
 # Excellore Kubernetes chart
 
-This chart deploys the Shell, Profile, and Access BFFs; the Profile and Access APIs and workers;
+This chart deploys the Shell, Profile, Access, and Platform BFFs; the Profile and Access APIs and workers;
 an HA Keycloak pair; and a narrow public proxy for Keycloak. Every service is a private ClusterIP.
-Only the three BFFs and the identity proxy have ingress resources.
+Only the four BFFs and the identity proxy have ingress resources.
 
 ## Required deployment inputs
 
@@ -19,15 +19,18 @@ The chart expects a `ClusterSecretStore` and creates one `ExternalSecret` per se
 workload. The remote records must expose environment-variable keys expected by that workload.
 At minimum:
 
-- BFF records: `OIDC_CLIENT_SECRET`, `SESSION_ENCRYPTION_KEY`, `AUTHZ_CLIENT_SECRET`.
+- Shell, Profile, and Access BFF records: `OIDC_CLIENT_SECRET`, `SESSION_ENCRYPTION_KEY`,
+  `AUTHZ_CLIENT_SECRET`. The Platform BFF has no authorization machine client and needs only the
+  first two values.
 - Profile API: `ConnectionStrings__Profile`, `Authz__ClientSecret`, `Authz__RabbitMq`, and object
   store credentials/configuration.
 - Access API: `ConnectionStrings__Access`, `IdentityAdmin__ClientSecret`, and object store and SMTP
   credentials/configuration.
 - Workers: publisher/worker connection strings, RabbitMQ, object store configuration, machine
   actor ID where required, and Keycloak directory client credentials.
-- Keycloak: `KC_DB_URL`, `KC_DB_USERNAME`, and `KC_DB_PASSWORD`. Bootstrap administrator
-  credentials belong only in the one-time realm provisioning job.
+- Keycloak: `KC_DB_URL`, `KC_DB_USERNAME`, `KC_DB_PASSWORD`, and the BFF and machine-client
+  secrets referenced by the generated realm, including `PLATFORM_BFF_SECRET`. Bootstrap
+  administrator credentials belong only in the one-time realm provisioning job.
 
 The private CIDR lists enable only the documented PostgreSQL, Valkey, RabbitMQ, object store, and
 SMTP ports. Empty lists intentionally leave those connections blocked.

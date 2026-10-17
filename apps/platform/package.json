@@ -1,0 +1,30 @@
+{
+  "name": "@excellore/platform",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3003",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p 3003",
+    "lint": "eslint app lib next.config.ts proxy.ts && tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@excellore/auth": "workspace:*",
+    "@excellore/config": "workspace:*",
+    "@excellore/ui": "workspace:*",
+    "iovalkey": "0.4.0",
+    "next": "16.4.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "22.19.15",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.3"
+  }
+}

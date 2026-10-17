@@ -3,6 +3,7 @@
   (dict "name" "shell" "port" 3000)
   (dict "name" "profile-bff" "port" 3000)
   (dict "name" "access-bff" "port" 3000)
+  (dict "name" "platform-bff" "port" 3000)
   (dict "name" "profile-api" "port" 8080)
   (dict "name" "access-api" "port" 8080)
 }}

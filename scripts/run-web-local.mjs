@@ -9,6 +9,7 @@ const apps = [
   ['shell', 3000],
   ['profile', 3001],
   ['access', 3002],
+  ['platform', 3003],
 ];
 const env = Object.fromEntries(
   readFileSync(new URL('../.env', import.meta.url), 'utf8')

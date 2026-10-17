@@ -1,0 +1,149 @@
+@import 'tailwindcss';
+@import '@excellore/ui/styles.css';
+
+body {
+  margin: 0;
+  background: var(--ex-color-background);
+  color: var(--ex-color-text);
+  font-family: system-ui, sans-serif;
+}
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+}
+a {
+  color: var(--ex-color-accent);
+}
+.ex-card {
+  background: var(--ex-color-surface);
+  border: 1px solid var(--ex-color-border);
+  border-radius: var(--ex-radius-medium);
+  padding: 1.5rem;
+}
+.platform-layout {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  max-width: 88rem;
+  margin: auto;
+}
+.platform-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 2rem 1rem;
+  border-right: 1px solid var(--ex-color-border);
+}
+.platform-sidebar a,
+.platform-sidebar button {
+  border: 0;
+  background: transparent;
+  color: var(--ex-color-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.7rem 0.8rem;
+  border-radius: var(--ex-radius-medium);
+  text-decoration: none;
+}
+.platform-sidebar a:hover,
+.platform-sidebar a:focus-visible,
+.platform-sidebar button:hover,
+.platform-sidebar button:focus-visible,
+.platform-sidebar button[aria-current='page'] {
+  background: var(--ex-color-surface);
+  outline-offset: 2px;
+}
+.platform-main {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding: 2rem;
+}
+.platform-eyebrow {
+  color: var(--ex-color-accent);
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+}
+.platform-stack,
+.platform-form {
+  display: grid;
+  gap: 1rem;
+}
+.platform-card h2 {
+  margin-top: 0;
+  font-size: 1.5rem;
+}
+.platform-form {
+  max-width: 38rem;
+}
+.platform-form label,
+.platform-card > label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+.platform-form input,
+.platform-form select,
+.platform-form textarea,
+.platform-card > label input {
+  width: 100%;
+  min-height: 2.6rem;
+  padding: 0.5rem;
+  border: 1px solid var(--ex-color-border);
+  border-radius: 0.4rem;
+  background: var(--ex-color-background);
+  color: var(--ex-color-text);
+}
+.platform-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--ex-color-border);
+}
+.platform-row span {
+  overflow-wrap: anywhere;
+}
+.platform-detail {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--ex-color-border);
+  border-radius: 0.4rem;
+}
+.platform-card button,
+.platform-button {
+  display: inline-block;
+  cursor: pointer;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--ex-color-accent);
+  border-radius: 0.4rem;
+  background: var(--ex-color-accent);
+  color: white;
+  text-decoration: none;
+  font: inherit;
+}
+.platform-card button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+@media (max-width: 48rem) {
+  .platform-layout {
+    grid-template-columns: 1fr;
+  }
+  .platform-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--ex-color-border);
+  }
+  .platform-sidebar a {
+    white-space: nowrap;
+  }
+  .platform-main {
+    padding: 1.5rem;
+  }
+}

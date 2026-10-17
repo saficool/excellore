@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Document version** | 5.12 |
+| **Document version** | 5.14 |
 | **Status** | Draft for ratification (agents MAY build from it now; see Part 0) |
 | **Audience** | LLM coding agents, engineers, architects, security reviewers, operators |
 | **Supersedes** | v2.0 (single-tenant model with roles in Keycloak) |
@@ -16,6 +16,7 @@
 
 | Version | Summary |
 |---|---|
+| 5.14 | The platform console is a separate `apps/platform` UI and BFF with its own host, OIDC client, session boundary, and deployment. The Platform BFF may call only Access's documented `/v1/platform/**` contracts; Access retains all tenant and authorization ownership (ADR-0075, owner-approved INV-09 exception). |
 | 5.13 | WP-12 application user erasure is orchestrated from Profile to Access and back through existing ID-only erasure confirmations. Access immediately denies the identity, removes grants, anonymizes retained live references, and appends tenant audit markers; Profile removes personal rows and objects, preserves restricted audit originals, and exposes `pending_external_identity_deletion` while Keycloak deletion remains deferred (ADR-0073 proposed). |
 | 5.12 | WP-12 tenant exports use opaque-ID events and private object staging for tenant-bounded Access and Profile contributions; Access assembles and streams the authenticated result, and tenant erasure removes all export objects (ADR-0072 proposed). |
 | 5.11 | WP-12 personal exports use opaque-ID events and private object staging for Access and Profile contributions; Profile assembles the authenticated 24-hour download (ADR-0071 proposed). |
@@ -87,7 +88,7 @@ This part is for any LLM agent (or new engineer) that will build or change the p
 
 ## 0.1 Mission
 
-Build and maintain **Excellore**: a multi-tenant SaaS suite of first-party applications (**Shell**, **Profile**, **Access**) with one login, tenant-specific roles, permissions, and app access, and strong tenant data isolation. Work through the **work packages in section 34, in order**, unless a human tells you otherwise.
+Build and maintain **Excellore**: a multi-tenant SaaS suite of first-party applications (**Shell**, **Profile**, **Access**, **Platform**) with one login, tenant-specific roles, permissions, and app access, and strong tenant data isolation. Work through the **work packages in section 34, in order**, unless a human tells you otherwise.
 
 ## 0.2 Where to find things
 
@@ -118,7 +119,7 @@ These hold for every change. A change that violates one is rejected, whatever th
 | **INV-06** | **One audience per API.** Each API accepts only tokens whose `aud` is its own. |
 | **INV-07** | **Workers carry `tenantId` and run in tenant context** with their own machine identity. Messages never contain tokens. |
 | **INV-08** | **Only the Access service changes tenant authorization data** (memberships, roles, assignments, app enablement). The permission catalog is **code-first**: apps declare permissions in their repository. |
-| **INV-09** | **Apps talk through events.** The only synchronous cross-app calls are the documented internal contracts of the Access service ([7.8](#78-resolve-contract-pdp-and-pep)). |
+| **INV-09** | **Apps talk through events.** Synchronous exceptions are the documented internal contracts of the Access service ([7.8](#78-resolve-contract-pdp-and-pep)) and the Platform BFF calling only Access's documented `/v1/platform/**` contracts (ADR-0075). |
 | **INV-10** | **Fail closed.** Unknown tenant, non-member, suspended tenant, missing permission, or unavailable authorization data means **deny**. A non-member gets `404`, not `403` (no tenant enumeration). |
 | **INV-11** | **No secrets, tokens, or personal data in logs, events, URLs, or error messages.** The sole URL exception is Keycloak's time-limited HTTPS execute-actions link for new-user onboarding. Never put an Excellore invitation code in a URL, log or forward the Keycloak action URL, or extend this exception to other flows (RFC-0006). |
 | **INV-12** | **Every security-relevant change is audited** with `tenant_id` (or platform scope), actor, target, before and after, and reason where required. |
@@ -211,7 +212,7 @@ Excellore is a **multi-tenant SaaS platform**: a suite of first-party applicatio
 
 ### 1.4 Scope of the current release
 
-Three front-end apps (**Shell**, **Profile**, **Access**), two services with APIs (**Profile**, **Access**), their workers, Keycloak, and shared infrastructure.
+Four front-end apps (**Shell**, **Profile**, **Access**, **Platform**), two services with APIs (**Profile**, **Access**), their workers, Keycloak, and shared infrastructure.
 
 ---
 
@@ -243,26 +244,27 @@ Three front-end apps (**Shell**, **Profile**, **Access**), two services with API
 |---|---|---|---|
 | **Shell** | `excellore.com` | Front door: sign-in, tenant picker and switcher, per-tenant app launcher, global sign-out | Both (picker is user-level; launcher is tenant-level) |
 | **Profile** | `profile.excellore.com` | My account (global): details, avatar, preferences, security, sessions, data export, deletion. Plus **member profile** inside a tenant | Both |
-| **Access** | `access.excellore.com` | **Tenant console**: members, invitations, roles, assignments, groups, audit, tenant settings. **Platform console**: tenants, app enablement, support grants. Also the platform's **authorization authority** | Both |
+| **Access** | `access.excellore.com` | **Tenant console**: members, invitations, roles, assignments, groups, audit, tenant settings. Also the platform's **authorization authority** | Tenant |
+| **Platform** | `platform.excellore.com` | Staff console: tenant lifecycle, app enablement, support grants, permission catalog, and platform audit | Platform staff only |
 
 ### 3.2 Services and components
 
-| Component | Shell | Profile | Access |
-|---|---|---|---|
-| Front end + BFF | `excellore-shell` app | `excellore-profile` app | `excellore-access` app |
-| OIDC client (BFF) | `excellore-shell` | `excellore-profile` | `excellore-access` |
-| API | none | `Excellore.Profile.Api` | `Excellore.Access.Api` |
-| API audience | none | `api-profile` | `api-access` |
-| Worker | none | `Excellore.Profile.Worker` (`worker-profile`) | `Excellore.Access.Worker` (`worker-access`) |
-| Authz machine client | `svc-shell-authz` | `svc-profile-authz` | none (resolves locally) |
-| Database | none | `profile` | `access` |
-| Session key prefix | `shell:sess:` | `profile:sess:` | `access:sess:` |
-| Permission namespace | none | `profile.*` | `access.*` |
+| Component | Shell | Profile | Access | Platform |
+|---|---|---|---|---|
+| Front end + BFF | `excellore-shell` app | `excellore-profile` app | `excellore-access` app | `excellore-platform` app |
+| OIDC client (BFF) | `excellore-shell` | `excellore-profile` | `excellore-access` | `excellore-platform` |
+| API | none | `Excellore.Profile.Api` | `Excellore.Access.Api` | Access platform contracts only |
+| API audience | none | `api-profile` | `api-access` | `api-access` |
+| Worker | none | `Excellore.Profile.Worker` (`worker-profile`) | `Excellore.Access.Worker` (`worker-access`) | none |
+| Authz machine client | `svc-shell-authz` | `svc-profile-authz` | none (resolves locally) | none |
+| Database | none | `profile` | `access` | none |
+| Session key prefix | `shell:sess:` | `profile:sess:` | `access:sess:` | `platform:sess:` |
+| Permission namespace | none | `profile.*` | `access.*` | platform realm roles |
 
 ### 3.3 Dependency rules
 
 - Apps MUST NOT call each other's APIs or read each other's databases (INV-09).
-- **Allowed synchronous exception:** BFFs and APIs of any app call the **internal contracts of the Access service** to resolve a user's tenants and permissions ([7.8](#78-resolve-contract-pdp-and-pep)). Access is the leaf authority; it calls no other app.
+- **Allowed synchronous exceptions:** BFFs and APIs call the **internal contracts of the Access service** to resolve tenants and permissions ([7.8](#78-resolve-contract-pdp-and-pep)); the Platform BFF calls only the Access API's documented `/v1/platform/**` contracts. Access remains the leaf authority and calls no other app (ADR-0075).
 - Only **Access** changes tenant authorization data (INV-08). Only **Profile** changes a person's own profile data.
 - Cross-app reactions (cleanup, notifications, cache invalidation) use **events** ([section 16](#16-platform-events-and-inter-app-communication)).
 
@@ -270,32 +272,28 @@ Three front-end apps (**Shell**, **Profile**, **Access**), two services with API
 
 ## 4. Architecture Overview
 
-```
-                      ┌────────────────────────────────────────────────────┐
-                      │ Keycloak (auth.excellore.com)  realm: excellore    │
-                      │ Global identities · MFA/passkeys · SSO · tokens    │
-                      │ Tokens are TENANT-AGNOSTIC (INV-01)                │
-                      └─▲───────▲────────▲────────▲──────────▲─────────────┘
-         OIDC code+PKCE │       │        │        │          │ client credentials
-                        │       │        │        │          │
-   ┌────────────┐  ┌────┴─────┐ ┌┴─────────┐   workers   service identities (svc-*)
-   │ Shell      │  │ Profile  │ │ Access   │
-   │ UI + BFF   │  │ UI + BFF │ │ UI + BFF │      browser ⇄ BFF: cookie only
-   └─────┬──────┘  └────┬─────┘ └────┬─────┘
-         │ internal      │ Bearer     │ Bearer
-         │ context       │ aud=       │ aud=
-         │               │ api-profile│ api-access
-         │          ┌────▼─────┐ ┌────▼──────────────────────────┐
-         │          │ Profile  │ │ Access API  = AUTHORIZATION   │
-         │          │ API      ├─► AUTHORITY (PDP)               │
-         └──────────►  (PEP)   │ │ tenants · members · roles ·   │
-          resolve   └────┬─────┘ │ assignments · app enablement  │
-                        │       └────┬──────────────────────────┘
-                  ┌─────▼────┐  ┌────▼─────┐      Shared: Valkey (BFF sessions,
-                  │ Postgres │  │ Postgres │      authz cache), RabbitMQ
-                  │ profile  │  │ access   │      (excellore.events), object
-                  │ RLS      │  │ RLS      │      storage, OTel stack
-                  └──────────┘  └──────────┘
+```mermaid
+flowchart TB
+    Browser[Browser: opaque host-only cookies] --> Shell[Shell UI + BFF]
+    Browser --> Profile[Profile UI + BFF]
+    Browser --> Access[Access tenant UI + BFF]
+    Browser --> Platform[Platform staff UI + BFF]
+
+    Shell -->|OIDC code + PKCE| Keycloak[Keycloak: global identity, MFA and SSO]
+    Profile -->|OIDC code + PKCE| Keycloak
+    Access -->|OIDC code + PKCE| Keycloak
+    Platform -->|OIDC code + PKCE| Keycloak
+
+    Profile -->|Bearer: api-profile| ProfileApi[Profile API]
+    Access -->|Bearer: api-access| AccessApi[Access API and authorization authority]
+    Platform -->|Bearer: api-access; /v1/platform/** only| AccessApi
+    Shell -->|Access internal context contracts| AccessApi
+    ProfileApi -->|Access internal authorization contracts| AccessApi
+
+    ProfileApi --> ProfileDb[(Profile PostgreSQL with RLS)]
+    AccessApi --> AccessDb[(Access PostgreSQL with RLS)]
+    ProfileApi --> Shared[Valkey, RabbitMQ, object storage and OTel]
+    AccessApi --> Shared
 ```
 
 - **PDP** = Policy Decision Point (Access authority). **PEP** = Policy Enforcement Point (each API, through `Excellore.Authz`).
@@ -474,7 +472,7 @@ Switching tenants is navigating to another `/t/{slug}`. Different browser tabs M
 | Level | Who | Where | How roles are managed |
 |---|---|---|---|
 | **Tenant** | Tenant owners, admins, and holders of custom roles | Access app, `/t/{slug}/…` | Tenant roles and permissions in the Access database (section 7) |
-| **Platform** | Excellore staff | Access app, `/platform/…` (separate route group, separate API policies, separate audit scope) | **Keycloak realm roles managed as code** ([10.4](#104-roles-platform-and-machine)) |
+| **Platform** | Excellore staff | Platform app at `platform.excellore.com` (separate OIDC client, session, API policies, and audit scope) | **Keycloak realm roles managed as code** ([10.4](#104-roles-platform-and-machine)) |
 
 Platform staff have **no standing access** to tenant data (INV-18). They get it through **support grants**: a tenant owner (or break-glass with dual approval and alerting) creates a time-boxed grant (default max 8 hours, read-only by default) that gives a named staff member a defined role in that tenant. Every action under a grant is audited with the grant ID.
 
@@ -575,7 +573,7 @@ Realm roles in Keycloak are assigned **only through code**. Local fixture assign
 | `platform-auditor` | Read platform-level audit; read tenant audit only under a support grant |
 | `platform-security` | Read security events and suspend tenants during incidents; force-end sessions is deferred under INV-11 |
 
-Platform roles appear in the `platform_roles` claim of tokens issued for the Access API audience only ([10.5](#105-client-scopes-and-mappers)).
+Platform roles appear only in the `platform_roles` claim of tokens issued to the Platform BFF; those tokens use the Access API audience ([10.5](#105-client-scopes-and-mappers)).
 
 ### 7.7 Privileged operations and anti-escalation
 
@@ -755,6 +753,7 @@ See [25.2](#252-tenant-isolation-test-harness). In short: for every tenant-scope
 | `excellore.com` | Shell | Public |
 | `profile.excellore.com` | Profile UI + BFF | Public |
 | `access.excellore.com` | Access UI + BFF | Public |
+| `platform.excellore.com` | Platform staff UI + BFF | Public; platform role required |
 | `auth.excellore.com` | Keycloak (login, token, end-session, discovery) | Public (selected paths only) |
 | `admin-auth.excellore.internal` | Keycloak admin console | Internal / VPN only |
 | `api-profile.internal.excellore.com` | Profile API | Private network |
@@ -808,6 +807,7 @@ Tenants do **not** get hostnames in the first release. Tenant identity is the `/
 | `excellore-shell` | Shell BFF | On | Off | Off | S256 required |
 | `excellore-profile` | Profile BFF | On | Off | Off | S256 required |
 | `excellore-access` | Access BFF | On | Off | Off | S256 required |
+| `excellore-platform` | Platform BFF | On | Off | Off | S256 required |
 
 Per client: exact redirect URIs (for example `https://profile.excellore.com/auth/callback`), exact post-logout URIs, no web origins, back-channel logout URL (`…/auth/backchannel-logout`) with session required, implicit flow off, consent off, **Full scope allowed off**, default scopes `openid profile email` plus the app's API scope (Shell has none).
 
@@ -865,12 +865,15 @@ Every BFF and machine client has Keycloak's `basic` default client scope so its 
 | Client scope | Mappers | Assigned to |
 |---|---|---|
 | `api-profile` | Audience `api-profile`; client-role mapper (client `api-profile`) to claim `roles` | `excellore-profile`, `worker-profile` |
-| `api-access` | Audience `api-access`; client-role mapper (client `api-access`) to claim `roles`; **realm-role mapper limited to `platform-*`** to claim `platform_roles` | `excellore-access`, `worker-access`, `svc-shell-authz`, `svc-profile-authz`, `svc-access-authz`, `svc-catalog-sync` |
+| `api-access` | Audience `api-access`; client-role mapper (client `api-access`) to claim `roles` | `excellore-access`, `excellore-platform`, `worker-access`, `svc-shell-authz`, `svc-profile-authz`, `svc-access-authz`, `svc-catalog-sync` |
+
+The `excellore-platform` client alone has a realm-role mapper limited by its client scope mappings to `platform-*` roles and writes them to `platform_roles`. No shared `api-access` scope emits platform roles.
 
 Resulting tokens:
 
 - **User token for the Profile BFF:** `aud=api-profile`, `sub`, `acr`, `sid`, standard identity claims. No roles, no tenant.
-- **User token for the Access BFF:** `aud=api-access`, plus `platform_roles` (empty for almost everyone).
+- **User token for the Access BFF:** `aud=api-access`, without platform roles.
+- **User token for the Platform BFF:** `aud=api-access`, plus only the caller's scoped `platform_roles`.
 - **Machine token:** `aud=api-access`, `roles=["access.authz.resolve"]`.
 
 Mapper rules: never add tenant-related claims (INV-01). Never add a mapper that emits all realm roles.
@@ -1193,11 +1196,12 @@ inbox [P]   event_id PK, received_at                                    -- consu
 
 ### 15.1 Purpose
 
-Two faces and one authority:
+One tenant-facing console and one authority:
 
 - **Tenant console:** where a tenant manages **who can do what** in that tenant.
-- **Platform console:** where Excellore staff provision and operate tenants.
 - **Authorization authority (PDP):** the service every other service asks "what may this person do in this tenant?" ([7.8](#78-resolve-contract-pdp-and-pep)).
+
+The separate Platform app is the staff-facing presentation layer for Access's platform contracts. It owns no service data and contains no authorization business logic (ADR-0075).
 
 ### 15.2 Modules
 
@@ -1220,7 +1224,7 @@ Two faces and one authority:
 | **Ownership, export, and deletion** (`access.tenant.transfer`, `access.tenant.export`, `access.tenant.delete`) | Transfer ownership, request tenant export or deletion (step-up) |
 | **Access reviews** (`access.review.manage`) | Periodic recertification (later phase) |
 
-**Platform console** (`/platform/…`, platform roles from the `platform_roles` claim)
+**Platform console** (`https://platform.excellore.com/`, platform roles from the `platform_roles` claim)
 
 | Module | Role | What it does |
 |---|---|---|
@@ -2209,10 +2213,10 @@ A bootstrap script creates the `<app>_migrator` and `<app>_app` roles in each se
 ### 32.2 Local hostnames
 
 ```
-127.0.0.1  excellore.localhost  profile.excellore.localhost  access.excellore.localhost  auth.excellore.localhost
+127.0.0.1  excellore.localhost  profile.excellore.localhost  access.excellore.localhost  platform.excellore.localhost  auth.excellore.localhost
 ```
 
-Register matching HTTPS redirect URIs in the dev realm. The local loopback gateway terminates an mkcert certificate for all four hostnames and forwards only to loopback development ports. `__Host-` cookies require `Secure`; a dev-only cookie name remains allowed only in local development.
+Register matching HTTPS redirect URIs in the dev realm. The local loopback gateway terminates an mkcert certificate for all five hostnames and forwards only to loopback development ports. `__Host-` cookies require `Secure`; a dev-only cookie name remains allowed only in local development.
 
 ### 32.3 Seed data
 
@@ -2279,7 +2283,7 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 - **AC (all automated in `check-realm`):**
   1. Client-credentials token for `svc-profile-authz` has `aud=api-access` and `roles` containing `access.authz.resolve`.
   2. A user token obtained through the `excellore-profile` flow has `aud=api-profile`, **no** `roles`, **no** `platform_roles`, and **no tenant-related claim**.
-  3. A user token for `excellore-access` carries `platform_roles` (empty for normal users, populated for `penny.platform`).
+  3. A user token for `excellore-access` has no `platform_roles`; a user token for `excellore-platform` carries only scoped `platform_roles` (populated for `penny.platform`).
   4. Password grant and implicit flow are rejected for every client.
   5. Redirect URIs are exact; a wildcard or unregistered URI is rejected.
   6. Step-up: requesting the higher ACR forces MFA and the resulting token has the higher `acr`.
@@ -2345,7 +2349,7 @@ Each package lists: **Goal**, **Depends on**, **Deliverables**, **Key steps**, a
 
 - **Goal:** Operator tooling and controlled staff access.
 - **Depends on:** WP-08.
-- **Deliverables:** `/platform/…` route group in the Access app; tenant create, edit, suspend, reactivate, deletion request, plan and app enablement; support grant request, approval, expiry, owner visibility; platform audit; `platform-staff.yaml` local realm and CI validation pipeline. Actual deletion is WP-12. Keycloak emergency user actions remain deferred under INV-11.
+- **Deliverables:** separate `apps/platform` UI and BFF; tenant create, edit, suspend, reactivate, deletion request, plan and app enablement through Access `/v1/platform/**` contracts; support grant request, approval, expiry, owner visibility; platform audit; `platform-staff.yaml` local realm and CI validation pipeline. Actual deletion is WP-12. Keycloak emergency user actions remain deferred under INV-11.
 - **AC:** only users with the right `platform_roles` reach platform endpoints; platform roles cannot read tenant data without a grant; a grant is time-boxed and appears in the tenant's audit and to its owner; suspending a tenant denies all its members within the SLO; app enablement immediately hides tiles and neutralizes permissions of the app.
 
 ### WP-12: Lifecycle: deletion, export, erasure
@@ -2531,7 +2535,7 @@ The handbook or an ADR is updated; Keycloak configuration, infrastructure, and t
 | `sid` | UUID | Back-channel logout |
 | `acr` | `1` or `2` | Step-up decisions |
 | `preferred_username`, `email`, `email_verified`, `name` | strings | Display, identity mirror, invitation matching |
-| `platform_roles` | `["platform-operator"]` | **Only in `api-access` tokens**; empty for most users |
+| `platform_roles` | `["platform-operator"]` | Only in Platform BFF `api-access` user tokens |
 
 **Absent by design:** tenant IDs, tenant roles, tenant permissions, app entitlements (INV-01).
 
@@ -2556,7 +2560,7 @@ The handbook or an ADR is updated; Keycloak configuration, infrastructure, and t
 
 | Client ID | Type | Purpose |
 |---|---|---|
-| `excellore-shell`, `excellore-profile`, `excellore-access` | Confidential, standard flow, PKCE S256 | BFFs |
+| `excellore-shell`, `excellore-profile`, `excellore-access`, `excellore-platform` | Confidential, standard flow, PKCE S256 | BFFs |
 | `api-profile`, `api-access` | Resource server (audience and machine roles) | APIs |
 | `worker-profile`, `worker-access` | Confidential, service account | Workers |
 | `svc-shell-authz`, `svc-profile-authz`, `svc-access-authz` | Confidential, service account | Calls to Access internal contracts |
@@ -2569,7 +2573,9 @@ The handbook or an ADR is updated; Keycloak configuration, infrastructure, and t
 | Scope | Contents | Assigned to |
 |---|---|---|
 | `api-profile` | Audience, client-role mapper to `roles` | `excellore-profile`, `worker-profile` |
-| `api-access` | Audience, client-role mapper to `roles`, realm-role mapper (`platform-*` only) to `platform_roles` | `excellore-access`, `worker-access`, `svc-shell-authz`, `svc-profile-authz`, `svc-access-authz`, `svc-catalog-sync` |
+| `api-access` | Audience and client-role mapper to `roles` | `excellore-access`, `excellore-platform`, workers and Access service clients |
+
+The `excellore-platform` client alone maps its scoped `platform-*` realm roles to `platform_roles`.
 
 ### C.3 Roles
 
@@ -2589,7 +2595,7 @@ There are **no** human-facing client roles and **no** `app-*` entitlement roles 
 
 ```
 OIDC_ISSUER=https://auth.excellore.com/realms/excellore
-OIDC_CLIENT_ID=excellore-profile                 # excellore-shell | excellore-access
+OIDC_CLIENT_ID=excellore-profile                 # excellore-shell | excellore-access | excellore-platform
 OIDC_CLIENT_SECRET=***                           # secrets manager
 OIDC_SCOPES="openid profile email api-profile"   # Shell: "openid profile email"
 APP_BASE_URL=https://profile.excellore.com
@@ -2597,9 +2603,9 @@ SESSION_COOKIE_NAME=__Host-excellore-profile
 SESSION_STORE_URL=redis://valkey:6379
 SESSION_KEY_PREFIX=profile:sess:
 SESSION_ENCRYPTION_KEY=***
-API_BASE_URL=http://api-profile.internal:8080                 # none for Shell
+API_BASE_URL=http://api-profile.internal:8080                 # Access API for Platform; none for Shell
 ACCESS_INTERNAL_URL=http://api-access.internal:8080           # internal contracts
-AUTHZ_CLIENT_ID=svc-profile-authz                             # svc-shell-authz for Shell; svc-access-authz for Access
+AUTHZ_CLIENT_ID=svc-profile-authz                             # omitted for Platform
 AUTHZ_CLIENT_SECRET=***
 STEP_UP_ACR_VALUES=2                                          # Access only
 ALLOWED_KC_ACTIONS=UPDATE_PASSWORD,UPDATE_EMAIL,CONFIGURE_TOTP   # Profile only
@@ -3129,7 +3135,7 @@ Place this at the repository root as `AGENTS.md`. It points an agent at this boo
 ````markdown
 # AGENTS.md: Excellore
 
-You are working on **Excellore**, a multi-tenant SaaS platform (Shell, Profile, Access).
+You are working on **Excellore**, a multi-tenant SaaS platform (Shell, Profile, Access, Platform).
 The single source of truth is `docs/handbook.md`. Read **Part 0 (Agent Operating Manual)** first,
 then the sections relevant to your task. If anything here conflicts with the handbook, the handbook wins.
 

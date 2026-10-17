@@ -12,7 +12,12 @@ const env = Object.fromEntries(
 );
 
 const browserProtocol = process.env.CI === 'true' ? 'http:' : 'https:';
-for (const name of ['SHELL_ORIGIN', 'PROFILE_ORIGIN', 'ACCESS_ORIGIN']) {
+for (const name of [
+  'SHELL_ORIGIN',
+  'PROFILE_ORIGIN',
+  'ACCESS_ORIGIN',
+  'PLATFORM_ORIGIN',
+]) {
   const origin = new URL(env[name]);
   assert.equal(origin.protocol, browserProtocol);
   assert.equal(origin.hostname.endsWith('.localhost'), true);
@@ -41,8 +46,39 @@ const clientsResponse = await fetch(endpoint, {
   headers: { authorization: `Bearer ${token}` },
 });
 assert.equal(clientsResponse.status, 200, 'local Keycloak client list');
-const clients = await clientsResponse.json();
-for (const app of ['shell', 'profile', 'access']) {
+let clients = await clientsResponse.json();
+const realmDefinition = JSON.parse(
+  readFileSync(
+    new URL('../.local/keycloak/realm-dev.json', import.meta.url),
+    'utf8',
+  ),
+);
+if (!clients.some((candidate) => candidate.clientId === 'excellore-platform')) {
+  const definition = realmDefinition.clients.find(
+    (candidate) => candidate.clientId === 'excellore-platform',
+  );
+  assert.ok(definition, 'declarative Platform BFF client');
+  const created = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(definition),
+  });
+  const creationError = created.status === 201 ? '' : await created.text();
+  assert.equal(
+    created.status,
+    201,
+    `local Platform BFF client creation: ${creationError}`,
+  );
+  const refreshed = await fetch(endpoint, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(refreshed.status, 200, 'local BFF client refresh');
+  clients = await refreshed.json();
+}
+for (const app of ['shell', 'profile', 'access', 'platform']) {
   const client = clients.find(
     (candidate) => candidate.clientId === `excellore-${app}`,
   );
@@ -75,7 +111,155 @@ for (const app of ['shell', 'profile', 'access']) {
     assert.equal(update.status, 204, `local ${app} redirect update`);
   }
 }
-console.log('Local BFF redirects match the generated realm.');
+
+async function mappersAt(mapperEndpoint, label) {
+  const response = await fetch(mapperEndpoint, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.status, 200, label);
+  return response.json();
+}
+
+async function removeMapper(mapperEndpoint, mapper, label) {
+  const response = await fetch(`${mapperEndpoint}/${mapper.id}`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(response.status, 204, label);
+}
+
+const clientScopesResponse = await fetch(
+  `${base}/admin/realms/excellore/client-scopes`,
+  { headers: { authorization: `Bearer ${token}` } },
+);
+assert.equal(clientScopesResponse.status, 200, 'local client scopes');
+const apiAccessScope = (await clientScopesResponse.json()).find(
+  (scope) => scope.name === 'api-access',
+);
+assert.ok(apiAccessScope?.id, 'local api-access scope');
+const apiAccessMapperEndpoint = `${base}/admin/realms/excellore/client-scopes/${apiAccessScope.id}/protocol-mappers/models`;
+for (const mapper of await mappersAt(
+  apiAccessMapperEndpoint,
+  'local api-access mappers',
+)) {
+  if (mapper.name === 'platform-roles')
+    await removeMapper(
+      apiAccessMapperEndpoint,
+      mapper,
+      'remove shared platform role mapper',
+    );
+}
+
+for (const app of ['access', 'platform']) {
+  const client = clients.find(
+    (candidate) => candidate.clientId === `excellore-${app}`,
+  );
+  const mapperEndpoint = `${endpoint}/${client.id}/protocol-mappers/models`;
+  const mappers = await mappersAt(mapperEndpoint, `local ${app} mappers`);
+  for (const mapper of mappers) {
+    if (
+      mapper.name === 'empty-platform-roles' ||
+      (app === 'access' && mapper.name === 'platform-roles')
+    )
+      await removeMapper(
+        mapperEndpoint,
+        mapper,
+        `remove stale ${app} platform mapper`,
+      );
+  }
+  if (
+    app === 'platform' &&
+    !mappers.some((mapper) => mapper.name === 'platform-roles')
+  ) {
+    const definition = realmDefinition.clients.find(
+      (candidate) => candidate.clientId === 'excellore-platform',
+    );
+    const desiredMapper = definition.protocolMappers.find(
+      (mapper) => mapper.name === 'platform-roles',
+    );
+    assert.ok(desiredMapper, 'declarative Platform role mapper');
+    const created = await fetch(mapperEndpoint, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(desiredMapper),
+    });
+    assert.equal(created.status, 201, 'create Platform role mapper');
+  }
+}
+
+const platformRoleNames = [
+  'platform-admin',
+  'platform-operator',
+  'platform-support',
+  'platform-auditor',
+  'platform-security',
+];
+const realmRolesResponse = await fetch(`${base}/admin/realms/excellore/roles`, {
+  headers: { authorization: `Bearer ${token}` },
+});
+assert.equal(realmRolesResponse.status, 200, 'local realm roles');
+const platformRoles = (await realmRolesResponse.json()).filter((role) =>
+  platformRoleNames.includes(role.name),
+);
+assert.equal(platformRoles.length, platformRoleNames.length, 'platform roles');
+const accessBff = clients.find(
+  (candidate) => candidate.clientId === 'excellore-access',
+);
+const platformBff = clients.find(
+  (candidate) => candidate.clientId === 'excellore-platform',
+);
+assert.ok(accessBff?.id && platformBff?.id, 'local isolated BFF clients');
+const accessRealmMappings = await fetch(
+  `${endpoint}/${accessBff.id}/scope-mappings/realm`,
+  { headers: { authorization: `Bearer ${token}` } },
+);
+assert.equal(accessRealmMappings.status, 200, 'Access BFF realm scope');
+const staleAccessRoles = (await accessRealmMappings.json()).filter((role) =>
+  platformRoleNames.includes(role.name),
+);
+if (staleAccessRoles.length) {
+  const removed = await fetch(
+    `${endpoint}/${accessBff.id}/scope-mappings/realm`,
+    {
+      method: 'DELETE',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(staleAccessRoles),
+    },
+  );
+  assert.equal(removed.status, 204, 'remove platform scope from Access BFF');
+}
+const platformRealmMappings = await fetch(
+  `${endpoint}/${platformBff.id}/scope-mappings/realm`,
+  { headers: { authorization: `Bearer ${token}` } },
+);
+assert.equal(platformRealmMappings.status, 200, 'Platform BFF realm scope');
+const mappedNames = new Set(
+  (await platformRealmMappings.json()).map((role) => role.name),
+);
+const missingPlatformRoles = platformRoles.filter(
+  (role) => !mappedNames.has(role.name),
+);
+if (missingPlatformRoles.length) {
+  const mapped = await fetch(
+    `${endpoint}/${platformBff.id}/scope-mappings/realm`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(missingPlatformRoles),
+    },
+  );
+  assert.equal(mapped.status, 204, 'Platform BFF role scope');
+}
+console.log('Local BFF redirects and role scopes match the generated realm.');
 
 // Realm import does not modify an already imported development realm. Reconcile
 // the Access BFF's dedicated machine identity without resetting local users.

@@ -50,6 +50,7 @@ for (const path of [
   'apps/shell/proxy.ts',
   'apps/profile/proxy.ts',
   'apps/access/proxy.ts',
+  'apps/platform/proxy.ts',
   'packages/create-excellore-app/template/proxy.ts',
 ]) {
   const source = await readFile(path, 'utf8');

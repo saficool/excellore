@@ -89,11 +89,13 @@ jobs:
       - name: Build representative production images
         run: |
           docker build -f infra/images/next/Dockerfile --build-arg APP_NAME=shell -t excellore-shell:ci .
+          docker build -f infra/images/next/Dockerfile --build-arg APP_NAME=platform -t excellore-platform:ci .
           docker build -f infra/images/dotnet/Dockerfile --build-arg PROJECT=services/access/Excellore.Access.Api/Excellore.Access.Api.csproj -t excellore-access-api:ci .
           docker build -f infra/images/keycloak/Dockerfile -t excellore-keycloak:ci .
       - name: Verify non-root runtime users
         run: |
           test "$(docker image inspect excellore-shell:ci --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect excellore-platform:ci --format '{{.Config.User}}')" = "10001:10001"
           test "$(docker image inspect excellore-access-api:ci --format '{{.Config.User}}')" = "1654:1654"
           test "$(docker image inspect excellore-keycloak:ci --format '{{.Config.User}}')" = "1000:0"
 
@@ -210,6 +212,7 @@ jobs:
           sed -i 's|^SHELL_ORIGIN=.*|SHELL_ORIGIN=http://excellore.localhost:3000|' .env
           sed -i 's|^PROFILE_ORIGIN=.*|PROFILE_ORIGIN=http://profile.excellore.localhost:3001|' .env
           sed -i 's|^ACCESS_ORIGIN=.*|ACCESS_ORIGIN=http://access.excellore.localhost:3002|' .env
+          sed -i 's|^PLATFORM_ORIGIN=.*|PLATFORM_ORIGIN=http://platform.excellore.localhost:3003|' .env
       - name: Start isolated identity stack
         run: bash scripts/dev-up.sh --identity-only
       - name: Prepare Shell and Profile BFFs
